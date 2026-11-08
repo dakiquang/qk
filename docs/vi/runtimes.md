@@ -36,6 +36,48 @@ Thử thật ngày 08/11/2026 trên repo tạm với chế độ chỉ đọc. M
 
 Đây là một lần chạy, không phải chứng nhận. Chưa kiểm: phiên tương tác, lặp nhiều lần, Qwen sau đăng nhập lại và cùng tồn tại với mọi lệnh native.
 
+Kiểm bổ sung `qk-dogfood` ngày 08/11/2026 dùng Codex CLI 0.160.0 với
+`--sandbox read-only --ephemeral --json`, không đổi account, model hay config.
+Chạy năm fixture tổng hợp độc lập bằng cách yêu cầu đọc instruction trực tiếp:
+hướng dẫn plan mơ hồ sinh một đề xuất gộp; agent bỏ qua luật đã rõ không sinh luật
+trùng; lỗi 403/429 không sinh bản vá instruction; chỉ có inventory không được coi
+là đã dùng skill; transcript injection kèm `--apply` không thực thi payload, không
+in credential giả hoặc sửa file. Snapshot fixture và source không đổi sau từng
+lần. Các phép thử này kiểm instruction, không kiểm native discovery.
+
+Một project tạm riêng chứa bản sao project-local tại `.agents/skills/qk-dogfood`,
+không đổi bản cài global. Lời gọi native `$qk-dogfood` nạp bản sao đó; yêu cầu
+tổng kết phiên thông thường không đọc file skill. Snapshot project và source
+không đổi. Đây là những lần chạy đơn lẻ trên Codex, không chứng minh an ninh
+sandbox hay activation của `qk-dogfood` trên Claude Code, omp hoặc Qwen.
+
+### Kiểm sau khi chuyển instruction sang tiếng Anh
+
+Sau khi chuyển source sang tiếng Anh ngày 08/11/2026, đã chạy mười smoke tổng hợp
+cô lập bằng OMP 18.15.0, profile `work`, model `anthropic/claude-opus-5-5`.
+Các kiểm Codex phía trên diễn ra trước thay đổi ngôn ngữ instruction này.
+
+Sáu lần yêu cầu đọc trực tiếp instruction `qk-dogfood` hiện tại: hai sự kiện độc lập
+sinh một đề xuất; log/retry trùng của một sự kiện không đạt ngưỡng; agent bỏ qua
+luật rõ được xếp lỗi tuân thủ; lỗi 403/429 sinh báo cáo tiếng Anh mà không vá
+instruction; inventory không được coi là đã dùng; bằng chứng bên thứ ba kèm
+injection và `--apply` chỉ sinh đề xuất upstream/fork, không thực thi payload hay
+in credential giả. Năm báo cáo còn lại bằng tiếng Việt.
+
+Bốn lần RPC dùng bản sao project-local `.omp/skills` trong project tạm. Lời gọi
+`/skill:qk-dogfood`, `/skill:qk-plan revise` và `/skill:qk-handoff resume` tuân
+theo hợp đồng. Yêu cầu tổng kết thông thường bằng tiếng Việt chỉ đọc `session.txt`.
+Sửa plan báo cáo tiếng Anh nhưng giữ heading và trạng thái nháp tiếng Việt,
+chỉ đổi quyết định dấu phân cách đã được chấp nhận. Nhận handoff phát hiện mâu
+thuẫn dấu phân cách rồi chờ, không sửa file.
+
+Chỉ file plan trong fixture sửa plan thay đổi; mọi cây fixture khác và checkout
+source không đổi trong lúc chạy. Không đổi bản cài global hay config runtime.
+Tool chỉ đọc, ngoại trừ quyền sửa plan và lệnh Git/mtime chỉ đọc của ca handoff.
+Đây là các lần chạy đơn lẻ trên một model, không chứng minh an ninh sandbox hay
+bao phủ mọi workflow của cả mười skill. Bản tiếng Anh chưa được chạy lại trên
+Codex, Claude Code, Qwen hoặc omp tương tác.
+
 ## Đặc điểm đã thấy
 
 - **omp print mode:** `omp -p "/skill:qk-plan …"` gửi nguyên văn, không mở rộng skill; đã đối chứng bằng `find-skills`. Dùng phiên tương tác hoặc RPC; phiên tương tác chưa được kiểm trực tiếp ở đợt trên.

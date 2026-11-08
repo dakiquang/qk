@@ -21,8 +21,11 @@ qk là **cánh tay mở rộng của Claude Code, Codex và omp**, không thay t
 | [qk/handoff](docs/vi/skills/qk-handoff.md) | Lưu ngữ cảnh hoặc nhận lại và kiểm độ lệch |
 | [qk/agent-coord](docs/vi/skills/qk-agent-coord.md) | Giao việc có giới hạn cho agent/model bạn nêu, rồi kiểm kết quả |
 | [qk/release-notes](docs/vi/skills/qk-release-notes.md) | Nháp release notes/changelog truy được nguồn, chưa đăng |
+| [qk/dogfood](docs/vi/skills/qk-dogfood.md) | Đề xuất cải thiện instruction từ bằng chứng, chỉ trong chat; không áp dụng |
 
 Mỗi skill ghi kết quả, quyền và tiêu chí xong. Không pipeline bắt buộc, không tự gọi skill khác. Quyền sửa code không bao gồm commit, push, mở PR, merge, tag, deploy hoặc đăng.
+
+Instruction chuẩn của skill và mẫu prompt cho worker được viết bằng tiếng Anh; tài liệu cho người đọc vẫn có EN/VI. Báo cáo theo ngôn ngữ người dùng, trừ khi người dùng hoặc repo chỉ định khác; khi sửa file đã có thì giữ ngôn ngữ và định dạng của file đó. Không dịch lệnh, đường dẫn, identifier hay chuỗi máy đọc cố định.
 
 Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), vẫn là repo và bản cài riêng.
 

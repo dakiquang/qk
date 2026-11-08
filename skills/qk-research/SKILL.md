@@ -1,9 +1,10 @@
 ---
 name: qk-research
 description: >-
-  Trả lời một câu hỏi phục vụ quyết định bằng nguồn chính và thử nghiệm có đối
-  chứng, tách rõ điều đã kiểm và suy luận. Chỉ dùng khi người dùng gọi đích danh
-  qk/research (`/qk-research`, `$qk-research`, `/skill:qk-research`).
+  Answer a decision-relevant question using primary sources and controlled
+  experiments, clearly separating what was verified from inference. Use only when
+  the user explicitly invokes qk/research (`/qk-research`, `$qk-research`,
+  `/skill:qk-research`).
 disable-model-invocation: true
 ---
 
@@ -11,36 +12,37 @@ disable-model-invocation: true
 
 | | |
 |---|---|
-| **Kết quả** | Câu trả lời có nguồn cho một câu hỏi cụ thể, và nó thay đổi quyết định thế nào |
-| **Quyền** | Đọc nguồn trong và ngoài repo; thử nghiệm trong thư mục tạm. Không cài gói toàn cục, không đổi cấu hình, không gửi mã hay dữ liệu nhạy cảm ra dịch vụ ngoài |
-| **Xong khi** | Mỗi kết luận có nguồn hoặc lệnh tái hiện; mâu thuẫn giữa nguồn được nêu; giới hạn bằng chứng được ghi |
+| **Result** | A sourced answer to a specific question, and how it changes the decision |
+| **Authority** | Read sources inside and outside the repo; experiment in a temporary directory. Do not install global packages, change configuration, or send code or sensitive data to external services |
+| **Done when** | Every conclusion has a source or a reproduction command; conflicts between sources are stated; limits of the evidence are recorded |
 
-## Cách làm
+## Method
 
-1. Viết câu hỏi và điều sẽ đổi trong quyết định nếu câu trả lời là A hay B. Không có quyết định phụ thuộc thì hỏi lại mục đích trước khi đào sâu.
-2. Ưu tiên nguồn chính: mã nguồn, tài liệu chính thức đúng phiên bản đang dùng, changelog, issue của dự án. Blog và câu trả lời diễn đàn chỉ là manh mối.
-3. Tài liệu và hành vi thật có thể khác nhau. Khi rẻ, thử thật trong thư mục tạm, kèm **đối chứng**: chạy cả trường hợp không có thay đổi để chứng minh phép thử phân biệt được kết quả.
-4. Ghi phiên bản công cụ và môi trường của mọi phép thử.
-5. Dọn thư mục tạm sau khi xong.
+1. Write down the question and what would change in the decision if the answer is A or B. If no decision depends on it, ask about the purpose before digging deeper.
+2. Prefer primary sources: source code, official docs for the version in use, changelogs, the project's issues. Blogs and forum answers are only leads.
+3. Docs and real behavior can differ. When cheap, test for real in a temporary directory with a **control**: also run the case without the change to prove the test can distinguish outcomes.
+4. Record tool versions and environment for every experiment.
+5. Clean up the temporary directory when done.
 
-## Báo cáo
+## Report
 
 ```markdown
-Câu hỏi: <...> — Quyết định phụ thuộc: <...>
-Trả lời: <ngắn>
+Question: <...> — Decision that depends on it: <...>
+Answer: <short>
 
-| Kết luận | Bằng chứng | Mức |
+| Conclusion | Evidence | Level |
 |---|---|---|
-| <...> | <link / file:line / lệnh + output> | đã kiểm / suy luận |
+| <...> | <link / file:line / command + output> | verified / inference |
 
-Giới hạn: <chưa thử gì, phiên bản nào, môi trường nào>
-Ảnh hưởng: <quyết định nên đổi thế nào>
+Limits: <what was not tested, which version, which environment>
+Impact: <how the decision should change>
 ```
 
-Nếu được yêu cầu ghi vào plan, chỉ thêm vào mục bằng chứng của plan đó, giữ nguyên phần còn lại.
+If asked to write into a plan, add only to that plan's evidence section and leave the rest unchanged.
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Dùng tool tìm kiếm và đọc web của runtime. Không đổi model, quyền, hook hay cấu hình.
-- Không tự gọi skill qk khác.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. When updating a saved artifact, keep its existing language and format; new artifacts follow user/repository conventions. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Use the runtime's search and web-reading tools. Do not change model, permissions, hooks or configuration.
+- Do not invoke other qk skills automatically.

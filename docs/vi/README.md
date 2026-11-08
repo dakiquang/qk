@@ -24,6 +24,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 | [qk/handoff](skills/qk-handoff.md) | Bàn giao sang phiên mới hoặc nhận lại |
 | [qk/agent-coord](skills/qk-agent-coord.md) | Giao việc có giới hạn cho agent/model chỉ định |
 | [qk/release-notes](skills/qk-release-notes.md) | Soạn nháp release notes và changelog |
+| [qk/dogfood](skills/qk-dogfood.md) | Đề xuất cải thiện instruction tối thiểu từ bằng chứng, không áp dụng |
 
 Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), một dự án riêng.
 

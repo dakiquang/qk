@@ -1,45 +1,46 @@
 ---
 name: qk-test
 description: >-
-  Kiểm tra độc lập một thay đổi bằng lệnh test, lint, typecheck khám phá từ repo;
-  báo kết quả thật, phân loại lỗi mới và baseline, không sửa để cho xanh. Chỉ
-  dùng khi người dùng gọi đích danh qk/test (`/qk-test`, `$qk-test`,
-  `/skill:qk-test`).
+  Independently verify a change with test, lint and typecheck commands discovered
+  from the repo; report actual results, classify new failures versus baseline,
+  and never edit to make it green. Use only when the user explicitly invokes
+  qk/test (`/qk-test`, `$qk-test`, `/skill:qk-test`).
 disable-model-invocation: true
 ---
 
 # qk/test
 
-Dùng khi cần kiểm rộng hơn hoặc độc lập với phần kiểm trong `qk/cook`, ví dụ trước khi merge, sau khi người khác sửa, hoặc trên môi trường khác.
+Use when verification must be broader than, or independent of, the checks in `qk/cook`, e.g. before merging, after someone else's change, or on a different environment.
 
 | | |
 |---|---|
-| **Kết quả** | Lệnh đã chạy, exit code, lỗi mới so với baseline, khoảng trống kiểm thử |
-| **Quyền** | Chạy lệnh kiểm của repo. Không sửa mã, không đổi cấu hình test, không cài dependency mới, không commit |
-| **Xong khi** | Mỗi lệnh có kết quả thật; lỗi được phân loại; điều không chạy được ghi lý do |
+| **Result** | Commands run, exit codes, new failures versus baseline, test coverage gaps |
+| **Authority** | Run the repo's check commands. Do not edit code, change test configuration, install new dependencies or commit |
+| **Done when** | Every command has an actual result; failures are classified; anything that could not run has a reason |
 
-## Cách làm
+## Method
 
-1. Khám phá lệnh theo thứ tự: tài liệu của repo, CI workflow, script trong manifest (`package.json`, `composer.json`, `Makefile`...). Không chọn sẵn công cụ hay package manager.
-2. Xác định phạm vi: test của phần thay đổi trước, rồi bộ rộng hơn nếu được yêu cầu hoặc thay đổi chạm giao diện chung.
-3. Chạy, giữ output. Output dài thì ghi vào file tạm, chỉ trích phần lỗi.
-4. Lỗi xuất hiện: kiểm có trên base không (đọc CI của base, hoặc chạy trên base khi người dùng cho phép tạo worktree tạm). Có trên base là baseline, không tính cho thay đổi.
-5. Lỗi chập chờn: chạy lại tối đa hai lần, ghi cả hai kết quả, không gọi là pass.
-6. Nêu hành vi đã đổi mà chưa có test nào chạm tới.
+1. Discover commands in this order: repo docs, CI workflows, manifest scripts (`package.json`, `composer.json`, `Makefile`...). Do not presuppose a tool or package manager.
+2. Determine scope: tests for the changed part first, then broader suites if requested or if the change touches shared interfaces.
+3. Run and keep the output. For long output, write it to a temporary file and quote only the failing part.
+4. When failures appear: check whether they occur on base (read base CI, or run on base when the user permits creating a temporary worktree). If present on base, it is baseline and not attributed to the change.
+5. Flaky failures: rerun at most twice, record both results, do not call it a pass.
+6. List changed behavior that no test touches.
 
-## Báo cáo
+## Report
 
 ```text
-| Lệnh | Exit | Kết quả |
-Lỗi mới:      <test — thông điệp — nghi do đâu>
-Baseline:     <lỗi có sẵn>
-Chập chờn:    <...>
-Chưa kiểm:    <hành vi / môi trường — lý do>
+| Command | Exit | Result |
+New failures:  <test — message — suspected cause>
+Baseline:      <pre-existing failures>
+Flaky:         <...>
+Not verified:  <behavior / environment — reason>
 ```
 
-Trạng thái CI từ xa ghi là CI, không ghi là test local.
+Report remote CI status as CI, not as local tests.
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Không đổi model, quyền, hook hay cấu hình. Không tự gọi skill qk khác.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. When updating a saved artifact, keep its existing language and format; new artifacts follow user/repository conventions. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Do not change model, permissions, hooks or configuration. Do not invoke other qk skills automatically.

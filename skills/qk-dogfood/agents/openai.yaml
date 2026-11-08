@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk dogfood"
+  short_description: "Propose skill improvements from work evidence"
+policy:
+  allow_implicit_invocation: false

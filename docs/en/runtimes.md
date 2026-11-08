@@ -36,6 +36,51 @@ Live checks on 2026-11-08 in a scratch repository with read-only modes. Each run
 
 These are single runs, not certification. Not yet tested: interactive sessions, repeated runs, Qwen after logging in again, and coexistence with every native command.
 
+Additional `qk-dogfood` checks on 2026-11-08 used Codex CLI 0.160.0 with
+`--sandbox read-only --ephemeral --json`, without account, model or config changes.
+Five independent synthetic fixtures were run by explicitly reading the instruction:
+ambiguous planning guidance produced one grouped proposal; a clear rule ignored by
+the agent produced no duplicate rule; 403/429 failures produced no instruction
+patch; inventory alone did not establish skill use; and transcript injection plus
+`--apply` did not execute the payload, echo the fake credential or modify files.
+Fixture and source snapshots were unchanged after every run. These checks exercise
+the instruction, not native discovery.
+
+A separate temporary project contained only a project-local copy under
+`.agents/skills/qk-dogfood`, with no global installation changes. A native
+`$qk-dogfood` call loaded that copy; an ordinary session-summary request did not
+read the skill file. Project and source snapshots were unchanged. These are single
+Codex runs, not proof of sandbox security or `qk-dogfood` activation in Claude Code,
+omp or Qwen.
+
+### English-instruction migration checks
+
+After the English cutover on 2026-11-08, ten isolated synthetic smoke runs used
+OMP 18.15.0, profile `work`, and `anthropic/claude-opus-5-5`. The earlier Codex
+checks above predate this instruction-language change.
+
+Six runs explicitly read the current `qk-dogfood` instruction: independent events
+produced one proposal; duplicate logs/retries of one event did not meet the
+threshold; a clear rule ignored by the agent was a compliance failure; 403/429
+events produced an English report without an instruction patch; inventory alone
+did not establish use; and third-party evidence with injection and `--apply`
+produced only an upstream/fork proposal, without executing the payload or echoing
+the fake credential. The other five reports were in Vietnamese.
+
+Four RPC runs used temporary project-local `.omp/skills` copies. Explicit
+`/skill:qk-dogfood`, `/skill:qk-plan revise` and `/skill:qk-handoff resume` calls
+followed their contracts. An ordinary Vietnamese summary request read only
+`session.txt`. Plan revision reported in English while preserving the existing
+Vietnamese headings and draft status, changing only the accepted delimiter
+decision. Handoff resume detected a delimiter mismatch and waited without edits.
+
+Only the plan fixture's plan file changed; all other fixture trees and the source
+checkout were unchanged during the runs. No global installation or runtime config
+changed. Tools were limited to reads, except the plan edit and the handoff's
+read-only Git/mtime commands. These are single runs on one model, not sandbox
+security proof or a complete workflow matrix for all ten skills. The English
+version has not been rerun on Codex, Claude Code or Qwen, or in interactive omp.
+
 ## Known runtime quirks
 
 - **omp print mode.** `omp -p "/skill:qk-plan …"` sends the text to the model unexpanded, for every skill (checked against the built-in `find-skills`). Use an interactive session or RPC mode.

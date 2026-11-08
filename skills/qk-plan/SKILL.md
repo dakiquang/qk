@@ -1,65 +1,66 @@
 ---
 name: qk-plan
 description: >-
-  Tạo, audit hoặc sửa một kế hoạch triển khai có nguồn, quyết định, tiêu chí xong
-  và rủi ro. Chỉ dùng khi người dùng gọi đích danh qk/plan (`/qk-plan`,
-  `$qk-plan`, `/skill:qk-plan`). Không dùng cho yêu cầu lập kế hoạch chung chung
-  khi người dùng không gọi qk/plan.
+  Create, audit or revise an implementation plan with sources, decisions, done
+  criteria and risks. Use only when the user explicitly invokes qk/plan
+  (`/qk-plan`, `$qk-plan`, `/skill:qk-plan`). Do not use for generic planning
+  requests when the user has not invoked qk/plan.
 disable-model-invocation: true
 ---
 
 # qk/plan
 
-Ba chế độ, đọc từ lời gọi: `create` (mặc định khi chưa có plan), `audit <path>`, `revise <path>`.
+Three modes, read from the invocation: `create` (default when no plan exists yet), `audit <path>`, `revise <path>`.
 
 | | |
 |---|---|
-| **Kết quả** | Một plan người dùng duyệt được: biết làm gì, vì sao, phạm vi, cách kiểm, rủi ro |
-| **Quyền** | Đọc repo và nguồn ngoài. Chỉ ghi file plan được chỉ định hoặc theo quy ước repo. Không sửa code, không cài đặt, không chuyển sang triển khai |
-| **Xong khi** | Mọi khẳng định có nguồn hoặc nhãn suy đoán; tiêu chí xong kiểm được; câu hỏi cần người dùng quyết được liệt kê |
+| **Result** | A plan the user can approve: what to do, why, scope, how to verify, risks |
+| **Authority** | Read the repo and external sources. Write only the specified plan file or the one the repo convention dictates. Do not edit code, install anything, or switch to implementation |
+| **Done when** | Every claim has a source or an inference label; done criteria are verifiable; questions that need a user decision are listed |
 
 ## create
 
-1. Làm rõ mục tiêu, điều không được đổi và ngoài phạm vi từ lời gọi, plan cũ, issue, mã nguồn. Thiếu một quyết định quan trọng mà nguồn không trả lời được thì hỏi một lần.
-2. Đọc luật repo và phần mã liên quan. Thiếu dữ kiện quyết định hướng đi thì kiểm bằng nguồn chính hoặc thử nhanh trong thư mục tạm; nếu cần nghiên cứu dài, dừng và đề xuất `qk/research`.
-3. Chọn độ dài theo rủi ro: việc nhỏ vài mục; việc lớn mới tách giai đoạn.
-4. Ghi vào `plans/<slug>.md`, hoặc nơi repo đã quy ước. Không ghi đè plan có sẵn khi chưa được yêu cầu.
+1. Clarify the goal, what must not change and what is out of scope from the invocation, prior plans, issues and source code. If an important decision is missing and sources cannot answer it, ask once.
+2. Read repo rules and the relevant code. If facts that decide the direction are missing, check them against primary sources or with a quick test in a temporary directory; if lengthy research is needed, stop and propose `qk/research`.
+3. Size the plan by risk: small work gets a few items; only large work is split into phases.
+4. Write to `plans/<slug>.md`, or wherever the repo has a convention. Do not overwrite an existing plan unless asked.
 
-Cấu trúc gợi ý, bỏ mục không cần:
+Suggested structure; drop sections that are not needed:
 
 ```markdown
-# <Tên việc>
-Trạng thái: nháp | đã duyệt | đang làm | xong — <ngày>
+# <Task name>
+Status: draft | approved | in progress | done — <date>
 
-## Mục tiêu và ngoài phạm vi
-## Hiện trạng và bằng chứng   <!-- nguồn, lệnh đã chạy; đánh dấu [Đã kiểm] / [Suy đoán] -->
-## Quyết định                 <!-- chọn gì, vì sao, hướng bị bác -->
-## Thay đổi dự kiến           <!-- file, giao diện, dữ liệu -->
-## Các bước                   <!-- mỗi bước: việc | xong khi -->
-## Kiểm chứng                 <!-- lệnh hoặc kịch bản chứng minh tiêu chí xong -->
-## Rủi ro                     <!-- tín hiệu thất bại và cách phản ứng -->
-## Câu hỏi mở
+## Goal and out of scope
+## Current state and evidence   <!-- sources, commands run; mark [Verified] / [Inference] -->
+## Decisions                    <!-- what was chosen, why, rejected approaches -->
+## Planned changes              <!-- files, interfaces, data -->
+## Steps                        <!-- each step: work | done when -->
+## Verification                 <!-- commands or scenarios that prove the done criteria -->
+## Risks                        <!-- failure signals and how to respond -->
+## Open questions
 ```
 
 ## audit
 
-Đối chiếu plan với nguồn, không sửa plan:
+Check the plan against sources, without editing the plan:
 
-- Khẳng định về mã, phiên bản, API: đọc lại đúng nguồn hoặc chạy lại lệnh đã nêu.
-- Tiêu chí xong có kiểm được không; bước nào thiếu phụ thuộc; scope có phình hoặc mâu thuẫn quyết định đã chốt.
-- Mỗi finding: mức (blocker / important / nit), vị trí trong plan, bằng chứng, đề xuất sửa. Không có bằng chứng thì ghi là câu hỏi, không ghi là lỗi.
-- Ý kiến của model khác là đầu vào cần kiểm, không phải kết luận.
+- Claims about code, versions, APIs: re-read the exact source or rerun the stated command.
+- Whether done criteria are verifiable; which steps are missing dependencies; whether scope has grown or contradicts settled decisions.
+- Each finding: severity (blocker / important / nit), location in the plan, evidence, suggested fix. Without evidence, record it as a question, not an error.
+- Another model's opinion is input to verify, not a conclusion.
 
 ## revise
 
-Áp các quyết định và finding người dùng đã chấp nhận. Sau đó rà toàn plan để mục khác không còn mâu thuẫn. Giữ bảng quyết định đã chốt và ghi ngày thay đổi. Không tự thêm scope mới.
+Apply the decisions and findings the user has accepted. Then review the whole plan so no other section still contradicts them. Keep the settled-decisions table and record the date of the change. Do not add new scope on your own.
 
-## Báo cáo
+## Report
 
-Đường dẫn plan, tóm tắt thay đổi, câu hỏi còn mở. Bước tiếp theo nêu thành lệnh để người dùng gọi, ví dụ `qk/cook <path>`.
+Plan path, summary of changes, open questions. State the next step as a command for the user to invoke, e.g. `qk/cook <path>`.
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Dùng plan mode, task và tool có sẵn của runtime. Không đổi model, quyền, hook hay cấu hình.
-- Không tự gọi skill qk khác. Duyệt plan không phải quyền commit, merge hay phát hành.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. When updating a saved artifact, keep its existing language and format; new artifacts follow user/repository conventions. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Use the runtime's plan mode, tasks and tools. Do not change model, permissions, hooks or configuration.
+- Do not invoke other qk skills automatically. Plan approval is not permission to commit, merge or release.

@@ -1,9 +1,9 @@
 ---
 name: qk-debug
 description: >-
-  Tìm nguyên nhân gốc của một lỗi bằng chuỗi bằng chứng và tái hiện, rồi đề xuất
-  cách sửa nhỏ nhất; mặc định không sửa code. Chỉ dùng khi người dùng gọi đích
-  danh qk/debug (`/qk-debug`, `$qk-debug`, `/skill:qk-debug`).
+  Find the root cause of a bug through an evidence chain and reproduction, then
+  propose the smallest fix; does not edit code by default. Use only when the user
+  explicitly invokes qk/debug (`/qk-debug`, `$qk-debug`, `/skill:qk-debug`).
 disable-model-invocation: true
 ---
 
@@ -11,34 +11,35 @@ disable-model-invocation: true
 
 | | |
 |---|---|
-| **Kết quả** | Nguyên nhân gốc có bằng chứng `file:line`, cách tái hiện, đề xuất sửa và cách kiểm sau sửa |
-| **Quyền** | Đọc, chạy tái hiện, chạy test hiện có. Log hoặc script chẩn đoán tạm chỉ khi cần và phải gỡ trước khi báo cáo. Không sửa code sản phẩm trừ khi chat yêu cầu sửa |
-| **Xong khi** | Có lệnh tái hiện (hoặc lý do không tái hiện được); nguyên nhân giải thích đủ triệu chứng; giả thuyết bị loại có lý do |
+| **Result** | Root cause with `file:line` evidence, a reproduction, a proposed fix and how to verify after the fix |
+| **Authority** | Read, run reproductions, run existing tests. Temporary diagnostic logs or scripts only when needed, and they must be removed before reporting. Do not edit product code unless the chat asks for a fix |
+| **Done when** | There is a reproduction command (or a reason it cannot be reproduced); the cause explains all symptoms; rejected hypotheses have reasons |
 
-## Cách làm
+## Method
 
-1. Ghi triệu chứng chính xác: lỗi, input, môi trường, từ khi nào. Phân biệt điều người dùng thấy với điều mình suy ra.
-2. Tái hiện bằng lệnh nhỏ nhất. Không tái hiện được thì thu hẹp điều kiện trước khi đoán.
-3. Thu hẹp vùng: so với base hoặc bản chạy được, đọc log, chia đôi commit hay input.
-4. Mỗi giả thuyết kèm phép thử có thể bác nó. Chạy phép thử, ghi kết quả. Không sửa thử để xem có hết lỗi không.
-5. Tách triệu chứng với nguyên nhân: sửa chỗ lỗi hiện ra hay chỗ dữ liệu sai sinh ra? Tìm cùng mẫu lỗi ở chỗ khác.
-6. Lỗi do môi trường hay công cụ, không phải mã: ghi rõ, không đề xuất sửa mã.
+1. Record the exact symptom: error, input, environment, since when. Distinguish what the user observed from what you inferred.
+2. Reproduce with the smallest command. If it cannot be reproduced, narrow the conditions before guessing.
+3. Narrow the area: compare against base or a working version, read logs, bisect commits or input.
+4. Pair each hypothesis with a test that could refute it. Run the test and record the result. Do not try fixes just to see whether the bug goes away.
+5. Separate symptom from cause: fix where the error surfaces, or where the bad data originates? Look for the same bug pattern elsewhere.
+6. If the failure comes from the environment or tooling, not the code: state it clearly and do not propose code changes.
 
-## Báo cáo
+## Report
 
 ```text
-Triệu chứng:   <...>
-Tái hiện:      <lệnh> → <kết quả>
-Nguyên nhân:   <file:line — cơ chế>
-Bằng chứng:    <đã đọc gì / chạy gì>
-Đã loại:       <giả thuyết — vì sao>
-Đề xuất sửa:   <nhỏ nhất> — kiểm bằng: <lệnh>
+Symptom:       <...>
+Reproduction:  <command> → <result>
+Cause:         <file:line — mechanism>
+Evidence:      <what was read / run>
+Ruled out:     <hypothesis — why>
+Proposed fix:  <smallest> — verify with: <command>
 ```
 
-Người dùng muốn sửa: nêu lệnh `qk/cook` kèm nguyên nhân đã kiểm làm đầu vào. Nếu chat đã yêu cầu sửa ngay, làm theo hợp đồng của qk/cook: thay đổi nhỏ nhất, chạy lại lệnh tái hiện và test hồi quy.
+If the user wants a fix: give a `qk/cook` command with the verified cause as input. If the chat has already asked for an immediate fix, follow the qk/cook contract: smallest change, rerun the reproduction command and regression tests.
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Dùng debugger và tool có sẵn của runtime. Không đổi model, quyền, hook hay cấu hình.
-- Không tự gọi skill qk khác.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. When updating a saved artifact, keep its existing language and format; new artifacts follow user/repository conventions. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Use the runtime's debugger and tools. Do not change model, permissions, hooks or configuration.
+- Do not invoke other qk skills automatically.

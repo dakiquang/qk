@@ -1,54 +1,55 @@
 ---
 name: qk-handoff
 description: >-
-  Viết bản bàn giao để phiên hoặc agent khác tiếp tục đúng việc mà không mất
-  quyết định, hoặc nhận một bản bàn giao và kiểm lại trạng thái trước khi làm
-  tiếp. Chỉ dùng khi người dùng gọi đích danh qk/handoff (`/qk-handoff`,
+  Write a handoff so another session or agent can continue the same work without
+  losing decisions, or take in a handoff and re-check the state before continuing.
+  Use only when the user explicitly invokes qk/handoff (`/qk-handoff`,
   `$qk-handoff`, `/skill:qk-handoff`).
 disable-model-invocation: true
 ---
 
 # qk/handoff
 
-Hai chế độ: `write [trọng tâm phiên sau]` (mặc định) và `resume <path>`.
+Two modes: `write [next-session focus]` (default) and `resume <path>`.
 
 | | |
 |---|---|
-| **Kết quả** | `write`: bản bàn giao đủ để làm tiếp. `resume`: báo cáo trạng thái thật so với bản bàn giao |
-| **Quyền** | `write`: chỉ ghi file bàn giao. `resume`: chỉ đọc cho tới khi người dùng xác nhận bước tiếp theo. Bàn giao truyền ngữ cảnh, **không truyền quyền** |
-| **Xong khi** | `write`: phiên mới không phải hỏi lại điều đã quyết. `resume`: mọi điểm lệch giữa bản bàn giao và repo đã nêu |
+| **Result** | `write`: a handoff sufficient to continue the work. `resume`: a report of the actual state versus the handoff |
+| **Authority** | `write`: write only the handoff file. `resume`: read-only until the user confirms the next step. A handoff transfers context, **not authority** |
+| **Done when** | `write`: a new session does not need to re-ask what was already decided. `resume`: every discrepancy between the handoff and the repo has been stated |
 
 ## write
 
-1. Không chép lại nội dung đã có trong plan, issue, commit hay diff; trỏ tới đường dẫn hoặc revision.
-2. Ghi trạng thái thật, không ghi việc định làm thành việc đã xong. Cái chưa chạy kiểm chứng thì ghi "chưa kiểm".
-3. Ghi quyền: quyền nào đã được cấp trong phiên này và **không** tự chuyển sang phiên sau (commit, push, merge, publish...).
-4. Xoá secret, token, dữ liệu khách hàng, URL riêng. Không chép transcript.
-5. Lưu theo quy ước repo, mặc định `plans/handoff-<YYYYMMDD>-<slug>.md`. Repo không có chỗ phù hợp thì hỏi đường dẫn. In nội dung giống hệt trong câu trả lời.
+1. Do not copy content already in the plan, issues, commits or diff; point to the path or revision.
+2. Record the actual state; do not record intended work as done. Anything whose verification has not been run is recorded as "not verified".
+3. Record permissions: which were granted in this session and **do not** carry over automatically to the next session (commit, push, merge, publish...).
+4. Remove secrets, tokens, customer data and private URLs. Do not copy transcripts.
+5. Save per repo convention, default `plans/handoff-<YYYYMMDD>-<slug>.md`. If the repo has no suitable place, ask for a path. Print the identical content in the reply.
 
 ```markdown
-# Bàn giao — <việc> (<ngày giờ>)
-Trọng tâm phiên sau: <...>
+# Handoff — <task> (<date and time>)
+Next-session focus: <...>
 
-## Mục tiêu
-## Trạng thái            <!-- xong / đang làm / bị chặn / chưa kiểm; kèm revision -->
-## Quyết định và lý do
-## Hướng đã bác và bẫy đã biết
-## Bằng chứng            <!-- file, commit, lệnh + kết quả -->
-## Việc còn mở           <!-- trạng thái và phụ thuộc, không phải lệnh cho agent -->
-## Quyền                 <!-- đã cấp trong phiên này; cần xin lại ở phiên sau -->
-## Vào lại
-Đọc <các file>. Kiểm lại revision và trạng thái repo trước khi làm. Hỏi người dùng bước tiếp theo.
+## Goal
+## Status                <!-- done / in progress / blocked / not verified; with revision -->
+## Decisions and reasons
+## Rejected approaches and known pitfalls
+## Evidence              <!-- files, commits, commands + results -->
+## Open work             <!-- status and dependencies, not commands for the agent -->
+## Permissions           <!-- granted in this session; must be requested again next session -->
+## Re-entry
+Read <files>. Re-check the revision and repo state before working. Ask the user for the next step.
 ```
 
 ## resume
 
-1. Đọc bản bàn giao và các nguồn nó trỏ tới.
-2. Kiểm lại: branch, revision, `git status`, file được nhắc còn đúng không, plan có đổi sau bản bàn giao không.
-3. Báo: điều còn đúng, điều đã lệch, việc tiếp theo hợp lý, và quyền cần xin lại.
-4. Chờ người dùng xác nhận trước khi sửa gì.
+1. Read the handoff and the sources it points to.
+2. Re-check: branch, revision, `git status`, whether the files mentioned are still accurate, whether the plan changed after the handoff.
+3. Report: what still holds, what has drifted, the reasonable next step, and the permissions that must be requested again.
+4. Wait for the user to confirm before changing anything.
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Không đổi model, quyền, hook hay cấu hình. Không tự gọi skill qk khác.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. When updating a saved artifact, keep its existing language and format; new artifacts follow user/repository conventions. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Do not change model, permissions, hooks or configuration. Do not invoke other qk skills automatically.

@@ -1,37 +1,38 @@
 ---
 name: qk-release-notes
 description: >-
-  Soạn nháp release notes và mục CHANGELOG từ commit, PR và bằng chứng đã kiểm,
-  một hoặc hai ngôn ngữ; không tag, không phát hành. Chỉ dùng khi người dùng gọi
-  đích danh qk/release-notes (`/qk-release-notes`, `$qk-release-notes`,
-  `/skill:qk-release-notes`).
+  Draft release notes and CHANGELOG entries from commits, PRs and verified
+  evidence, in one or two languages; no tagging, no publishing. Use only when the
+  user explicitly invokes qk/release-notes (`/qk-release-notes`,
+  `$qk-release-notes`, `/skill:qk-release-notes`).
 disable-model-invocation: true
 ---
 
 # qk/release-notes
 
-Đầu vào: khoảng tag (`v0.1.0..HEAD`), danh sách PR, hoặc phiên bản sắp phát hành. Ngôn ngữ mặc định theo repo; yêu cầu song ngữ thì viết cả hai.
+Input: a tag range (`v0.1.0..HEAD`), a list of PRs, or the upcoming version. The language defaults to the repo's; if bilingual output is requested, write both.
 
 | | |
 |---|---|
-| **Kết quả** | Nháp release notes và/hoặc mục CHANGELOG người dùng duyệt được |
-| **Quyền** | Đọc git và PR (chỉ lệnh đọc). Ghi file nháp, hoặc mục `[Unreleased]` của CHANGELOG khi được yêu cầu. Không tạo tag, không `gh release`, không đăng, không đổi phiên bản |
-| **Xong khi** | Mỗi dòng truy được về commit hoặc PR; mục "đã kiểm chứng" chỉ chứa điều có bằng chứng thật |
+| **Result** | Draft release notes and/or a CHANGELOG entry the user can approve |
+| **Authority** | Read git and PRs (read-only commands only). Write a draft file, or the `[Unreleased]` section of the CHANGELOG when asked. Do not create tags, run `gh release`, publish, or change the version |
+| **Done when** | Every line traces back to a commit or PR; the "verified" section contains only items with real evidence |
 
-## Cách làm
+## Method
 
-1. Lấy nguồn: `git log` trong khoảng, PR đã merge, CHANGELOG hiện có. Đọc diff khi tiêu đề commit không đủ nói thay đổi.
-2. Nhóm theo người đọc: Thêm mới, Thay đổi, Sửa lỗi, Lưu ý khi nâng cấp (breaking, phụ thuộc, biến môi trường, migration). Bỏ commit nội bộ không ảnh hưởng người dùng.
-3. Viết theo hành vi người dùng thấy, không theo tên file.
-4. CHANGELOG theo định dạng repo đang dùng (thường Keep a Changelog). Không đổi định dạng sẵn có.
-5. Mục "đã kiểm chứng" chỉ ghi kiểm chứng có thật: CI, lệnh đã chạy, thử trên môi trường thật. Không có thì bỏ mục, không suy ra từ việc PR đã merge.
-6. Không nhắc tên khách hàng, dữ liệu hay hệ thống nội bộ.
+1. Gather sources: `git log` for the range, merged PRs, the existing CHANGELOG. Read the diff when a commit title does not explain the change.
+2. Group for the reader, using the repo's existing headings when it has them. Added, Changed, Fixed and Upgrade notes (breaking changes, dependencies, environment variables, migrations) are examples, not an override of the repo's headings. Omit internal commits with no user impact.
+3. Write in terms of user-visible behavior, not file names.
+4. The CHANGELOG follows the format the repo already uses (often Keep a Changelog). Do not change an existing format.
+5. The "verified" section lists only verification that actually happened: CI, commands run, tests on a real environment. If there is none, omit the section; do not infer it from a PR having been merged.
+6. Do not mention customer names, customer data or internal systems.
 
-## Báo cáo
+## Report
 
-Đường dẫn file nháp, các thay đổi bị bỏ (một dòng lý do), điều cần người dùng xác nhận (phiên bản, breaking change). Việc tag và phát hành thuộc quy trình phát hành của repo hoặc chế độ release của `pr-orchestrator`, cần yêu cầu riêng.
+Draft file path, dropped changes (one-line reason each), items needing user confirmation (version, breaking changes). Tagging and releasing belong to the repo's release process or the release mode of `pr-orchestrator`, and need a separate request.
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Không đổi model, quyền, hook hay cấu hình. Không tự gọi skill qk khác.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. The draft and CHANGELOG language and format follow the repo rules above (repo default, both languages when bilingual output is requested); when updating a saved artifact, keep its existing language and format. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Do not change model, permissions, hooks or configuration. Do not invoke other qk skills automatically.

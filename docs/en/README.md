@@ -24,6 +24,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 | [qk/handoff](skills/qk-handoff.md) | Hand work to a fresh session, or resume it |
 | [qk/agent-coord](skills/qk-agent-coord.md) | Give a bounded task to a named agent and model |
 | [qk/release-notes](skills/qk-release-notes.md) | Draft release notes and changelog entries |
+| [qk/dogfood](skills/qk-dogfood.md) | Propose minimal instruction improvements from work evidence, without applying them |
 
 Pull-request review and scoring are handled by the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), a separate project.
 

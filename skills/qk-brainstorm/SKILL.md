@@ -1,9 +1,9 @@
 ---
 name: qk-brainstorm
 description: >-
-  So sánh các hướng giải quyết một vấn đề chưa rõ, nêu đánh đổi và giả định cần
-  kiểm, rồi khuyến nghị một hướng để người dùng chọn. Chỉ dùng khi người dùng gọi
-  đích danh qk/brainstorm (`/qk-brainstorm`, `$qk-brainstorm`,
+  Compare approaches to an unclear problem, state trade-offs and assumptions to
+  verify, then recommend one approach for the user to choose. Use only when the
+  user explicitly invokes qk/brainstorm (`/qk-brainstorm`, `$qk-brainstorm`,
   `/skill:qk-brainstorm`).
 disable-model-invocation: true
 ---
@@ -12,33 +12,34 @@ disable-model-invocation: true
 
 | | |
 |---|---|
-| **Kết quả** | 2–4 hướng khả thi, đánh đổi, giả định then chốt và một khuyến nghị. Người dùng chọn hướng |
-| **Quyền** | Chỉ đọc. Ghi file chỉ khi được yêu cầu kèm đường dẫn. Không triển khai |
-| **Xong khi** | Mỗi hướng có lợi, hại, chi phí quay đầu; giả định kiểm được bằng nguồn có sẵn đã kiểm; điều cần người dùng quyết được nêu rõ |
+| **Result** | 2–4 viable approaches, trade-offs, key assumptions and one recommendation. The user chooses the approach |
+| **Authority** | Read-only. Write a file only when asked and given a path. Do not implement |
+| **Done when** | Each approach has upside, downside and cost of reversal; assumptions that available sources can check have been checked; decisions needed from the user are stated clearly |
 
-## Cách làm
+## Method
 
-1. Nhắc lại vấn đề bằng một câu, kèm ràng buộc và điều không được đổi. Hiểu sai vấn đề thì mọi hướng đều sai, nên hỏi trước nếu vấn đề còn hai cách hiểu khác nhau về kết quả.
-2. Đọc mã, tài liệu và quyết định cũ liên quan. Ý tưởng phải bám hệ thống thật, không bám mô hình lý tưởng.
-3. Luôn xét hướng đơn giản nhất và hướng "không làm / làm thủ công". Loại hướng vi phạm ràng buộc, ghi một dòng lý do.
-4. So theo: kết quả có đạt không; trường hợp xấu nhất hợp lý; khó đảo ngược đến đâu; chi phí bảo trì; phụ thuộc mới.
-5. Tách giả định then chốt (sai thì hướng hỏng). Cái nào kiểm nhanh được thì kiểm ngay; cái nào cần nghiên cứu thì đề xuất `qk/research`.
+1. Restate the problem in one sentence, with constraints and what must not change. If the problem is misunderstood, every approach is wrong, so ask first if the problem still has two readings with different outcomes.
+2. Read related code, docs and prior decisions. Ideas must fit the real system, not an idealized model.
+3. Always consider the simplest approach and the "do nothing / do it manually" approach. Drop approaches that violate constraints, with a one-line reason.
+4. Compare on: whether it achieves the outcome; reasonable worst case; how hard it is to reverse; maintenance cost; new dependencies.
+5. Separate out key assumptions (if wrong, the approach fails). Check now the ones that can be checked quickly; propose `qk/research` for the ones that need research.
 
-## Báo cáo
+## Report
 
 ```markdown
-Vấn đề: <một câu> — Ràng buộc: <...>
+Problem: <one sentence> — Constraints: <...>
 
-| Hướng | Cách làm | Được | Mất | Quay đầu |
+| Approach | How | Gains | Costs | Reversal |
 |---|---|---|---|---|
 
-Giả định then chốt: <giả định — đã kiểm / chưa kiểm>
-Khuyến nghị: <hướng> vì <lý do>; đổi ý nếu <điều kiện>
-Cần người dùng quyết: <câu hỏi>
-Tiếp theo: qk/plan sau khi chọn hướng, hoặc qk/research cho giả định chưa kiểm
+Key assumptions: <assumption — verified / unverified>
+Recommendation: <approach> because <reason>; reconsider if <condition>
+User decisions needed: <question>
+Next: qk/plan after choosing an approach, or qk/research for unverified assumptions
 ```
 
-## Ranh giới
+## Boundaries
 
-- Chỉ dẫn cấp cao hơn, luật runtime và luật repo thắng skill này.
-- Không đổi model, quyền, hook hay cấu hình. Không tự gọi skill qk khác.
+- Higher-priority instructions, runtime rules and repository rules override this skill.
+- Language: reply in the user's language unless the user or repository specifies another; localize human-facing report labels. When updating a saved artifact, keep its existing language and format; new artifacts follow user/repository conventions. Commands, paths, identifiers and fixed machine strings stay unchanged.
+- Do not change model, permissions, hooks or configuration. Do not invoke other qk skills automatically.

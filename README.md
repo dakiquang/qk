@@ -21,8 +21,11 @@ qk is an **extension of Claude Code, Codex and omp**, not a replacement. Skills 
 | [qk/handoff](docs/en/skills/qk-handoff.md) | Save session context or resume it with drift checks |
 | [qk/agent-coord](docs/en/skills/qk-agent-coord.md) | A bounded task on the agent/model you name, with checked results |
 | [qk/release-notes](docs/en/skills/qk-release-notes.md) | Traceable release-note and changelog drafts, not publication |
+| [qk/dogfood](docs/en/skills/qk-dogfood.md) | Evidence-based instruction improvement proposals in chat; no changes applied |
 
 Each skill states its result, authority and done criteria. There is no mandatory pipeline and no automatic skill chaining. Implementing code does not grant authority to commit, push, open a PR, merge, tag, deploy or publish.
+
+Canonical skill instructions and worker prompt templates are written in English. Human documentation stays available in English and Vietnamese. Reports follow the user's language unless the user or repository specifies another; edits preserve an existing artifact's language and format. Commands, paths, identifiers and fixed machine strings are not translated.
 
 PR review and scoring use the companion [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), which remains a separate repository and installation.
 
