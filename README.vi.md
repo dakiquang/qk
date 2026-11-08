@@ -1,79 +1,50 @@
 # qk
 
-[English](README.md)
+[English](README.md) · [Tài liệu](docs/vi/README.md) · [Case study đầu-cuối](docs/vi/case-study-csv-export.md)
 
-Bộ skill nhỏ cho cách tôi làm việc thật: quyết định dựa trên bằng chứng, lập kế hoạch trước thay đổi lớn, triển khai có kiểm chứng, bàn giao giữa các phiên, và để con người quyết mọi thứ đi ra khỏi máy.
+Bộ kit cá nhân nhỏ để quyết định bằng bằng chứng, lập plan có phạm vi rõ, triển khai có kiểm chứng và bàn giao đáng tin giữa các phiên AI coding.
 
-qk mở rộng Claude Code, Codex và omp, không thay thế chúng. Mỗi skill **được cấu hình để chỉ chạy khi gọi đích danh**, không phải vì yêu cầu có nhắc tới lập kế hoạch hay debug. Runtime vẫn giữ tool, plan mode, subagent, cấu hình model và quyền của nó.
+qk là **cánh tay mở rộng của Claude Code, Codex và omp**, không thay thế chúng. Skill được cấu hình để chỉ chạy khi gọi đích danh; yêu cầu plan hoặc debug thông thường vẫn do runtime xử lý. Tool, plan mode, subagent, lựa chọn model, quyền native và luật repo giữ nguyên.
 
-> Dự án cá nhân, không liên quan công ty nào, không cam kết hỗ trợ.
+> Dự án cá nhân, không liên quan công ty nào, không cam kết hỗ trợ. Repo hiện riêng tư; cần quyền truy cập để cài.
 
-## Skill
+## Chọn skill theo việc
 
-| Skill | Dùng để | Ghi gì |
-|---|---|---|
-| `qk/brainstorm` | So sánh hướng đi, đánh đổi, giả định; khuyến nghị một hướng | Mặc định không ghi |
-| `qk/research` | Trả lời câu hỏi phục vụ quyết định bằng nguồn chính và thử nghiệm có đối chứng | Không, hoặc mục bằng chứng của plan |
-| `qk/plan` | Tạo, audit hoặc sửa plan có nguồn, quyết định và tiêu chí xong | Chỉ file plan |
-| `qk/cook` | Triển khai yêu cầu rõ hoặc plan đã duyệt, rồi kiểm chứng và tự review | File trong phạm vi; không commit, push, phát hành trừ khi được yêu cầu |
-| `qk/debug` | Tìm nguyên nhân gốc bằng tái hiện và chuỗi bằng chứng | Mặc định không ghi |
-| `qk/test` | Kiểm tra độc lập và báo kết quả thật | Không ghi |
-| `qk/handoff` | Viết bàn giao cho phiên mới, hoặc nhận bàn giao và kiểm độ lệch | Chỉ file bàn giao |
-| `qk/agent-coord` | Giao việc có giới hạn cho agent và model chỉ định, rồi kiểm kết quả | Worktree riêng của worker |
-| `qk/release-notes` | Soạn nháp release notes và CHANGELOG từ commit và PR | Chỉ bản nháp; không tag, không phát hành |
+| Skill | Kết quả |
+|---|---|
+| [qk/brainstorm](docs/vi/skills/qk-brainstorm.md) | 2–4 hướng, đánh đổi và một khuyến nghị |
+| [qk/research](docs/vi/skills/qk-research.md) | Câu trả lời cho quyết định, có nguồn và thử nghiệm đối chứng |
+| [qk/plan](docs/vi/skills/qk-plan.md) | Tạo, audit hoặc sửa plan kiểm chứng được |
+| [qk/cook](docs/vi/skills/qk-cook.md) | Triển khai yêu cầu rõ hoặc plan đã duyệt; kiểm và tự review |
+| [qk/debug](docs/vi/skills/qk-debug.md) | Tái hiện, nguyên nhân gốc đã kiểm và đề xuất sửa nhỏ nhất |
+| [qk/test](docs/vi/skills/qk-test.md) | Kiểm độc lập, phân loại lỗi và khoảng trống kiểm chứng |
+| [qk/handoff](docs/vi/skills/qk-handoff.md) | Lưu ngữ cảnh hoặc nhận lại và kiểm độ lệch |
+| [qk/agent-coord](docs/vi/skills/qk-agent-coord.md) | Giao việc có giới hạn cho agent/model bạn nêu, rồi kiểm kết quả |
+| [qk/release-notes](docs/vi/skills/qk-release-notes.md) | Nháp release notes/changelog truy được nguồn, chưa đăng |
 
-Mỗi skill ghi rõ **kết quả, quyền và tiêu chí xong** ở đầu file. Skill không gọi lẫn nhau; khi có bước tiếp theo hợp lý, skill nêu lệnh để bạn tự gọi.
+Mỗi skill ghi kết quả, quyền và tiêu chí xong. Không pipeline bắt buộc, không tự gọi skill khác. Quyền sửa code không bao gồm commit, push, mở PR, merge, tag, deploy hoặc đăng.
 
-Review và chấm điểm pull request dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator). Nó vẫn là dự án riêng; `qk/cook` và `qk/agent-coord` nhắc tới nó theo tên.
+Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), vẫn là repo và bản cài riêng.
 
-## Cách gọi
+## Bắt đầu
 
-| Runtime | Ví dụ | Cơ chế chỉ chạy khi gọi |
-|---|---|---|
-| Claude Code | `/qk-plan` | `disable-model-invocation: true` |
-| Codex | `$qk-plan` | `agents/openai.yaml` → `allow_implicit_invocation: false` |
-| omp | `/skill:qk-plan` (giao diện tương tác hoặc RPC; `omp -p` không mở rộng `/skill:` cho mọi skill) | `disable-model-invocation: true` |
-| Qwen Code | `/qk-plan` | chưa kiểm |
+[Cài một lần, tạo link từng thư mục skill](docs/vi/getting-started.md), rồi mở phiên runtime mới. Không cần cài package hoặc build.
 
-Orca chạy các agent này trong terminal của nó và thấy skill đã cài cho từng agent.
+| Runtime | Ví dụ gọi |
+|---|---|
+| Claude Code | `/qk-plan audit plans/feature.md` |
+| Codex | `$qk-plan audit plans/feature.md` |
+| omp | `/skill:qk-plan audit plans/feature.md` (tương tác hoặc RPC) |
 
-Các cấu hình này báo cho runtime không tự nạp skill; Claude Code ghi trong tài liệu rằng cấu hình của nó cũng giữ skill ngoài subagent. Chủ ý: qk không giành lấy yêu cầu mà bạn không chuyển cho nó. Kết quả thử thật ở mục Mức hỗ trợ.
+`qk/plan` là tên khái niệm, không phải cú pháp CLI nguyên văn. Bản omp đã quan sát không mở rộng `/skill:` trong `omp -p`. Chưa kiểm được thực thi và cơ chế chỉ gọi đích danh của Qwen. Xem [bằng chứng runtime và giới hạn](docs/vi/runtimes.md); một lần chạy thành công không phải chứng nhận.
 
-## Cài đặt
+## Đọc thêm
 
-Clone một lần, rồi tạo symlink từng thư mục skill vào thư mục skill của runtime bạn dùng. Symlink giữ mọi runtime trên cùng một nguồn; `git pull` cập nhật tất cả.
-
-```bash
-git clone https://github.com/dakiquang/qk ~/src/qk
-dest=~/.claude/skills            # hoặc ~/.codex/skills, ~/.agents/skills, ~/.omp/agent/skills, ~/.qwen/skills
-mkdir -p "$dest"
-collision=0
-for skill in ~/src/qk/skills/qk-*; do
-  target="$dest/$(basename "$skill")"
-  if [ -e "$target" ] || [ -L "$target" ]; then echo "already exists: $target"; collision=1; fi
-done
-if [ "$collision" = 0 ]; then
-  for skill in ~/src/qk/skills/qk-*; do ln -s "$skill" "$dest/$(basename "$skill")"; done
-fi
-```
-
-Script kiểm mọi đích trước và không tạo link nào nếu có đích đã tồn tại, nên skill hay thư mục có sẵn không bao giờ bị thay hoặc bị ghi vào. Mỗi runtime dùng một nơi cài; vài runtime đọc nhiều thư mục và sẽ liệt kê một skill hai lần nếu cài trùng. Gỡ skill bằng cách xoá symlink.
-
-Mở phiên mới sau khi cài để runtime nhận skill.
-
-## Mức hỗ trợ
-
-Cấu trúc và cấu hình gọi được `scripts/validate.py` kiểm. Thử thật ngày 08/11/2026 trên repo nháp, chế độ chỉ đọc, mỗi runtime một lần gọi đích danh (`qk-brainstorm`) và một yêu cầu lập kế hoạch thường:
-
-| Runtime | Gọi đích danh thì skill chạy | Yêu cầu thường không kích hoạt qk | Ghi chú |
-|---|---|---|---|
-| Claude Code (Sonnet 5.5, plan mode) | Có | Có, không nạp skill | |
-| Codex (`codex exec -s read-only`) | Có | Có, không đọc file skill | |
-| omp 18.15.0 (RPC) | Có | Có, không chèn skill | `omp -p` gửi `/skill:` nguyên văn cho mọi skill |
-| Qwen Code | Chưa thử được | Chưa thử được | Nhận ra `/qk-brainstorm` là skill, sau đó API trả 401 (phiên đăng nhập hết hạn); Qwen cũng ghi file tham số tạm vào `.qwen/tmp` dù ở plan mode |
-| Orca | — | — | Liệt kê mỗi skill qk đúng một lần |
-
-Đây là một lần chạy, không phải chứng nhận. Việc cùng tồn tại với lệnh native ngoài các yêu cầu trên chưa được thử.
+- [Bắt đầu](docs/vi/getting-started.md): cài, gọi, cập nhật và gỡ an toàn.
+- [Quy trình](docs/vi/workflows.md): chọn cách làm theo điều còn thiếu.
+- [Case study: xuất CSV từ ý tưởng đến PR được ship](docs/vi/case-study-csv-export.md): prompt, hợp đồng coordinator/worker, PR review và cổng phát hành.
+- [Runtime](docs/vi/runtimes.md): ranh giới native, chọn model và hỗ trợ đã quan sát.
+- [Changelog](CHANGELOG.md).
 
 ## Kiểm tra
 
@@ -81,7 +52,7 @@ Cấu trúc và cấu hình gọi được `scripts/validate.py` kiểm. Thử t
 python3 scripts/validate.py
 ```
 
-Kiểm tên thư mục và frontmatter, cấu hình chỉ chạy khi gọi cho Claude Code, omp và Codex, link nội bộ, đường dẫn cá nhân và chuỗi giống secret. Đặt `QK_DENYLIST` trỏ tới file các từ không được xuất hiện trong repo. CI chạy thêm gitleaks trên toàn lịch sử.
+Kiểm metadata skill, cấu hình gọi đích danh, link nội bộ, cặp docs EN/VI, đường dẫn cá nhân và chuỗi giống secret. `QK_DENYLIST` tùy chọn trỏ file từ cấm. CI chạy thêm gitleaks trên lịch sử. Kiểm tĩnh không chứng minh cô lập runtime.
 
 ## Giấy phép
 

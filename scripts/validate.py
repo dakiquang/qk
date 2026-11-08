@@ -133,6 +133,26 @@ def check_links(doc, boundary):
             fail(doc, f"broken link: {target}")
 
 
+def check_docs(skill_dirs):
+    """Require core guides, a guide per skill, and matching EN/VI paths."""
+    docs = ROOT / "docs"
+    required = {
+        Path(name) for name in (
+            "README.md", "getting-started.md", "workflows.md", "runtimes.md",
+            "case-study-csv-export.md",
+        )
+    }
+    required.update(Path("skills") / f"{skill.name}.md" for skill in skill_dirs)
+    pages = {
+        language: {path.relative_to(docs / language) for path in (docs / language).rglob("*.md")}
+        for language in ("en", "vi")
+    }
+    for relative in sorted(required | pages["en"] | pages["vi"]):
+        for language in ("en", "vi"):
+            if relative not in pages[language]:
+                fail(docs / language / relative, "missing documentation page or language counterpart")
+
+
 def text_files():
     for path in ROOT.rglob("*"):
         if ".git" in path.parts or not path.is_file() or path.resolve() == SELF:
@@ -169,6 +189,8 @@ for readme in READMES:
         trigger = "qk/" + skill_dir.name.removeprefix("qk-")
         if trigger not in content:
             fail(path, f"does not document {trigger}")
+
+check_docs(skill_dirs)
 
 for doc in ROOT.rglob("*.md"):
     if ".git" not in doc.parts and SKILLS not in doc.parents:

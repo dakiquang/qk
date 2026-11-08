@@ -1,79 +1,50 @@
 # qk
 
-[Tiếng Việt](README.vi.md)
+[Tiếng Việt](README.vi.md) · [Documentation](docs/en/README.md) · [End-to-end case study](docs/en/case-study-csv-export.md)
 
-A small set of agent skills for the way I actually work: decide with evidence, plan before large changes, implement with verification, hand work across sessions, and keep the person in charge of anything that leaves the machine.
+A small personal toolkit for evidence-based decisions, bounded plans, implementation with verification and reliable handoffs between AI coding sessions.
 
-qk extends Claude Code, Codex and omp; it does not replace them. Every skill is **configured to run only when you call it by name**, not because a request happens to mention planning or debugging. Your runtime keeps its own tools, plan mode, subagents, model settings and permissions.
+qk is an **extension of Claude Code, Codex and omp**, not a replacement. Skills are configured for explicit invocation: ordinary planning or debugging requests stay with the runtime. Native tools, plan mode, subagents, model choices, permissions and repository rules remain in control.
 
-> Personal project, not affiliated with any company, no support commitment.
+> Personal project, not affiliated with any company, no support commitment. The repository is currently private; installation requires access.
 
-## Skills
+## Pick the skill you need
 
-| Skill | Use it to | Writes |
-|---|---|---|
-| `qk/brainstorm` | Compare approaches, trade-offs and assumptions; recommend one | Nothing by default |
-| `qk/research` | Answer a decision question from primary sources and controlled experiments | Nothing, or the evidence section of a plan |
-| `qk/plan` | Create, audit or revise a plan with sources, decisions and done-criteria | The plan file only |
-| `qk/cook` | Implement a clear request or approved plan, then verify and self-review | Files in scope; no commit, push or release unless asked |
-| `qk/debug` | Find a root cause with a reproduction and evidence chain | Nothing by default |
-| `qk/test` | Run independent verification and report real results | Nothing |
-| `qk/handoff` | Write a handoff for a fresh session, or resume one and check for drift | The handoff file only |
-| `qk/agent-coord` | Give a bounded task to a named agent and model, then check the result | The worker's own worktree |
-| `qk/release-notes` | Draft release notes and changelog entries from commits and PRs | The draft only; no tag or release |
+| Skill | Result |
+|---|---|
+| [qk/brainstorm](docs/en/skills/qk-brainstorm.md) | 2–4 approaches, trade-offs and a recommendation |
+| [qk/research](docs/en/skills/qk-research.md) | A decision question answered with sources and controlled experiments |
+| [qk/plan](docs/en/skills/qk-plan.md) | Create, audit or revise a verifiable plan |
+| [qk/cook](docs/en/skills/qk-cook.md) | Implement a clear request or approved plan; verify and self-review |
+| [qk/debug](docs/en/skills/qk-debug.md) | Reproduction, verified root cause and smallest proposed fix |
+| [qk/test](docs/en/skills/qk-test.md) | Independent checks, classified failures and verification gaps |
+| [qk/handoff](docs/en/skills/qk-handoff.md) | Save session context or resume it with drift checks |
+| [qk/agent-coord](docs/en/skills/qk-agent-coord.md) | A bounded task on the agent/model you name, with checked results |
+| [qk/release-notes](docs/en/skills/qk-release-notes.md) | Traceable release-note and changelog drafts, not publication |
 
-Each skill states its **result, authority and done-criteria** at the top. Skills never call each other; when a next step makes sense they name the command for you to run.
+Each skill states its result, authority and done criteria. There is no mandatory pipeline and no automatic skill chaining. Implementing code does not grant authority to commit, push, open a PR, merge, tag, deploy or publish.
 
-For pull-request review and scoring, use the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator). It stays a separate project; `qk/cook` and `qk/agent-coord` point to it by name.
+PR review and scoring use the companion [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), which remains a separate repository and installation.
 
-## How to call a skill
+## Start
 
-| Runtime | Example | Explicit-only mechanism |
-|---|---|---|
-| Claude Code | `/qk-plan` | `disable-model-invocation: true` |
-| Codex | `$qk-plan` | `agents/openai.yaml` → `allow_implicit_invocation: false` |
-| omp | `/skill:qk-plan` (interactive or RPC; `omp -p` does not expand `/skill:` for any skill) | `disable-model-invocation: true` |
-| Qwen Code | `/qk-plan` | not verified yet |
+[Install once and link the skill folders](docs/en/getting-started.md), then open a new runtime session. No package installation or build is needed.
 
-Orca runs these agents in its terminals and sees the skills installed for each agent.
+| Runtime | Example invocation |
+|---|---|
+| Claude Code | `/qk-plan audit plans/feature.md` |
+| Codex | `$qk-plan audit plans/feature.md` |
+| omp | `/skill:qk-plan audit plans/feature.md` (interactive or RPC) |
 
-These settings tell each runtime not to load a skill on its own; Claude Code documents that its setting also keeps the skill out of subagents. The intent: qk never takes over a request you did not route to it. Tested results are in Support status.
+`qk/plan` is the conceptual name, not literal CLI syntax. In the observed omp version, `omp -p` does not expand `/skill:`. Qwen execution and explicit-only behaviour remain unverified. See [runtime evidence and limits](docs/en/runtimes.md); single successful checks are not certification.
 
-## Install
+## Read more
 
-Clone once and link each skill folder into the skills directory of the runtimes you use. Links keep every runtime on the same source; `git pull` updates all of them.
-
-```bash
-git clone https://github.com/dakiquang/qk ~/src/qk
-dest=~/.claude/skills            # or ~/.codex/skills, ~/.agents/skills, ~/.omp/agent/skills, ~/.qwen/skills
-mkdir -p "$dest"
-collision=0
-for skill in ~/src/qk/skills/qk-*; do
-  target="$dest/$(basename "$skill")"
-  if [ -e "$target" ] || [ -L "$target" ]; then echo "already exists: $target"; collision=1; fi
-done
-if [ "$collision" = 0 ]; then
-  for skill in ~/src/qk/skills/qk-*; do ln -s "$skill" "$dest/$(basename "$skill")"; done
-fi
-```
-
-The script checks every target first and links nothing if any of them already exists, so an existing skill or folder is never replaced or written into. Use one install location per runtime; some runtimes read several directories and would otherwise list a skill twice. Remove a skill by deleting its link.
-
-Start a new session after installing so the runtime discovers the skills.
-
-## Support status
-
-Structure and invocation settings are checked by `scripts/validate.py`. Live checks, 2026-11-08, in a scratch repository with read-only modes, one explicit call (`qk-brainstorm`) and one ordinary planning request per runtime:
-
-| Runtime | Explicit call runs the skill | Ordinary request leaves qk alone | Notes |
-|---|---|---|---|
-| Claude Code (Sonnet 5.5, plan mode) | Yes | Yes, no skill loaded | |
-| Codex (`codex exec -s read-only`) | Yes | Yes, no skill file read | |
-| omp 18.15.0 (RPC) | Yes | Yes, no skill injected | `omp -p` passes `/skill:` through as plain text for every skill |
-| Qwen Code | Not tested | Not tested | Recognised `/qk-brainstorm` as a skill, then the API returned 401 (expired login); Qwen also wrote a temporary args file under `.qwen/tmp` in plan mode |
-| Orca | — | — | Lists each qk skill once |
-
-These are single runs, not certification. Coexistence with each runtime's native commands beyond these requests has not been tested.
+- [Getting started](docs/en/getting-started.md): installation, invocation, updates and safe removal.
+- [Workflows](docs/en/workflows.md): choose a process by what is missing.
+- [Case study: CSV export from idea to shipped PR](docs/en/case-study-csv-export.md): prompts, coordinator/worker contracts, PR review and release gates.
+- [Runtimes](docs/en/runtimes.md): native boundaries, model selection and observed support.
+- [Changelog](CHANGELOG.md).
 
 ## Validate
 
@@ -81,7 +52,7 @@ These are single runs, not certification. Coexistence with each runtime's native
 python3 scripts/validate.py
 ```
 
-Checks folder and frontmatter names, explicit-invocation settings for Claude Code, omp and Codex, internal links, personal paths and secret-like strings. Set `QK_DENYLIST` to a file of terms that must never appear in the repository. CI also runs gitleaks over the full history.
+Checks skill metadata, explicit-invocation settings, internal links, EN/VI documentation pairs, personal paths and secret-like strings. Optional `QK_DENYLIST` points to a file of prohibited terms. CI also runs gitleaks over history. Static checks do not prove runtime isolation.
 
 ## License
 

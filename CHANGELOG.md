@@ -14,3 +14,9 @@ All notable changes to this project are documented here. The format follows
   omp, `policy.allow_implicit_invocation: false` for Codex.
 - `scripts/validate.py` and CI checks for structure, naming, invocation policy,
   internal links, personal paths and secrets, plus a gitleaks scan.
+- English and Vietnamese documentation: installation, workflow recipes, runtime
+  evidence and limits, and practical guides for all nine skills.
+- A worked CSV-export case study covering brainstorm, planning, bounded worker
+  orchestration, PR creation, companion review, merge and verified shipping.
+- Documentation checks requiring core guides, per-skill guides and matching
+  English/Vietnamese paths in addition to internal-link validation.
