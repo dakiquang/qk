@@ -84,16 +84,18 @@ Chưa có bằng chứng qk hơn đối thủ về chất lượng code, an toà
 
 ## Ưu tiên tiếp theo
 
-1. Hoàn tất audit toàn source, rồi chỉ sửa finding được xác minh theo yêu cầu riêng.
+1. Kiểm quyền gitleaks mới bằng một PR thật vì đường chạy PR chưa được tái hiện.
 2. Giữ fixture tổng hợp tái chạy được cho các ranh giới quan trọng trên runtime thực sự dùng.
 3. Có release/tag và hướng dẫn pin phiên bản trước khi chia sẻ rộng.
 4. Benchmark vài task thật với cùng input, repo/revision và tiêu chí chấm; tách model cost, skill overhead và chất lượng kết quả.
 
-## Trạng thái tại thời điểm ghi
+## Trạng thái
 
-Triển khai, dịch source, docs và push đã hoàn tất. Audit toàn source hai model đang diễn ra; **chưa có kết luận audit chéo cuối**. Không coi bản tổng kết này là báo cáo audit đã hoàn thành.
+Triển khai, dịch source, docs và push đã hoàn tất. Audit toàn source bằng hai model (`openai-codex/gpt-6.1-sol` và `anthropic/claude-opus-5-5`) đã hoàn tất hai vòng audit chéo trên `d23ab29`; đây là audit snapshot, không phải chấm điểm PR.
 
-File này được tạo sau commit nói trên theo yêu cầu lưu để đọc lại; chưa được commit/push.
+Các finding được giữ đã sửa ở commit `806f41a`: quyền đọc PR cho gitleaks, mô tả đúng phạm vi quét theo push/PR, snapshot nội dung đã stage, ghi mọi lần chạy lại test chập chờn, guard cài đặt EN/VI, validator chặn description lồng nhau, key metadata trùng và denylist có dấu câu. Các trường hợp này đã được chạy lại trước/sau trên bản sao tạm; validator báo `OK: 10 skills checked`.
+
+File này được commit ở `c9d586a` và cập nhật trạng thái sau đó.
 
 ## Nguồn đối chiếu
 
