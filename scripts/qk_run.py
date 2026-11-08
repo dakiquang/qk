@@ -103,14 +103,30 @@ def parse_spec(spec):
     return runtime, model
 
 
+FAMILY_NAMES = (("anthropic", ("claude", "opus", "sonnet", "haiku")),
+                ("openai", ("gpt", "codex")),
+                ("google", ("gemini",)),
+                ("xai", ("grok",)))
+PROVIDER_FAMILIES = {"anthropic": "anthropic", "openai": "openai", "openai-codex": "openai",
+                     "google": "google", "xai": "xai", "xai-oauth": "xai"}
+
+
 def family(spec):
+    """Model family of a runtime:model spec. Unknown families are an error, never a pass."""
     runtime, model = parse_spec(spec)
-    text = model.lower()
-    if runtime == "claude" or "claude" in text or text.startswith("anthropic/"):
+    if runtime == "claude":
         return "anthropic"
-    if runtime == "codex" or "gpt" in text or text.startswith(("openai", "openai-codex")):
+    if runtime == "codex":
         return "openai"
-    return text.split("/")[0] or runtime
+    provider, _, name = model.lower().rpartition("/")
+    if not name:
+        raise SystemExit(f"qk-run: {spec!r} needs an explicit model, e.g. omp:anthropic/claude-opus-5-5")
+    for found, hints in FAMILY_NAMES:
+        if any(hint in name for hint in hints) or re.match(r"o\d", name) and found == "openai":
+            return found
+    if provider in PROVIDER_FAMILIES:
+        return PROVIDER_FAMILIES[provider]
+    raise SystemExit(f"qk-run: cannot tell the model family of {spec!r}; use a provider/model id")
 
 
 def agent_command(spec, write, cwd, extra_dirs):
@@ -200,24 +216,46 @@ NO_GIT = ("Do not run git commit, git push, git checkout, git reset, git stash, 
           "or open pull requests. The runner owns all git and GitHub actions.")
 
 
+def checkout_state(path):
+    return (git(path, "symbolic-ref", "-q", "HEAD", check=False),
+            git(path, "rev-parse", "HEAD", check=False),
+            git(path, "status", "--porcelain"))
+
+
+def check_worktree(state, worktree):
+    """Only the runner moves the worktree: it must stay on the run branch at the runner's commit."""
+    expected = state.get("commit") or state["base_sha"]
+    ref = git(worktree, "symbolic-ref", "-q", "HEAD", check=False)
+    head = git(worktree, "rev-parse", "HEAD")
+    if ref != f"refs/heads/{state['branch']}" or head != expected:
+        raise Blocked(f"worktree HEAD is {ref or 'detached'} at {head[:12]}, expected {state['branch']} at "
+                      f"{expected[:12]}; only the runner may commit or switch branches. "
+                      f"Inspect {worktree}; abort the run if it cannot be restored")
+
+
 def run_agent(state, role, prompt, write=None):
     spec = state["impl"] if role == "impl" else state["review"]
     write = role == "impl" if write is None else write
     worktree = Path(state["worktree"])
-    if not write:
-        state["tree_snapshot"] = tree_snapshot(worktree)
-    head = git(worktree, "rev-parse", "HEAD")
-    user_status = git(Path(state["repo"]), "status", "--porcelain")
+    check_worktree(state, worktree)
+    if not write and tree_snapshot(worktree) != state["expected_tree"]:
+        raise Blocked(f"worktree {worktree} differs from the state this read-only stage expects; "
+                      "restore it or abort the run")
+    primary = checkout_state(Path(state["repo"]))
     log(state, f"{spec} ({'write' if write else 'read-only'})")
-    text = call_agent(spec, prompt, worktree, write, state["timeout"],
-                      [run_dir(state["id"])])
+    error, text = None, ""
+    try:
+        text = call_agent(spec, prompt, worktree, write, state["timeout"], [run_dir(state["id"])])
+    except Blocked as exc:
+        error = exc
     (run_dir(state["id"]) / f"{state['stage']}-{int(time.time())}.out.md").write_text(text or "", encoding="utf-8")
-    if git(worktree, "rev-parse", "HEAD") != head:
-        raise Blocked("agent changed HEAD (commit/reset/checkout) in the worktree; only the runner may commit")
-    if git(Path(state["repo"]), "status", "--porcelain") != user_status:
-        raise Blocked("agent changed the user's primary checkout; stop and inspect it")
-    if not write and tree_snapshot(worktree) != state.get("tree_snapshot"):
+    if checkout_state(Path(state["repo"])) != primary:
+        raise Blocked("agent changed the user's primary checkout (branch, HEAD or files); stop and inspect it")
+    check_worktree(state, worktree)
+    if not write and tree_snapshot(worktree) != state["expected_tree"]:
         raise Blocked("read-only agent modified the worktree")
+    if error:
+        raise error
     return text, parse_result(text)
 
 
@@ -260,7 +298,7 @@ def preflight(state):
     worktree = run_dir(state["id"]) / "worktree"
     git(repo, "worktree", "add", "-b", branch, str(worktree), f"origin/{base}")
     state.update(base=base, branch=branch, worktree=str(worktree), remote=remote,
-                 base_sha=git(worktree, "rev-parse", "HEAD"))
+                 base_sha=git(worktree, "rev-parse", "HEAD"), expected_tree=tree_snapshot(worktree))
     return "planning"
 
 
@@ -268,6 +306,7 @@ def planning(state):
     plan = run_dir(state["id"]) / "plan.md"
     feedback = state.get("feedback")
     previous = plan.read_text(encoding="utf-8") if feedback and plan.is_file() else ""
+    revision = f"Previous plan:\n{previous}\nUser feedback to apply: {feedback}" if feedback else ""
     prompt = f"""Read {skill('qk-plan')} and follow it in `{'revise' if feedback else 'create'}` mode, read-only.
 Repository checkout: {state['worktree']} (base {state['base']}). Do not edit files or run commands that write.
 Task: {state['task']}
@@ -275,7 +314,7 @@ Instead of saving a file, put the complete plan between a line `<<<QK-PLAN` and 
 the runner saves it. The plan MUST contain a fenced block ```qk-verify``` listing, one per line, the shell
 commands discovered from this repository that prove the done criteria. Each runs from the repository root
 and must exit 0 on success. Do not invent commands; if none can be discovered, report needs_input.
-{('Previous plan:\n' + previous + '\nUser feedback to apply: ' + feedback) if feedback else ''}
+{revision}
 {NO_GIT}
 {RESULT_CONTRACT}"""
     text, _ = run_agent(state, "impl", prompt, write=False)
@@ -309,6 +348,7 @@ Work only inside {state['worktree']}. The plan is approved; do not ask for appro
     run_agent(state, "impl", prompt)
     if not git(Path(state["worktree"]), "status", "--porcelain"):
         raise Blocked("implementation produced no changes")
+    state["impl_tree"] = tree_snapshot(Path(state["worktree"]))
     return "verifying"
 
 
@@ -318,8 +358,10 @@ def untracked(worktree):
 
 def verifying(state):
     worktree = Path(state["worktree"])
+    if tree_snapshot(worktree) != state["impl_tree"]:
+        raise Blocked(f"worktree {worktree} changed since the implementation was recorded; "
+                      "restore it or abort the run")
     before_untracked = untracked(worktree)
-    before_tracked = git(worktree, "diff", "HEAD")
     results = []
     for command in state["verify"]:
         log(state, f"$ {command}")
@@ -342,10 +384,11 @@ def verifying(state):
             parent = parent.parent
     if created:
         log(state, f"removed {len(created)} file(s) created by verification")
-    if git(worktree, "diff", "HEAD") != before_tracked:
-        raise Blocked("verification commands modified tracked files")
+    if tree_snapshot(worktree) != state["impl_tree"]:
+        raise Blocked("verification commands modified the worktree (tracked or new files); restore it or abort the run")
     failed = [r for r in results if r["exit"] != 0]
     if not failed:
+        state["expected_tree"] = state["impl_tree"]
         return "reviewing"
     state["problems"] = [f"`{r['cmd']}` exited {r['exit']}:\n{r['tail']}" for r in failed]
     return next_fix(state, "verification failed")
@@ -358,14 +401,35 @@ def changed_files(worktree):
     return set(names)
 
 
+def repo_path(path, worktree):
+    text = str(path or "").strip()
+    for root in (str(worktree), str(Path(worktree).resolve())):
+        if text.startswith(root + "/"):
+            text = text[len(root) + 1:]
+    while text.startswith("./"):
+        text = text[2:]
+    return text
+
+
+def approved_plan(state):
+    """The plan exactly as the user approved it; agents may edit their working copy, not this one."""
+    import hashlib
+    path = run_dir(state["id"]) / "approved-plan.md"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != state.get("approved_plan_sha"):
+        raise Blocked(f"{path} is missing or changed after approval")
+    return path, text
+
+
 def reviewing(state):
     worktree = Path(state["worktree"])
+    plan, _ = approved_plan(state)
     diff_file = run_dir(state["id"]) / "review.diff"
     git(worktree, "add", "-A")
     diff_file.write_text(git(worktree, "diff", "--cached", state["base_sha"]), encoding="utf-8")
     git(worktree, "reset", "-q")
     prompt = f"""Independent read-only review. Do not edit files and do not run commands that write.
-Repository: {worktree}. Approved plan: {run_dir(state['id']) / 'plan.md'}. Full diff: {diff_file}.
+Repository: {worktree}. Approved plan: {plan}. Full diff: {diff_file}.
 Check correctness, security, regressions, scope versus the plan, and missing tests. Re-read every line you cite.
 Report only verified problems introduced by this diff. Put them in "findings" as
 {{"severity": "blocker|important|nit", "file": "<repo-relative path>", "line": N, "claim": "...", "fix": "..."}}.
@@ -374,7 +438,10 @@ Use status "done" when the review itself completed, even if there are findings.
     _, result = run_agent(state, "review", prompt)
     files = changed_files(worktree)
     findings = [f for f in result.get("findings") or [] if isinstance(f, dict)]
-    serious = [f for f in findings if f.get("severity") in ("blocker", "important") and f.get("file") in files]
+    for finding in findings:
+        finding["file"] = repo_path(finding.get("file"), worktree)
+        finding["severity"] = str(finding.get("severity", "")).lower()
+    serious = [f for f in findings if f["severity"] in ("blocker", "important") and f["file"] in files]
     state["findings"] = findings
     if not serious:
         return "publishing"
@@ -385,25 +452,28 @@ Use status "done" when the review itself completed, even if there are findings.
 def next_fix(state, why):
     if state.get("fix_rounds", 0) >= 1:
         raise Blocked(f"{why} after the single fix round:\n" + "\n".join(state["problems"]))
+    state.setdefault("addressed", []).extend(state["problems"])
     return "fixing"
 
 
 def fixing(state):
     state["fix_rounds"] = state.get("fix_rounds", 0) + 1
+    plan, _ = approved_plan(state)
     problems = "\n".join(f"- {p}" for p in state["problems"])
     prompt = f"""Read {skill('qk-cook')}. Fix only the problems below in {state['worktree']}, with the smallest change,
-staying within the approved plan {run_dir(state['id']) / 'plan.md'}. Do not weaken tests or checks.
+staying within the approved plan {plan}. Do not weaken tests or checks.
 Problems:
 {problems}
 {CLEAN}
 {NO_GIT}
 {RESULT_CONTRACT}"""
     run_agent(state, "impl", prompt)
+    state["impl_tree"] = tree_snapshot(Path(state["worktree"]))
     return "verifying"
 
 
 def plan_title(state):
-    plan = (run_dir(state["id"]) / "plan.md").read_text(encoding="utf-8")
+    _, plan = approved_plan(state)
     for line in plan.splitlines():
         if line.startswith("# "):
             return line[2:].strip()[:72]
@@ -411,22 +481,26 @@ def plan_title(state):
 
 
 def pr_body(state):
-    plan = (run_dir(state["id"]) / "plan.md").read_text(encoding="utf-8")
+    _, plan = approved_plan(state)
     checks = "\n".join(f"- `{r['cmd']}` → exit {r['exit']}" for r in state.get("verify_results", []))
+    addressed = "\n".join(f"- {p.splitlines()[0]}" for p in state.get("addressed", [])) or "- none"
     findings = state.get("findings") or []
     remaining = "\n".join(f"- [{f.get('severity')}] {f.get('file')}:{f.get('line')} {f.get('claim')}" for f in findings) or "- none"
     return (f"## Task\n\n{state['task']}\n\n## Verification (run by qk-run)\n\n{checks}\n\n"
-            f"## Independent review ({state['review']})\n\nRemaining findings:\n{remaining}\n\n"
+            f"## Independent review ({state['review']})\n\nAddressed in the fix round:\n{addressed}\n\n"
+            f"Remaining findings:\n{remaining}\n\n"
             f"Fix rounds: {state.get('fix_rounds', 0)}\n\n<details><summary>Approved plan</summary>\n\n{plan}\n\n</details>\n")
 
 
 def publishing(state):
     worktree = Path(state["worktree"])
+    check_worktree(state, worktree)
     if not state.get("commit"):
+        title = plan_title(state)
         git(worktree, "add", "-A")
         if not git(worktree, "diff", "--cached", "--name-only"):
             raise Blocked("nothing to commit")
-        git(worktree, "commit", "-q", "-m", plan_title(state))
+        git(worktree, "commit", "-q", "-m", title)
         state["commit"] = git(worktree, "rev-parse", "HEAD")
         save(state)
     if not state.get("pushed"):
@@ -485,11 +559,19 @@ def cmd_start(args):
 
 
 def cmd_approve(args):
+    import hashlib
     state = load(args.id)
     if state["stage"] != "awaiting_approval":
         sys.exit(f"qk-run: run is {state['stage']}, not awaiting_approval")
-    state["stage"] = "implementing"
+    text = (run_dir(state["id"]) / "plan.md").read_text(encoding="utf-8")
+    commands = verify_commands(text)
+    if not commands:
+        sys.exit("qk-run: plan.md has no non-empty ```qk-verify``` block; edit it or use revise")
+    (run_dir(state["id"]) / "approved-plan.md").write_text(text, encoding="utf-8")
+    state.update(stage="implementing", verify=commands,
+                 approved_plan_sha=hashlib.sha256(text.encode("utf-8")).hexdigest())
     save(state)
+    print("Approved. Verification commands that will run:\n" + "\n".join(f"  $ {c}" for c in commands))
     return advance(state)
 
 
