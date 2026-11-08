@@ -7,10 +7,13 @@ permissions:
   contents: read
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python: ["3.9", "3.12"]
+        include:
+          - {python: "3.9", os: ubuntu-24.04}  # oldest supported; not built for newer images
+          - {python: "3.12", os: ubuntu-latest}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
