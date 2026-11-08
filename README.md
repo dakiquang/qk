@@ -23,7 +23,9 @@ qk is an **extension of Claude Code, Codex and omp**, not a replacement. Skills 
 | [qk/release-notes](docs/en/skills/qk-release-notes.md) | Traceable release-note and changelog drafts, not publication |
 | [qk/dogfood](docs/en/skills/qk-dogfood.md) | Evidence-based instruction improvement proposals in chat; no changes applied |
 
-Each skill states its result, authority and done criteria. There is no mandatory pipeline and no automatic skill chaining. Implementing code does not grant authority to commit, push, open a PR, merge, tag, deploy or publish.
+Each skill states its result, authority and done criteria. Skills never call each other and there is no mandatory pipeline. Implementing code does not grant authority to commit, push, open a PR, merge, tag, deploy or publish.
+
+For end-to-end automation, the opt-in [qk-run runner](docs/en/runner.md) drives Claude Code, Codex or omp from a request to a ready-for-review PR: it stops once for plan approval, verifies with the plan's commands, gets a cross-model review, and never merges.
 
 Canonical skill instructions and worker prompt templates are written in English. Human documentation stays available in English and Vietnamese. Reports follow the user's language unless the user or repository specifies another; edits preserve an existing artifact's language and format. Commands, paths, identifiers and fixed machine strings are not translated.
 

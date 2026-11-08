@@ -10,6 +10,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 - [Quy trình](workflows.md) — ghép skill cho ý tưởng mơ hồ, thay đổi đã rõ, lỗi, chuyển phiên và phát hành.
 - [Runtime](runtimes.md) — cách gọi, bằng chứng đã thử và giới hạn hiện tại.
 - [Case study: xuất CSV](case-study-csv-export.md) — ví dụ từ brainstorm/plan qua worker cô lập, PR review, merge đến kiểm chứng ship.
+- [Runner qk-run](runner.md) — tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, một cổng duyệt plan.
 
 ## Skill
 

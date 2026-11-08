@@ -2,7 +2,7 @@
 
 [English](../en/workflows.md) · [Mục lục](README.md)
 
-Không có pipeline cố định. Bắt đầu từ điều còn thiếu, chỉ dùng skill cần thiết, bạn quyết tại từng cổng. Skill không tự gọi nhau: nó nêu lệnh tiếp theo để bạn gọi.
+Không có pipeline cố định. Bắt đầu từ điều còn thiếu, chỉ dùng skill cần thiết, bạn quyết tại từng cổng. Skill không tự gọi nhau: nó nêu lệnh tiếp theo để bạn gọi. Muốn giao trọn một việc đã rõ cho agent, chỉ một cổng duyệt plan và kết thúc bằng PR, hãy khởi động [runner qk-run](runner.md) (chỉ chạy khi bạn gọi).
 
 Xem [case study xuất CSV](case-study-csv-export.md) để có prompt cụ thể, cổng quyền và ví dụ coordinator/worker đến PR.
 

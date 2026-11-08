@@ -22,6 +22,10 @@ All notable changes to this project are documented here. The format follows
   orchestration, PR creation, companion review, merge and verified shipping.
 - Documentation checks requiring core guides, per-skill guides and matching
   English/Vietnamese paths in addition to internal-link validation.
+- `scripts/qk_run.py`: opt-in runner from request to a ready-for-review PR on
+  Claude Code, Codex or omp, with one plan-approval gate, runner-run verification,
+  cross-model review, at most one fix round and runner-only commit/push/PR;
+  unit tests in CI and English/Vietnamese guides.
 
 ### Changed
 
