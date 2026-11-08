@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk handoff"
+  short_description: "Write or resume a session handoff"
+policy:
+  allow_implicit_invocation: false

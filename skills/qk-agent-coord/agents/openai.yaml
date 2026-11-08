@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk agent-coord"
+  short_description: "Delegate a bounded task to a named agent and model"
+policy:
+  allow_implicit_invocation: false

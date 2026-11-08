@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk brainstorm"
+  short_description: "Compare approaches and recommend one"
+policy:
+  allow_implicit_invocation: false

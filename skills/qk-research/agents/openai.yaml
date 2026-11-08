@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk research"
+  short_description: "Answer a decision question with primary sources"
+policy:
+  allow_implicit_invocation: false

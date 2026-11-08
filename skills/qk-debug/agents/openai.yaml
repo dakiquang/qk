@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk debug"
+  short_description: "Find a root cause with evidence"
+policy:
+  allow_implicit_invocation: false

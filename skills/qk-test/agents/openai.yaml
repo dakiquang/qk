@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk test"
+  short_description: "Run independent verification and report real results"
+policy:
+  allow_implicit_invocation: false

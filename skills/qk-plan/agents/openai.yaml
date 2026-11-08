@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk plan"
+  short_description: "Create, audit or revise an implementation plan"
+policy:
+  allow_implicit_invocation: false

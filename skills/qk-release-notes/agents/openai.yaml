@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk release-notes"
+  short_description: "Draft release notes and changelog entries"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk cook"
+  short_description: "Implement an approved change with verification"
+policy:
+  allow_implicit_invocation: false
