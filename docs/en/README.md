@@ -10,6 +10,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 - [Workflows](workflows.md) — which skills to chain for an unclear idea, a clear change, a bug, a session switch or a release.
 - [Runtimes](runtimes.md) — how each runtime calls the skills, what has been tested, known quirks.
 - [Case study: CSV export](case-study-csv-export.md) — a worked feature from brainstorm and planning through an isolated worker, PR review, merge and shipping.
+- [qk-run runner](runner.md) — opt-in automation from request to a ready-for-review PR, with one plan-approval gate.
 
 ## Skills
 

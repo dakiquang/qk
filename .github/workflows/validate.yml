@@ -14,6 +14,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/validate.py
+      - run: python3 -m unittest discover -s tests -v
   gitleaks:
     runs-on: ubuntu-latest
     permissions:

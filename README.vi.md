@@ -23,7 +23,9 @@ qk là **cánh tay mở rộng của Claude Code, Codex và omp**, không thay t
 | [qk/release-notes](docs/vi/skills/qk-release-notes.md) | Nháp release notes/changelog truy được nguồn, chưa đăng |
 | [qk/dogfood](docs/vi/skills/qk-dogfood.md) | Đề xuất cải thiện instruction từ bằng chứng, chỉ trong chat; không áp dụng |
 
-Mỗi skill ghi kết quả, quyền và tiêu chí xong. Không pipeline bắt buộc, không tự gọi skill khác. Quyền sửa code không bao gồm commit, push, mở PR, merge, tag, deploy hoặc đăng.
+Mỗi skill ghi kết quả, quyền và tiêu chí xong. Skill không tự gọi nhau và không có pipeline bắt buộc. Quyền sửa code không bao gồm commit, push, mở PR, merge, tag, deploy hoặc đăng.
+
+Muốn tự động đầu-cuối, [runner qk-run](docs/vi/runner.md) (chỉ chạy khi bạn gọi) điều phối Claude Code, Codex hoặc omp từ yêu cầu đến PR ready-for-review: dừng một lần để duyệt plan, kiểm bằng lệnh trong plan, review chéo model và không bao giờ merge.
 
 Instruction chuẩn của skill và mẫu prompt cho worker được viết bằng tiếng Anh; tài liệu cho người đọc vẫn có EN/VI. Báo cáo theo ngôn ngữ người dùng, trừ khi người dùng hoặc repo chỉ định khác; khi sửa file đã có thì giữ ngôn ngữ và định dạng của file đó. Không dịch lệnh, đường dẫn, identifier hay chuỗi máy đọc cố định.
 

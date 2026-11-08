@@ -2,7 +2,7 @@
 
 [Tiếng Việt](../vi/workflows.md) · [Docs index](README.md)
 
-There is no fixed pipeline. Start from what is missing, run only the skills you need, and decide at each gate. Skills never call each other: each one ends by naming the next command, and you run it.
+There is no fixed pipeline. Start from what is missing, run only the skills you need, and decide at each gate. Skills never call each other: each one ends by naming the next command, and you run it. To hand a clear task end to end to agents, with one plan-approval gate and a PR at the end, start the opt-in [qk-run runner](runner.md).
 
 For prompts, authority gates and a concrete coordinator/worker-to-PR example, read the [CSV export case study](case-study-csv-export.md).
 
