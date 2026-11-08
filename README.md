@@ -32,12 +32,12 @@ For pull-request review and scoring, use the companion skill [pr-orchestrator](h
 |---|---|---|
 | Claude Code | `/qk-plan` | `disable-model-invocation: true` |
 | Codex | `$qk-plan` | `agents/openai.yaml` → `allow_implicit_invocation: false` |
-| omp | `/skill:qk-plan` | `disable-model-invocation: true` |
-| Qwen Code | not verified yet | not verified yet |
+| omp | `/skill:qk-plan` (interactive or RPC; `omp -p` does not expand `/skill:` for any skill) | `disable-model-invocation: true` |
+| Qwen Code | `/qk-plan` | not verified yet |
 
 Orca runs these agents in its terminals and sees the skills installed for each agent.
 
-These settings tell each runtime not to load a skill on its own; Claude Code documents that its setting also keeps the skill out of subagents. Whether every runtime honours them in practice has not been tested yet (see Support status). The intent: qk never takes over a request you did not route to it.
+These settings tell each runtime not to load a skill on its own; Claude Code documents that its setting also keeps the skill out of subagents. The intent: qk never takes over a request you did not route to it. Tested results are in Support status.
 
 ## Install
 
@@ -63,7 +63,17 @@ Start a new session after installing so the runtime discovers the skills.
 
 ## Support status
 
-Structure and invocation settings are checked by `scripts/validate.py`. On omp 18.15.0, discovery of all skills alongside existing ones has been checked in a throwaway project. Explicit invocation, absence of implicit activation and coexistence with native commands have not been tested on any runtime yet; results will be recorded here per runtime and version.
+Structure and invocation settings are checked by `scripts/validate.py`. Live checks, 2026-11-08, in a scratch repository with read-only modes, one explicit call (`qk-brainstorm`) and one ordinary planning request per runtime:
+
+| Runtime | Explicit call runs the skill | Ordinary request leaves qk alone | Notes |
+|---|---|---|---|
+| Claude Code (Sonnet 5.5, plan mode) | Yes | Yes, no skill loaded | |
+| Codex (`codex exec -s read-only`) | Yes | Yes, no skill file read | |
+| omp 18.15.0 (RPC) | Yes | Yes, no skill injected | `omp -p` passes `/skill:` through as plain text for every skill |
+| Qwen Code | Not tested | Not tested | Recognised `/qk-brainstorm` as a skill, then the API returned 401 (expired login); Qwen also wrote a temporary args file under `.qwen/tmp` in plan mode |
+| Orca | — | — | Lists each qk skill once |
+
+These are single runs, not certification. Coexistence with each runtime's native commands beyond these requests has not been tested.
 
 ## Validate
 

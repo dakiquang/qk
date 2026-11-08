@@ -32,12 +32,12 @@ Review và chấm điểm pull request dùng skill đồng hành [pr-orchestrato
 |---|---|---|
 | Claude Code | `/qk-plan` | `disable-model-invocation: true` |
 | Codex | `$qk-plan` | `agents/openai.yaml` → `allow_implicit_invocation: false` |
-| omp | `/skill:qk-plan` | `disable-model-invocation: true` |
-| Qwen Code | chưa kiểm | chưa kiểm |
+| omp | `/skill:qk-plan` (giao diện tương tác hoặc RPC; `omp -p` không mở rộng `/skill:` cho mọi skill) | `disable-model-invocation: true` |
+| Qwen Code | `/qk-plan` | chưa kiểm |
 
 Orca chạy các agent này trong terminal của nó và thấy skill đã cài cho từng agent.
 
-Các cấu hình này báo cho runtime không tự nạp skill; Claude Code ghi trong tài liệu rằng cấu hình của nó cũng giữ skill ngoài subagent. Runtime có tuân thủ thật hay không thì chưa được thử (xem Mức hỗ trợ). Chủ ý: qk không giành lấy yêu cầu mà bạn không chuyển cho nó.
+Các cấu hình này báo cho runtime không tự nạp skill; Claude Code ghi trong tài liệu rằng cấu hình của nó cũng giữ skill ngoài subagent. Chủ ý: qk không giành lấy yêu cầu mà bạn không chuyển cho nó. Kết quả thử thật ở mục Mức hỗ trợ.
 
 ## Cài đặt
 
@@ -63,7 +63,17 @@ Mở phiên mới sau khi cài để runtime nhận skill.
 
 ## Mức hỗ trợ
 
-Cấu trúc và cấu hình gọi được `scripts/validate.py` kiểm. Trên omp 18.15.0 đã kiểm trong project tạm: nhận đủ skill, cùng tồn tại với skill sẵn có. Gọi đích danh, không tự kích hoạt và cùng tồn tại với lệnh native chưa được thử trên runtime nào; kết quả sẽ ghi tại đây theo runtime và phiên bản.
+Cấu trúc và cấu hình gọi được `scripts/validate.py` kiểm. Thử thật ngày 08/11/2026 trên repo nháp, chế độ chỉ đọc, mỗi runtime một lần gọi đích danh (`qk-brainstorm`) và một yêu cầu lập kế hoạch thường:
+
+| Runtime | Gọi đích danh thì skill chạy | Yêu cầu thường không kích hoạt qk | Ghi chú |
+|---|---|---|---|
+| Claude Code (Sonnet 5.5, plan mode) | Có | Có, không nạp skill | |
+| Codex (`codex exec -s read-only`) | Có | Có, không đọc file skill | |
+| omp 18.15.0 (RPC) | Có | Có, không chèn skill | `omp -p` gửi `/skill:` nguyên văn cho mọi skill |
+| Qwen Code | Chưa thử được | Chưa thử được | Nhận ra `/qk-brainstorm` là skill, sau đó API trả 401 (phiên đăng nhập hết hạn); Qwen cũng ghi file tham số tạm vào `.qwen/tmp` dù ở plan mode |
+| Orca | — | — | Liệt kê mỗi skill qk đúng một lần |
+
+Đây là một lần chạy, không phải chứng nhận. Việc cùng tồn tại với lệnh native ngoài các yêu cầu trên chưa được thử.
 
 ## Kiểm tra
 
