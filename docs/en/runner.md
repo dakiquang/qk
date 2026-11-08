@@ -11,7 +11,7 @@ python3 scripts/qk_run.py start "Add X. Done when <check> passes." --repo <path>
 python3 scripts/qk_run.py approve <id>            # after reading the plan
 python3 scripts/qk_run.py revise <id> "<feedback>" # replan instead
 python3 scripts/qk_run.py status <id>
-python3 scripts/qk_run.py resume <id>             # retry a blocked stage
+python3 scripts/qk_run.py resume <id>             # retry a blocked stage as it stands
 python3 scripts/qk_run.py abort <id>
 ```
 
@@ -34,7 +34,7 @@ State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (d
 
 - Agents only edit files in the worktree. The runner alone commits, pushes and opens the PR.
 - The runner blocks when the worktree leaves the run branch or its HEAD moves away from the runner's commit, when an agent changes the primary checkout's branch, HEAD or files, or when a read-only agent changes worktree contents. These checks also run when the agent call itself fails or times out.
-- Expected states are stored, not re-captured: `resume` after such a block stays blocked until the worktree is restored, so a violating commit or edit cannot be published by resuming. Use `abort` if it cannot be restored.
+- The worktree's branch, HEAD and expected contents are stored, not re-captured: `resume` after such a block stays blocked until the worktree is restored, so a violating commit or edit cannot be published by resuming. Hand edits to the worktree after a block also keep it blocked; to change the work, `abort` and start a new run. The primary checkout is compared only across each agent turn, so leave it untouched while an agent runs; a change made by you between turns does not block.
 - Never merges, releases, tags, deploys, force-pushes, deletes branches or switches models. Quota, login or missing-model failures stop as `blocked`.
 - `resume` after publishing does not recommit, repush or open a second PR.
 
@@ -46,4 +46,4 @@ State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (d
 
 ## Verified
 
-On 2026-11-08: 29 unit tests with a scripted agent and real Git repositories, run on Python 3.9 and 3.12+, cover the main path, the single fix round (verification failure and a second serious review both block without publishing), agent commits and branch switches, commits in the primary checkout, read-only violations and their resume, verification artifacts and mutations, plan edits before approval and the frozen approved plan, model-family checks, dirty checkouts, existing branches and PRs, and resume after a failed PR call. Real end-to-end runs on a private scratch GitHub repository opened ready-for-review PRs containing only the intended files with each implementer: omp (Opus 5.5) reviewed by Codex, Claude Code (Sonnet) reviewed by Codex, and Codex reviewed by omp (Opus 5.5). After the review fixes, the default omp/Codex pair was rerun once with the same result. These are single runs, not certification.
+On 2026-11-08: 30 unit tests with a scripted agent and real Git repositories, run on Python 3.9 and 3.12+, cover the main path, the single fix round (verification failure and a second serious review both block without publishing; a fixer updating the plan status still publishes), agent commits and branch switches, commits in the primary checkout, read-only violations and their resume, verification artifacts and mutations, plan edits before approval and the frozen approved plan, model-family checks, dirty checkouts, existing branches and PRs, and resume after a failed PR call. Real end-to-end runs on a private scratch GitHub repository opened ready-for-review PRs containing only the intended files with each implementer: omp (Opus 5.5) reviewed by Codex, Claude Code (Sonnet) reviewed by Codex, and Codex reviewed by omp (Opus 5.5). After the review fixes, the default omp/Codex pair was rerun once with the same result. These are single runs, not certification.

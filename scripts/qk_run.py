@@ -114,12 +114,12 @@ PROVIDER_FAMILIES = {"anthropic": "anthropic", "openai": "openai", "openai-codex
 def family(spec):
     """Model family of a runtime:model spec. Unknown families are an error, never a pass."""
     runtime, model = parse_spec(spec)
-    if runtime == "claude":
-        return "anthropic"
-    if runtime == "codex":
-        return "openai"
     provider, _, name = model.lower().rpartition("/")
     if not name:
+        if runtime == "claude":
+            return "anthropic"
+        if runtime == "codex":
+            return "openai"
         raise SystemExit(f"qk-run: {spec!r} needs an explicit model, e.g. omp:anthropic/claude-opus-5-5")
     for found, hints in FAMILY_NAMES:
         if any(hint in name for hint in hints) or re.match(r"o\d", name) and found == "openai":
@@ -458,10 +458,10 @@ def next_fix(state, why):
 
 def fixing(state):
     state["fix_rounds"] = state.get("fix_rounds", 0) + 1
-    plan, _ = approved_plan(state)
+    approved_plan(state)
     problems = "\n".join(f"- {p}" for p in state["problems"])
     prompt = f"""Read {skill('qk-cook')}. Fix only the problems below in {state['worktree']}, with the smallest change,
-staying within the approved plan {plan}. Do not weaken tests or checks.
+staying within the approved plan {run_dir(state['id']) / 'plan.md'}. Do not weaken tests or checks.
 Problems:
 {problems}
 {CLEAN}

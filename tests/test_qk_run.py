@@ -353,6 +353,23 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(qk_run.family("omp:openai-codex/gpt-6.1-sol"), qk_run.family("codex:"))
         self.assertEqual(qk_run.family("omp:google-antigravity/claude-sonnet-4-6"), "anthropic")
         self.assertNotEqual(qk_run.family(qk_run.DEFAULT_IMPL), qk_run.family(qk_run.DEFAULT_REVIEW))
+        self.assertEqual(qk_run.family("codex:openrouter/anthropic/claude-sonnet-x"), "anthropic")
+
+    def test_fixer_updating_the_plan_status_still_publishes(self):
+        def cook(cwd, state_dir):
+            (cwd / "other.txt").write_text("wip\n")
+            return result()
+
+        def fix(cwd, state_dir):
+            (cwd / "greeting.txt").write_text("hello\n")
+            plan = state_dir / "plan.md"
+            plan.write_text(plan.read_text().replace("# Add greeting", "# Add greeting (done)"))
+            return result()
+        state = self.start(Agent(cook=cook, fix=fix))
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertEqual(state["fix_rounds"], 1)
 
     def test_existing_branch_is_refused(self):
         original = qk_run.secrets.token_hex

@@ -1,6 +1,6 @@
 # qk-run: runner tự động từ yêu cầu đến PR
 
-Trạng thái: đã triển khai — 2026-11-08. Lệch so với plan: bước planning chạy chỉ đọc và trả plan cho runner lưu (agent đã để lại `__pycache__` khi được ghi); runner xoá file do lệnh kiểm tạo ra (smoke đầu tiên đã commit `.pyc`); omp ghi dùng `--approval-mode yolo` vì `write` vẫn hỏi trước bash; Claude chỉ đọc dùng `--tools Read,Grep,Glob` vì `plan` mode vẫn chạy được lệnh. Smoke 2–5 được phủ bằng unit test với repo Git thật, không chạy riêng trên GitHub.
+Trạng thái: đã triển khai — 2026-11-08. Lệch so với plan: bước planning chạy chỉ đọc và trả plan cho runner lưu (agent đã để lại `__pycache__` khi được ghi); runner xoá file do lệnh kiểm tạo ra (smoke đầu tiên đã commit `.pyc`); omp ghi dùng `--approval-mode yolo` vì `write` vẫn hỏi trước bash; Claude chỉ đọc dùng `--tools Read,Grep,Glob` vì `plan` mode vẫn chạy được lệnh. Commit message là tiêu đề plan, chưa tự dò convention của repo; finding chỉ được đối chiếu theo file, chưa theo dòng trong diff. Sau review PR #1: plan được đóng băng khi `approve`, trạng thái worktree kỳ vọng được lưu để `resume` không hợp thức hoá vi phạm. Smoke 2–5 được phủ bằng unit test với repo Git thật, không chạy riêng trên GitHub.
 
 ## Mục tiêu và ngoài phạm vi
 

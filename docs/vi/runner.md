@@ -11,7 +11,7 @@ python3 scripts/qk_run.py start "Thêm X. Xong khi <lệnh kiểm> pass." --repo
 python3 scripts/qk_run.py approve <id>            # sau khi đọc plan
 python3 scripts/qk_run.py revise <id> "<góp ý>"   # lập lại plan
 python3 scripts/qk_run.py status <id>
-python3 scripts/qk_run.py resume <id>             # chạy lại bước bị chặn
+python3 scripts/qk_run.py resume <id>             # chạy lại bước bị chặn, giữ nguyên hiện trạng
 python3 scripts/qk_run.py abort <id>
 ```
 
@@ -34,7 +34,7 @@ Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (m
 
 - Agent chỉ sửa file trong worktree. Chỉ runner commit, push và mở PR.
 - Runner chặn khi worktree rời nhánh của run hoặc HEAD lệch khỏi commit của runner, khi agent đổi nhánh, HEAD hoặc file của checkout chính, hoặc khi agent chỉ đọc làm đổi nội dung worktree. Các kiểm này vẫn chạy khi lời gọi agent lỗi hoặc timeout.
-- Trạng thái kỳ vọng được lưu lại, không chụp lại khi resume: sau khi bị chặn vì các lý do trên, `resume` vẫn bị chặn cho tới khi worktree được khôi phục, nên không thể publish commit hay chỉnh sửa vi phạm bằng cách resume. Không khôi phục được thì dùng `abort`.
+- Nhánh, HEAD và nội dung kỳ vọng của worktree được lưu lại, không chụp lại khi resume: sau khi bị chặn vì các lý do trên, `resume` vẫn bị chặn cho tới khi worktree được khôi phục, nên không thể publish commit hay chỉnh sửa vi phạm bằng cách resume. Tự sửa worktree sau khi bị chặn cũng vẫn bị chặn; muốn đổi nội dung thì `abort` rồi chạy run mới. Checkout chính chỉ được so trong từng lượt agent, nên đừng đụng vào nó khi agent đang chạy; thay đổi của bạn giữa các lượt không làm run dừng.
 - Không merge, release, tag, deploy, force-push, xoá nhánh hay đổi model. Hết quota, lỗi đăng nhập hoặc thiếu model thì dừng ở `blocked`.
 - `resume` sau khi publish không commit lại, push lại hay mở PR thứ hai.
 
@@ -46,4 +46,4 @@ Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (m
 
 ## Đã kiểm
 
-Ngày 08/11/2026: 29 unit test với agent giả lập và repo Git thật, chạy trên Python 3.9 và 3.12+, phủ luồng chính, vòng sửa duy nhất (lệnh kiểm lỗi và review lần hai còn finding nghiêm trọng đều dừng, không publish), agent tự commit hoặc đổi nhánh, commit trong checkout chính, vi phạm chỉ đọc và resume sau đó, file sinh ra và thay đổi do lệnh kiểm, sửa plan trước khi duyệt và plan đã đóng băng, kiểm họ model, checkout bẩn, nhánh và PR đã tồn tại, và resume sau khi lệnh tạo PR lỗi. Chạy thật đầu-cuối trên một repo GitHub private tạm đã mở PR ready-for-review chỉ chứa đúng file dự kiến với từng runtime triển khai: omp (Opus 5.5) do Codex review, Claude Code (Sonnet) do Codex review, và Codex do omp (Opus 5.5) review. Sau bản sửa sau review, cặp mặc định omp/Codex được chạy lại một lần với cùng kết quả. Đây là các lần chạy đơn lẻ, không phải chứng nhận.
+Ngày 08/11/2026: 30 unit test với agent giả lập và repo Git thật, chạy trên Python 3.9 và 3.12+, phủ luồng chính, vòng sửa duy nhất (lệnh kiểm lỗi và review lần hai còn finding nghiêm trọng đều dừng, không publish; agent sửa cập nhật trạng thái plan vẫn publish được), agent tự commit hoặc đổi nhánh, commit trong checkout chính, vi phạm chỉ đọc và resume sau đó, file sinh ra và thay đổi do lệnh kiểm, sửa plan trước khi duyệt và plan đã đóng băng, kiểm họ model, checkout bẩn, nhánh và PR đã tồn tại, và resume sau khi lệnh tạo PR lỗi. Chạy thật đầu-cuối trên một repo GitHub private tạm đã mở PR ready-for-review chỉ chứa đúng file dự kiến với từng runtime triển khai: omp (Opus 5.5) do Codex review, Claude Code (Sonnet) do Codex review, và Codex do omp (Opus 5.5) review. Sau bản sửa sau review, cặp mặc định omp/Codex được chạy lại một lần với cùng kết quả. Đây là các lần chạy đơn lẻ, không phải chứng nhận.
