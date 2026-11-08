@@ -7,20 +7,26 @@
 qk là Markdown thuần: không build, không dependency runtime. Clone một lần rồi tạo symlink từng thư mục skill vào nơi runtime đọc. Mọi runtime dùng cùng nguồn; `git pull` cập nhật các link đó. Repo hiện riêng tư nên cần tài khoản GitHub có quyền đọc.
 
 ```bash
-git clone https://github.com/dakiquang/qk ~/src/qk
-dest=~/.claude/skills            # lặp lại cho thư mục runtime ở bảng dưới
-mkdir -p "$dest"
-collision=0
-for skill in ~/src/qk/skills/qk-*; do
-  target="$dest/$(basename "$skill")"
-  if [ -e "$target" ] || [ -L "$target" ]; then echo "already exists: $target"; collision=1; fi
-done
-if [ "$collision" = 0 ]; then
-  for skill in ~/src/qk/skills/qk-*; do ln -s "$skill" "$dest/$(basename "$skill")"; done
-fi
+(
+  git clone https://github.com/dakiquang/qk ~/src/qk || exit 1
+  dest=~/.claude/skills          # lặp lại cho thư mục runtime ở bảng dưới
+  set -- ~/src/qk/skills/qk-*
+  for skill do
+    [ -f "$skill/SKILL.md" ] || { echo "invalid or missing skill: $skill" >&2; exit 1; }
+    target="$dest/$(basename "$skill")"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      echo "already exists: $target" >&2
+      exit 1
+    fi
+  done
+  mkdir -p "$dest" || exit 1
+  for skill do
+    ln -s "$skill" "$dest/$(basename "$skill")" || exit 1
+  done
+)
 ```
 
-Script kiểm mọi đích trước, không tạo link nếu có đích đã tồn tại. Chạy khi không có tiến trình khác cài skill vào cùng thư mục; đây không phải installer xử lý đồng thời.
+Khối lệnh chạy trong subshell: clone lỗi hoặc nguồn skill thiếu/không hợp lệ sẽ dừng mà không thoát shell của bạn. Script kiểm mọi skill và đích trước khi tạo link, không tạo link nếu có đích đã tồn tại. Chạy khi không có tiến trình khác cài skill vào cùng thư mục; đây không phải installer xử lý đồng thời hoặc rollback.
 
 | Runtime | Thư mục skill |
 |---|---|
@@ -86,4 +92,4 @@ Từ thư mục gốc clone:
 python3 scripts/validate.py
 ```
 
-Kiểm tên folder/frontmatter, cấu hình gọi đích danh Claude Code/omp/Codex, link nội bộ, cặp docs EN/VI và chuỗi giống secret/đường dẫn cá nhân. Đặt `QK_DENYLIST` trỏ file các từ không được xuất hiện, mỗi dòng một từ. Đây là kiểm tĩnh, không chứng nhận mọi runtime sẽ tuân thủ.
+Kiểm tên folder/frontmatter, cấu hình gọi đích danh Claude Code/omp/Codex, link nội bộ và cặp docs EN/VI. Kiểm đường dẫn cá nhân và mẫu secret áp cho file text UTF-8 mọi hậu tố ngoài `.git`, trừ mẫu phát hiện của chính validator. `QK_DENYLIST` là file UTF-8 chứa term literal, mỗi dòng một term; khớp không phân biệt hoa thường theo biên ký tự chữ và áp cả cho validator. Không kiểm file binary, tên file hoặc lịch sử Git. Đây là kiểm tĩnh, không chứng nhận mọi runtime sẽ tuân thủ.

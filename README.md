@@ -55,7 +55,7 @@ PR review and scoring use the companion [pr-orchestrator](https://github.com/dak
 python3 scripts/validate.py
 ```
 
-Checks skill metadata, explicit-invocation settings, internal links, EN/VI documentation pairs, personal paths and secret-like strings. Optional `QK_DENYLIST` points to a file of prohibited terms. CI also runs gitleaks over history. Static checks do not prove runtime isolation.
+Checks skill metadata, explicit-invocation settings, internal links, EN/VI documentation pairs, personal paths and secret-like strings. Optional `QK_DENYLIST` points to literal terms checked in UTF-8 text contents outside `.git`, including the validator itself; binary files and filenames are not checked. CI runs gitleaks on the commit range of each push/PR event, not a guaranteed full-history scan. Static checks do not prove runtime isolation.
 
 ## License
 

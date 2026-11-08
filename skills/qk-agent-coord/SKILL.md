@@ -49,15 +49,16 @@ No path satisfies these conditions → report **blocked** with the reason. Do no
 
 - Only one writing agent per checkout. A worker's writes run in a separate worktree on a separate branch.
 - A worktree prevents Git collisions; it is **not a sandbox**: network, credentials and files outside the repo are still governed by the runtime's permissions.
-- Read-only tasks: use the runtime's permission-limiting mode from the table above — that is the primary barrier. For additional evidence, run these three commands before and after the worker runs and compare the output:
+- Read-only tasks: use the runtime's permission-limiting mode from the table above — that is the primary barrier. For additional evidence, run these commands before and after the worker runs and compare the output:
 
   ```bash
   git rev-parse --verify -q HEAD
   git status --porcelain --ignored --untracked-files=all
+  git ls-files --stage -z
   git ls-files -z -co --exclude-standard | xargs -0 shasum
   ```
 
-  This set catches new commits, new files (including ignored files and files inside untracked directories), deleted files, and edits to tracked or untracked files even when they were already dirty, and it works on repos with no commits. Plain `git status --porcelain` misses most of these cases. It still does **not** catch edits to pre-existing ignored files or to files outside the repo; state this limit in the report.
+  This set checks HEAD, status, staged blob IDs/modes and tracked/non-ignored untracked working-tree contents, including files that were already dirty. On a repo with no commits, the HEAD check exits nonzero; record that state and still run the other checks. Plain porcelain status does not expose staged content changes when the status flags stay the same. These checks still do **not** cover pre-existing ignored-file contents or files outside the repo; state those limits in the report.
 - Unexpected changes → stop and report the changed files. Do not revert or stash on your own.
 - A timeout does not prove the worker has stopped. Do not reassign a writing task in the same area until you are sure the old worker has exited. Do not automatically rerun tasks that have external effects.
 

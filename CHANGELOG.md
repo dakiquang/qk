@@ -31,3 +31,13 @@ All notable changes to this project are documented here. The format follows
   preserve existing artifacts' language and format, including plans and handoffs.
 - Clarified independent-event counting and exact-path source resolution in
   `qk-dogfood`, without adding an apply mode or expanding its authority.
+
+### Fixed
+
+- Grant the gitleaks job PR-read access without comment-write access; describe
+  event-range scanning rather than implying a full-history scan.
+- Include staged blob IDs in worker mutation checks and retain every flaky-run
+  outcome, including the original failure.
+- Stop installation on clone failure or invalid/missing skill sources.
+- Reject nested descriptions and duplicate interface keys; scan UTF-8 text of any
+  suffix and match punctuation-bearing denylist terms, including in the validator.

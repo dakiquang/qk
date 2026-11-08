@@ -22,7 +22,7 @@ No valid route, missing login, quota or unavailable model means **blocked**, wit
 
 ## Isolation and evidence
 
-One writer per checkout. A worktree prevents Git collisions; it is not a network/credential/filesystem sandbox. For read-only work, native permission limits are primary. The skill's before/after Git revision, full status and tracked/untracked content checks provide additional evidence but do not prove universal immutability: existing ignored-file contents and files outside the repo are not covered, among other limits.
+One writer per checkout. A worktree prevents Git collisions; it is not a network/credential/filesystem sandbox. For read-only work, native permission limits are primary. Compare Git revision, full status, staged blob IDs/modes (`git ls-files --stage -z`) and tracked/non-ignored untracked working-tree contents before and after. Status flags alone can stay unchanged while staged content changes. These checks do not prove universal immutability: pre-existing ignored-file contents and files outside the repo are not covered. A repo without commits has no HEAD; record that state and still run the remaining checks.
 
 Unexpected mutations are reported without reverting or stashing. A timeout does not prove a worker stopped; do not reassign a writing area until termination is known, or automatically retry external effects.
 

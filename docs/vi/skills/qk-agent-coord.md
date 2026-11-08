@@ -22,7 +22,7 @@ Không có đường phù hợp, chưa đăng nhập, hết quota hoặc model k
 
 ## Cô lập và bằng chứng
 
-Một checkout chỉ một agent ghi. Worktree tránh va chạm Git, không phải sandbox network/credential/filesystem. Việc chỉ đọc lấy giới hạn quyền native làm lớp chính. So revision, status đầy đủ và nội dung tracked/untracked trước/sau là bằng chứng bổ sung, không chứng minh bất biến tuyệt đối: không phủ nội dung file ignored có sẵn hoặc file ngoài repo, cùng các giới hạn khác.
+Một checkout chỉ một agent ghi. Worktree tránh va chạm Git, không phải sandbox network/credential/filesystem. Việc chỉ đọc lấy giới hạn quyền native làm lớp chính. So revision, status đầy đủ, blob ID/mode đã stage (`git ls-files --stage -z`) và nội dung working tree tracked/untracked không bị ignore trước/sau. Cờ status có thể giữ nguyên dù nội dung stage đổi. Đây không phải chứng minh bất biến tuyệt đối: không phủ nội dung file ignored có sẵn hoặc file ngoài repo. Repo chưa có commit thì ghi nhận chưa có HEAD, vẫn chạy các kiểm còn lại.
 
 Đổi ngoài dự kiến thì báo, không revert hay stash. Timeout không chứng minh worker đã dừng; chưa biết đã kết thúc thì không giao lại vùng ghi, không tự retry tác động ra ngoài.
 

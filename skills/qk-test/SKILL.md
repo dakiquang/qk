@@ -24,7 +24,7 @@ Use when verification must be broader than, or independent of, the checks in `qk
 2. Determine scope: tests for the changed part first, then broader suites if requested or if the change touches shared interfaces.
 3. Run and keep the output. For long output, write it to a temporary file and quote only the failing part.
 4. When failures appear: check whether they occur on base (read base CI, or run on base when the user permits creating a temporary worktree). If present on base, it is baseline and not attributed to the change.
-5. Flaky failures: rerun at most twice, record both results, do not call it a pass.
+5. Flaky failures: rerun at most twice; record the original result and every rerun result. Do not call a later success a clean pass.
 6. List changed behavior that no test touches.
 
 ## Report

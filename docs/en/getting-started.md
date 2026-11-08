@@ -9,20 +9,26 @@ qk is plain Markdown: no build, no runtime dependency. Clone it once and link ea
 The repository is currently private; cloning requires a GitHub account with access.
 
 ```bash
-git clone https://github.com/dakiquang/qk ~/src/qk
-dest=~/.claude/skills            # repeat for each runtime directory below
-mkdir -p "$dest"
-collision=0
-for skill in ~/src/qk/skills/qk-*; do
-  target="$dest/$(basename "$skill")"
-  if [ -e "$target" ] || [ -L "$target" ]; then echo "already exists: $target"; collision=1; fi
-done
-if [ "$collision" = 0 ]; then
-  for skill in ~/src/qk/skills/qk-*; do ln -s "$skill" "$dest/$(basename "$skill")"; done
-fi
+(
+  git clone https://github.com/dakiquang/qk ~/src/qk || exit 1
+  dest=~/.claude/skills          # repeat for each runtime directory below
+  set -- ~/src/qk/skills/qk-*
+  for skill do
+    [ -f "$skill/SKILL.md" ] || { echo "invalid or missing skill: $skill" >&2; exit 1; }
+    target="$dest/$(basename "$skill")"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      echo "already exists: $target" >&2
+      exit 1
+    fi
+  done
+  mkdir -p "$dest" || exit 1
+  for skill do
+    ln -s "$skill" "$dest/$(basename "$skill")" || exit 1
+  done
+)
 ```
 
-The script checks every target first and links nothing if a target already exists. Run it while no other process is installing skills into that directory; it is not a concurrent installer.
+The block runs in a subshell: clone failure or a missing/invalid source stops it without exiting your interactive shell. It validates every skill and target before making links, and links nothing if a target already exists. Run it while no other process is installing skills into that directory; it is not a concurrent or rollback-capable installer.
 
 | Runtime | Skills directory |
 |---|---|
@@ -90,4 +96,4 @@ Repeat for each owned link in the directories you installed into. Do not remove 
 python3 scripts/validate.py
 ```
 
-It checks folder and frontmatter names, the explicit-only settings for Claude Code, omp and Codex, internal links, that every English doc has a Vietnamese pair, and that nothing looks like a personal path or a secret. Set `QK_DENYLIST` to a file of terms (one per line) that must never appear in the repository.
+It checks folder and frontmatter names, explicit-only settings for Claude Code, omp and Codex, internal links and EN/VI documentation pairs. Personal-path and secret-pattern checks cover UTF-8 text files of any suffix outside `.git`, except the validator's own detection patterns. `QK_DENYLIST` is a UTF-8 file of literal terms (one per line); matching is case-insensitive with word-character boundaries and includes the validator itself. Binary files, filenames and Git history are outside these content checks.

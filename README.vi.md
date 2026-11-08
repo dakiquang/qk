@@ -55,7 +55,7 @@ Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://git
 python3 scripts/validate.py
 ```
 
-Kiểm metadata skill, cấu hình gọi đích danh, link nội bộ, cặp docs EN/VI, đường dẫn cá nhân và chuỗi giống secret. `QK_DENYLIST` tùy chọn trỏ file từ cấm. CI chạy thêm gitleaks trên lịch sử. Kiểm tĩnh không chứng minh cô lập runtime.
+Kiểm metadata skill, cấu hình gọi đích danh, link nội bộ, cặp docs EN/VI, đường dẫn cá nhân và chuỗi giống secret. `QK_DENYLIST` trỏ file các term literal, kiểm nội dung text UTF-8 ngoài `.git`, kể cả chính validator; không kiểm file binary hoặc tên file. CI chạy gitleaks trên khoảng commit của từng sự kiện push/PR, không bảo đảm quét toàn lịch sử. Kiểm tĩnh không chứng minh cô lập runtime.
 
 ## Giấy phép
 

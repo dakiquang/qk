@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check that every qk skill is well-formed, explicit-invocation only, and safe to publish.
 
-Optional: set QK_DENYLIST to a file of terms (one per line) that must not appear
-anywhere in the repository, e.g. employer or client names kept outside the repo.
+Optional: set QK_DENYLIST to a UTF-8 file of literal terms (one per line).
+Terms are checked in UTF-8 text file contents outside .git, including this script.
 """
 import os
 import re
@@ -17,7 +17,7 @@ NAME_RE = re.compile(r"^qk-[a-z0-9]+(-[a-z0-9]+)*$")
 LINK_RE = re.compile(r"\]\((?!https?:|mailto:|#)([^)#\s]+)")
 PERSONAL_RE = re.compile("/" + "Users/|/" + r"home/[a-z]")
 SECRET_RE = re.compile(r"\b(ghp_|github_pat_|sk-ant-|sk-proj-|AKIA|xox[bp]-)[A-Za-z0-9_-]{8,}")
-TEXT_SUFFIXES = {".md", ".yml", ".yaml", ".py", ".txt", ""}
+DESCRIPTION_BLOCKS = {">", ">-", "|", "|-"}
 SELF = Path(__file__).resolve()
 
 errors = []
@@ -32,9 +32,14 @@ def parse_frontmatter(path, text):
     if not match:
         fail(path, "missing frontmatter")
         return None
-    fields, key = {}, None
+    fields, key, block = {}, None, False
     for line in match[1].splitlines():
-        if line[:1] in (" ", "\t") and key:
+        if not line.strip():
+            continue
+        if line[:1] in (" ", "\t"):
+            if not block or "\t" in line:
+                fail(path, "indented frontmatter requires a space-indented description block")
+                return None
             fields[key] = f"{fields[key]} {line.strip()}".strip()
             continue
         name, sep, value = line.partition(":")
@@ -45,7 +50,11 @@ def parse_frontmatter(path, text):
         if key in fields:
             fail(path, f"duplicate frontmatter key: {key}")
         value = value.strip()
-        fields[key] = "" if value in (">", ">-", "|", "|-") else value.strip("'\"")
+        block = key == "description" and value in DESCRIPTION_BLOCKS
+        if key == "description" and not value:
+            fail(path, "description must be a string, not an empty or nested mapping")
+            return None
+        fields[key] = "" if block else value.strip("'\"")
     return fields
 
 
@@ -102,7 +111,7 @@ def check_policy_file(path):
         "interface": re.compile(r'  (display_name|short_description): "[^"\\]*"'),
         "policy": re.compile(r"  allow_implicit_invocation: (true|false)"),
     }
-    seen, parent, values = set(), None, []
+    seen, children, parent, values = set(), set(), None, []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -118,6 +127,11 @@ def check_policy_file(path):
         if not child:
             fail(path, f"line {number}: unsupported line {line.strip()!r}; use the canonical shape")
             return
+        child_key = line.strip().partition(":")[0]
+        if (parent, child_key) in children:
+            fail(path, f"line {number}: duplicate key {parent}.{child_key}")
+            return
+        children.add((parent, child_key))
         if parent == "policy":
             values.append(child[1])
     if values != ["false"]:
@@ -155,10 +169,14 @@ def check_docs(skill_dirs):
 
 def text_files():
     for path in ROOT.rglob("*"):
-        if ".git" in path.parts or not path.is_file() or path.resolve() == SELF:
+        if ".git" in path.parts or not path.is_file():
             continue
-        if path.suffix in TEXT_SUFFIXES:
-            yield path
+        try:
+            content = path.read_bytes()
+            if b"\0" not in content:
+                yield path, content.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
 
 
 def load_denylist():
@@ -170,7 +188,7 @@ def load_denylist():
         errors.append(f"QK_DENYLIST points to a missing file: {source}")
         return []
     terms = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-    return [re.compile(rf"\b{re.escape(term)}\b", re.I) for term in terms if term and not term.startswith("#")]
+    return [re.compile(rf"(?<!\w){re.escape(term)}(?!\w)", re.I) for term in terms if term and not term.startswith("#")]
 
 
 skill_dirs = sorted(p for p in SKILLS.iterdir() if p.is_dir()) if SKILLS.is_dir() else []
@@ -197,11 +215,11 @@ for doc in ROOT.rglob("*.md"):
         check_links(doc, boundary=ROOT)
 
 denylist = load_denylist()
-for path in text_files():
-    content = path.read_text(encoding="utf-8", errors="replace")
-    if PERSONAL_RE.search(content):
+for path, content in text_files():
+    # This script contains the detection patterns themselves; denylist still applies.
+    if path.resolve() != SELF and PERSONAL_RE.search(content):
         fail(path, "contains a personal home path")
-    if SECRET_RE.search(content):
+    if path.resolve() != SELF and SECRET_RE.search(content):
         fail(path, "contains something that looks like a secret")
     for pattern in denylist:
         if pattern.search(content):
