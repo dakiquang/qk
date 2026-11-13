@@ -75,8 +75,26 @@ Chỉ file plan trong fixture sửa plan thay đổi; mọi cây fixture khác v
 source không đổi trong lúc chạy. Không đổi bản cài global hay config runtime.
 Tool chỉ đọc, ngoại trừ quyền sửa plan và lệnh Git/mtime chỉ đọc của ca handoff.
 Đây là các lần chạy đơn lẻ trên một model, không chứng minh an ninh sandbox hay
-bao phủ mọi workflow của cả mười skill. Bản tiếng Anh chưa được chạy lại trên
+bao phủ mọi workflow của cả mười skill. Tại thời điểm đó, bản tiếng Anh chưa được chạy lại trên
 Codex, Claude Code, Qwen hoặc omp tương tác.
+
+## Danh sách kiểm thử thủ công
+
+Chạy từng phép kiểm trong một thư mục tạm trống trên mỗi runtime:
+
+1. **Gọi đích danh:** Gọi `qk-brainstorm` với câu hỏi "Should the app read its configuration from environment variables or a TOML file?" Dùng `/qk-brainstorm …` trong Claude Code, `$qk-brainstorm …` trong Codex hoặc `/skill:qk-brainstorm …` trong omp ở chế độ RPC. Đạt khi báo cáo kết thúc bằng bốn nhãn **Done**, **Evidence**, **Not verified**, **Needs your decision** theo đúng thứ tự và thư mục không có file mới.
+2. **Yêu cầu thường:** Hỏi "I need to plan and debug a config loader. In two sentences, what should I check first?" mà không gọi skill. Đạt khi câu trả lời hiển thị không chứa nhãn nào trong bốn nhãn. Phép kiểm này chỉ xét output nhìn thấy; không chứng minh skill không được nạp vào context.
+
+| Runtime | Ngày | Gọi đích danh | Yêu cầu thường |
+|---|---|---|---|
+| Claude Code 2.1.322 (`claude -p`) | 2026-11-13 | Đạt: bốn nhãn đúng thứ tự, không có file | Đạt: không có nhãn |
+| Codex 0.160.0 (`codex exec --sandbox read-only`) | 2026-11-13 | Đạt | Đạt |
+| omp 18.18.3 (RPC) | 2026-11-13 | Đạt; nội dung skill được chèn | Đạt; không chèn gì |
+| Qwen Code | — | Chưa kiểm: phiên đăng nhập hết hạn | Chưa kiểm |
+
+Đây là các lần chạy đơn lẻ, không phải tỷ lệ tuân thủ. Ngày 2026-11-13, gọi đích danh `qk-prefs` với kho đề xuất trống trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 (RPC): cả ba tìm được script qua thư mục skill symlink, báo không có đề xuất đang chờ và kết thúc bằng bốn nhãn theo đúng thứ tự.
+
+Ngày 2026-11-14, Claude Code 2.1.322 chạy `/qk-commit commit` trong repo tạm có remote bare cục bộ. Lệnh tạo đúng một commit chứa file đã theo dõi và có thay đổi, không push, để file chưa theo dõi không liên quan ở ngoài commit và nêu tên file đó. Khi có file env, file này vẫn ở ngoài commit, được nêu tên trong báo cáo và nội dung không bị đọc. Cả hai commit message đều không có dòng ghi công AI.
 
 ## Hook ghi nhận sở thích
 
@@ -93,6 +111,7 @@ Codex bỏ qua hook mới hoặc vừa sửa cho tới khi bạn trust nó bằn
 ## Đặc điểm đã thấy
 
 - **omp print mode:** `omp -p "/skill:qk-plan …"` gửi nguyên văn, không mở rộng skill; đã đối chứng bằng `find-skills`. Dùng phiên tương tác hoặc RPC; phiên tương tác chưa được kiểm trực tiếp ở đợt trên.
+- **Danh sách skill trong omp print mode:** Hỏi có những skill nào sẽ không liệt kê skill qk vì chúng chỉ chạy khi gọi đích danh. Kiểm bản cài bằng cách gọi đích danh một skill.
 - **Qwen ghi tham số xuống đĩa:** khi gọi skill, ghi file tạm trong `.qwen/tmp/` dù ở plan mode. Đây là hành vi Qwen, không phải qk; cân nhắc ignore thư mục này theo quy tắc repo của bạn.
 - **Codex và thư mục trùng:** link ở hai thư mục nó đọc có thể khiến liệt kê hai lần. Chọn một nơi cài.
 

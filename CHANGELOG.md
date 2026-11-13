@@ -6,8 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-14
+
 ### Added
 
+- Manual runtime smoke checklist and release pinning instructions in the English and Vietnamese documentation.
 - `qk-commit` for scoped commits, optional push and PR, plus `scripts/qk_preflight.py`
   to check push permission for the active GitHub account before publishing.
 - Skills `qk-brainstorm`, `qk-research`, `qk-plan`, `qk-cook`, `qk-debug`,
