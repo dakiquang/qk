@@ -43,7 +43,7 @@ codex exec --sandbox read-only --skip-git-repo-check --json "Reply with the sing
 
 **Qwen Code.** Not checked.
 
-Numbers are examples, not measurements. Checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 (2026-11-13).
+Numbers are examples, not measurements. The versions these commands were checked on are in [Test evidence](evidence.md#lean-setup-measurements).
 
 ## 2. Cut the three usual heavy spots
 

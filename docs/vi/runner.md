@@ -45,8 +45,6 @@ Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (m
 - Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Nếu repo có quy ước commit message, hãy đặt tiêu đề khi squash-merge.
 - Mỗi lần chạy một việc; không có queue, daemon hay chạy song song.
 
-## Đã kiểm
+## Bằng chứng
 
-Ngày 08/11/2026: 30 unit test với agent giả lập và repo Git thật, chạy trên Python 3.9 và 3.12+, phủ luồng chính, vòng sửa duy nhất (lệnh kiểm lỗi và review lần hai còn finding nghiêm trọng đều dừng, không publish; agent sửa cập nhật trạng thái plan vẫn publish được), agent tự commit hoặc đổi nhánh, commit trong checkout chính, vi phạm chỉ đọc và resume sau đó, file sinh ra và thay đổi do lệnh kiểm, sửa plan trước khi duyệt và plan đã đóng băng, kiểm họ model, checkout bẩn, nhánh và PR đã tồn tại, và resume sau khi lệnh tạo PR lỗi. Chạy thật đầu-cuối trên một repo GitHub private tạm đã mở PR ready-for-review chỉ chứa đúng file dự kiến với từng runtime triển khai: omp (Opus 5.5) do Codex review, Claude Code (Sonnet) do Codex review, và Codex do omp (Opus 5.5) review. Sau bản sửa sau review, cặp mặc định omp/Codex được chạy lại một lần với cùng kết quả. Đây là các lần chạy đơn lẻ, không phải chứng nhận.
-
-Ngày 2026-11-13, runner hoàn tất lần chạy đầu tiên trên một việc thật trong repo: thay đổi tài liệu trong chính repo này. omp với Opus 5.5 triển khai và Codex review. Có một lần `revise` trước khi duyệt; cả hai lệnh verify đều đạt, review không có finding và không cần vòng sửa. PR ready-for-review được mở khoảng tám phút sau `start`. Kiểm tra danh tính để push đạt ở preflight và ngay trước khi push. Đây là một lần chạy, không phải chứng nhận.
+Hành vi của runner được phủ bởi [`tests/test_qk_run.py`](../../tests/test_qk_run.py), chạy runner với agent giả lập trên repo Git thật. Các lần chạy thật đầu-cuối được ghi ở [Bằng chứng kiểm thử](evidence.md#runner-qk-run).

@@ -43,7 +43,7 @@ codex exec --sandbox read-only --skip-git-repo-check --json "Reply with the sing
 
 **Qwen Code.** Chưa kiểm.
 
-Các con số là ví dụ, không phải số đo. Đã kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 (13/11/2026).
+Các con số là ví dụ, không phải số đo. Phiên bản đã dùng để kiểm các lệnh này nằm ở [Bằng chứng kiểm thử](evidence.md#số-đo-thiết-lập-gọn-nhẹ).
 
 ## 2. Cắt ba chỗ thường nặng
 

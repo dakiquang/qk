@@ -1,66 +1,78 @@
 # qk
 
-[English](README.md) · [Tài liệu](docs/vi/README.md) · [Case study đầu-cuối](docs/vi/case-study-csv-export.md)
+[English](README.md) · [Tài liệu](docs/vi/README.md) · [Changelog](CHANGELOG.md)
 
-Bộ kit cá nhân nhỏ để quyết định bằng bằng chứng, lập plan có phạm vi rõ, triển khai có kiểm chứng và bàn giao đáng tin giữa các phiên AI coding.
+Bộ agent skill cho Claude Code, Codex và omp, thêm một nhóm nhỏ cách làm việc có kỷ luật lên runtime bạn đang dùng: so sánh hướng đi, lập plan, triển khai có kiểm chứng, debug, kiểm thử, bàn giao giữa các phiên, phối hợp với model thứ hai, commit và soạn nháp release notes.
 
-qk là **cánh tay mở rộng của Claude Code, Codex và omp**, không thay thế chúng. Skill được cấu hình để chỉ chạy khi gọi đích danh; yêu cầu plan hoặc debug thông thường vẫn do runtime xử lý. Tool, plan mode, subagent, lựa chọn model, quyền native và luật repo giữ nguyên.
+qk mở rộng runtime, không thay thế nó. Mỗi skill chỉ chạy khi bạn gọi đích danh, theo thiết lập đã kiểm trên Claude Code, Codex và omp. Yêu cầu thường, plan mode, subagent, cấu hình model, quyền và luật repo vẫn do runtime giữ.
 
-> Dự án cá nhân, không liên quan công ty nào, không cam kết hỗ trợ. Repo hiện riêng tư; cần quyền truy cập để cài.
+> **Trạng thái.** Dự án cá nhân, không liên quan tới công ty nào, công bố nguyên trạng. Tác giả duy trì cho công việc của chính mình và đánh phiên bản bằng tag, nhưng không cam kết hỗ trợ. Issue và pull request đều được đón nhận; không hứa sẽ phản hồi.
 
-## Chọn skill theo việc
+## Vì sao có qk
+
+Agent lập trình làm tốt việc tạo ra thay đổi, nhưng kém ổn định ở các bước xung quanh: thống nhất thế nào là xong, chứng minh điều đó, và không coi quyền sửa code là quyền phát hành. qk viết các bước đó thành những quy trình ngắn, gọi đích danh.
+
+- **Mỗi skill nêu rõ kết quả, quyền hạn và khi nào là xong.** Sửa code không bao giờ kéo theo commit, push, merge, tag, deploy hay publish.
+- **Báo cáo không phải bằng chứng.** Skill kiểm hành vi hoặc nguồn, và nói rõ phần nào chưa kiểm.
+- **Không có pipeline.** Skill không gọi nhau; mỗi skill nêu lệnh tiếp theo và bạn quyết định có chạy hay không.
+- **Mọi báo cáo kết thúc giống nhau:** Đã làm, Bằng chứng, Chưa kiểm chứng, Cần bạn quyết định.
+- **Cố ý giữ nhỏ.** Bộ kit dừng ở mười hai skill và khoảng 50 KB instruction. Muốn thêm skill thì phải thay hoặc gộp một skill.
+
+## Skill
 
 | Skill | Kết quả |
 |---|---|
-| [qk/brainstorm](docs/vi/skills/qk-brainstorm.md) | 2–4 hướng, đánh đổi và một khuyến nghị |
-| [qk/research](docs/vi/skills/qk-research.md) | Câu trả lời cho quyết định, có nguồn và thử nghiệm đối chứng |
-| [qk/plan](docs/vi/skills/qk-plan.md) | Tạo, audit hoặc sửa plan kiểm chứng được |
-| [qk/cook](docs/vi/skills/qk-cook.md) | Triển khai yêu cầu rõ hoặc plan đã duyệt; kiểm và tự review |
-| [qk/debug](docs/vi/skills/qk-debug.md) | Tái hiện, nguyên nhân gốc đã kiểm và đề xuất sửa nhỏ nhất |
-| [qk/test](docs/vi/skills/qk-test.md) | Kiểm độc lập, phân loại lỗi và khoảng trống kiểm chứng |
-| [qk/handoff](docs/vi/skills/qk-handoff.md) | Lưu ngữ cảnh hoặc nhận lại và kiểm độ lệch |
-| [qk/agent-coord](docs/vi/skills/qk-agent-coord.md) | Giao việc có giới hạn cho agent/model bạn nêu, rồi kiểm kết quả |
-| [qk/release-notes](docs/vi/skills/qk-release-notes.md) | Nháp release notes/changelog truy được nguồn, chưa đăng |
-| [qk/dogfood](docs/vi/skills/qk-dogfood.md) | Đề xuất cải thiện instruction từ bằng chứng, chỉ trong chat; không áp dụng |
-| [qk/prefs](docs/vi/skills/qk-prefs.md) | Duyệt từng đề xuất sở thích đã ghi; chỉ mục được duyệt mới ghi vào đích bạn chọn |
-| [qk/commit](docs/vi/skills/qk-commit.md) | Commit đúng phạm vi; chỉ push và mở PR khi được yêu cầu, sau khi kiểm tra tài khoản |
+| [qk/brainstorm](docs/vi/skills/qk-brainstorm.md) | Hai đến bốn hướng đi, đánh đổi của từng hướng và một khuyến nghị |
+| [qk/research](docs/vi/skills/qk-research.md) | Câu hỏi quyết định được trả lời từ nguồn chính và thí nghiệm có đối chứng |
+| [qk/plan](docs/vi/skills/qk-plan.md) | Plan được tạo, audit hoặc sửa, với tiêu chí xong kiểm được |
+| [qk/cook](docs/vi/skills/qk-cook.md) | Yêu cầu rõ hoặc plan đã duyệt được triển khai, kiểm chứng và tự review |
+| [qk/debug](docs/vi/skills/qk-debug.md) | Cách tái hiện, nguyên nhân gốc đã kiểm và cách sửa nhỏ nhất được đề xuất |
+| [qk/test](docs/vi/skills/qk-test.md) | Kiểm độc lập, phân loại lỗi và chỉ ra chỗ chưa kiểm |
+| [qk/handoff](docs/vi/skills/qk-handoff.md) | Lưu ngữ cảnh phiên, hoặc nhận lại kèm kiểm độ lệch |
+| [qk/agent-coord](docs/vi/skills/qk-agent-coord.md) | Một việc có giới hạn chạy trên đúng agent và model bạn nêu, kết quả được kiểm |
+| [qk/commit](docs/vi/skills/qk-commit.md) | Commit đúng phạm vi; chỉ push và mở PR khi được yêu cầu, sau bước kiểm account |
+| [qk/release-notes](docs/vi/skills/qk-release-notes.md) | Nháp release notes và changelog truy được nguồn, không bao giờ tự đăng |
+| [qk/dogfood](docs/vi/skills/qk-dogfood.md) | Đề xuất cải thiện instruction dựa trên bằng chứng, không bao giờ tự áp dụng |
+| [qk/prefs](docs/vi/skills/qk-prefs.md) | Duyệt từng đề xuất sở thích đã ghi; chỉ ghi những mục được duyệt |
 
-Mỗi skill ghi kết quả, quyền và tiêu chí xong. Skill không tự gọi nhau và không có pipeline bắt buộc. Quyền sửa code không bao gồm commit, push, mở PR, merge, tag, deploy hoặc đăng.
+Hai công cụ tuỳ chọn đi kèm:
 
-Muốn tự động đầu-cuối, [runner qk-run](docs/vi/runner.md) (chỉ chạy khi bạn gọi) điều phối Claude Code, Codex hoặc omp từ yêu cầu đến PR ready-for-review: dừng một lần để duyệt plan, kiểm bằng lệnh trong plan, review chéo model và không bao giờ merge.
+- **[qk-run](docs/vi/runner.md)** đưa một việc từ yêu cầu tới pull request ready-for-review: một cổng duyệt plan, chạy lệnh kiểm của chính plan, review bởi một họ model khác, và không bao giờ merge.
+- **[Hook ghi nhận sở thích](docs/vi/preference-hook.md)** biến câu "từ nay…" thành đề xuất để bạn duyệt bằng `qk/prefs`.
 
-Instruction chuẩn của skill và mẫu prompt cho worker được viết bằng tiếng Anh; tài liệu cho người đọc vẫn có EN/VI. Báo cáo theo ngôn ngữ người dùng, trừ khi người dùng hoặc repo chỉ định khác; khi sửa file đã có thì giữ ngôn ngữ và định dạng của file đó. Không dịch lệnh, đường dẫn, identifier hay chuỗi máy đọc cố định.
+Review và chấm điểm pull request nằm ở dự án đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 
-Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), vẫn là repo và bản cài riêng.
+## Bắt đầu nhanh
 
-## Bắt đầu
+Clone repo và link các thư mục skill vào thư mục skill của runtime; [Bắt đầu](docs/vi/getting-started.md) có script cài an toàn và thư mục cho từng runtime. Không cần build hay cài package. Sau đó mở phiên mới và gọi một skill:
 
-[Cài một lần, tạo link từng thư mục skill](docs/vi/getting-started.md), rồi mở phiên runtime mới. Không cần cài package hoặc build.
-
-| Runtime | Ví dụ gọi |
+| Runtime | Ví dụ |
 |---|---|
-| Claude Code | `/qk-plan audit plans/feature.md` |
-| Codex | `$qk-plan audit plans/feature.md` |
-| omp | `/skill:qk-plan audit plans/feature.md` (tương tác hoặc RPC) |
+| Claude Code | `/qk-brainstorm Should the app read its configuration from environment variables or a TOML file?` |
+| Codex | `$qk-brainstorm …` |
+| omp | `/skill:qk-brainstorm …` (đã kiểm ở chế độ RPC; chế độ tương tác chưa kiểm) |
 
-`qk/plan` là tên khái niệm, không phải cú pháp CLI nguyên văn. Bản omp đã quan sát không mở rộng `/skill:` trong `omp -p`. Chưa kiểm được thực thi và cơ chế chỉ gọi đích danh của Qwen. Xem [bằng chứng runtime và giới hạn](docs/vi/runtimes.md); một lần chạy thành công không phải chứng nhận.
+Tài liệu ghi tên skill dạng `qk/brainstorm`; đó là tên quy trình, không phải lệnh để gõ. Mức hỗ trợ khác nhau theo runtime và Qwen Code chưa được kiểm; xem [Runtime](docs/vi/runtimes.md).
 
-## Đọc thêm
+## Tài liệu
 
-- [Bắt đầu](docs/vi/getting-started.md): cài, gọi, cập nhật và gỡ an toàn.
-- [Quy trình](docs/vi/workflows.md): chọn cách làm theo điều còn thiếu.
-- [Case study: xuất CSV từ ý tưởng đến PR được ship](docs/vi/case-study-csv-export.md): prompt, hợp đồng coordinator/worker, PR review và cổng phát hành.
-- [Runtime](docs/vi/runtimes.md): ranh giới native, chọn model và hỗ trợ đã quan sát.
-- [Changelog](CHANGELOG.md).
+- [Bắt đầu](docs/vi/getting-started.md): cài, gọi, cập nhật, cố định bản phát hành, gỡ.
+- [Quy trình](docs/vi/workflows.md): dùng skill nào cho ý tưởng mơ hồ, thay đổi đã rõ, lỗi, chuyển phiên hoặc phát hành.
+- [Case study](docs/vi/case-study-csv-export.md): một tính năng từ ý tưởng tới pull request đã merge.
+- [Runtime](docs/vi/runtimes.md) và [Bằng chứng kiểm thử](docs/vi/evidence.md): mỗi runtime hỗ trợ gì và thực tế đã kiểm những gì.
+- [Mục lục đầy đủ](docs/vi/README.md).
+
+Instruction của skill viết bằng tiếng Anh. Tài liệu cho người đọc có cả tiếng Anh và tiếng Việt. Báo cáo theo ngôn ngữ bạn dùng.
 
 ## Kiểm tra
 
 ```bash
 python3 scripts/validate.py
+python3 -m unittest discover -s tests
 ```
 
-Kiểm metadata skill, cấu hình gọi đích danh, link nội bộ, cặp docs EN/VI, đường dẫn cá nhân và chuỗi giống secret. `QK_DENYLIST` trỏ file các term literal, kiểm nội dung text UTF-8 ngoài `.git`, kể cả chính validator; không kiểm file binary hoặc tên file. CI chạy gitleaks trên khoảng commit của từng sự kiện push/PR, không bảo đảm quét toàn lịch sử. Kiểm tĩnh không chứng minh cô lập runtime.
+Validator kiểm metadata của skill, thiết lập gọi đích danh, link nội bộ, cặp trang tiếng Anh và tiếng Việt, đường dẫn cá nhân và chuỗi giống secret; kiểm tĩnh không chứng minh runtime cô lập skill; các giới hạn khác nằm ở [Bắt đầu](docs/vi/getting-started.md#6-kiểm-bộ-kit). CI chạy cả hai lệnh và quét gitleaks.
 
 ## Giấy phép
 
-[MIT](LICENSE). Tác giả [Quang Dang](https://quangdk.com).
+[MIT](LICENSE). Tác giả: [Quang Dang](https://quangdk.com).

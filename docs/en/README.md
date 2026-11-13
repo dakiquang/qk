@@ -6,13 +6,20 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 
 ## Start here
 
-- [Getting started](getting-started.md) — install, call a skill, update, uninstall.
-- [Workflows](workflows.md) — which skills to chain for an unclear idea, a clear change, a bug, a session switch or a release.
-- [Runtimes](runtimes.md) — how each runtime calls the skills, what has been tested, known quirks.
-- [Case study: CSV export](case-study-csv-export.md) — a worked feature from brainstorm and planning through an isolated worker, PR review, merge and shipping.
-- [qk-run runner](runner.md) — opt-in automation from request to a ready-for-review PR, with one plan-approval gate.
-- [Preference hook](preference-hook.md) — opt-in hook that turns "from now on…" requests into proposals you approve, with examples.
-- [Lean setup](lean-setup.md) — measure and trim what your runtimes load into every session, alongside other kits.
+- [Getting started](getting-started.md): install, call a skill, update, pin a release, uninstall.
+- [Workflows](workflows.md): which skills to chain for an unclear idea, a clear change, a bug, a session switch or a release.
+- [Case study: CSV export](case-study-csv-export.md): a worked feature from brainstorm and planning through an isolated worker, PR review, merge and shipping.
+
+## Guides
+
+- [qk-run runner](runner.md): opt-in automation from a request to a ready-for-review PR, with one plan-approval gate.
+- [Preference hook](preference-hook.md): an opt-in hook that turns "from now on…" requests into proposals you approve.
+- [Lean setup](lean-setup.md): measure and trim what your runtimes load into every session, alongside other kits.
+
+## Reference
+
+- [Runtimes](runtimes.md): support status, explicit-only settings, hook registration, known quirks and model selection.
+- [Test evidence](evidence.md): dated records of what was checked, on which version, and the manual smoke checklist.
 
 ## Skills
 
