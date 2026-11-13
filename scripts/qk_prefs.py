@@ -24,21 +24,31 @@ import unicodedata
 
 STORE_NAME = "preferences-pending.jsonl"
 LOCK_NAME = "preferences-pending.lock"
-MAX_PROMPT = 4000
+MAX_PROMPT = 4000  # only the start of a prompt is scanned
+MAX_STDIN = 1_000_000  # larger hook payloads are ignored unread
 LIMITS = {"title": 120, "content": 1000, "project": 100}
 MAX_QUOTE = 300
 STATUSES = ("pending", "applied", "dismissed")
+PROPOSAL_FIELDS = ("scope", "project", "title", "content", "quote")
 
-# Unambiguous phrases only. A bare Vietnamese "luôn" usually means "right away"
-# ("làm luôn đi"), so it is matched only as "luôn luôn".
+# Phrases that state a standing rule, not a choice for the task at hand. Common words
+# such as "always", "never", "by default", "mặc định" only count at the start of a
+# sentence or after an instruction lead-in, so "this function never returns" or
+# "giá trị mặc định là None" do not match. A bare Vietnamese "luôn" usually means
+# "right away" ("làm luôn đi"), so it counts only as "luôn luôn".
+_START = r"(?:^|(?<=[.!?;:\n])\s*)"
+_LEAD = r"(?:please|you should|make sure to|remember to|i want you to|hãy|nhớ)\s+"
 CUE_RE = re.compile(
     r"\b(?:"
-    r"từ nay|từ giờ|từ lần sau|lần sau|mặc định|luôn luôn|lúc nào cũng|"
-    r"đừng bao giờ|không bao giờ được|ghi nhớ|nhớ là|thay vì|"
-    r"from now on|going forward|by default|always|never(?!\s+mind)|next time|"
-    r"remember (?:that|to)|i prefer|i'd prefer|stop using|instead of"
-    r")\b",
-    re.IGNORECASE,
+    r"từ nay|từ giờ(?!\s+(?:đến|tới))|từ lần sau|lần sau (?:nhớ|hãy|đừng|phải|luôn|cứ)|"
+    r"luôn luôn|lúc nào cũng|đừng bao giờ|không bao giờ được|ghi nhớ|nhớ là|"
+    r"from now on|going forward|from here on|"
+    r"next time,\s|"
+    r"remember (?:that|to)|stop using|don't ever|never again"
+    r")\b"
+    rf"|{_START}(?:by default|mặc định|always|never(?!\s+mind))\b"
+    rf"|\b{_LEAD}(?:always|never)\b",
+    re.IGNORECASE | re.MULTILINE,
 )
 FENCE_RE = re.compile(r"```.*?(?:```|\Z)", re.S)
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
@@ -51,9 +61,9 @@ def has_cue(prompt):
     """True when the prompt states something that may be a lasting preference."""
     text = unicodedata.normalize("NFC", prompt or "")
     stripped = text.lstrip()
-    if not stripped or stripped[0] in "/$" or len(text) > MAX_PROMPT:
+    if not stripped or stripped[0] in "/$":
         return False
-    text = FENCE_RE.sub(" ", text)
+    text = FENCE_RE.sub(" ", text[:MAX_PROMPT])
     text = INLINE_CODE_RE.sub(" ", text)
     text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith(">"))
     return bool(CUE_RE.search(text))
@@ -66,11 +76,14 @@ def nudge():
     return (
         "QK PREFERENCE CUE: the user's message may state a lasting working preference "
         "(a default, an always/never rule, or a correction meant for future work). "
-        "If it is meant to apply beyond the current task, record it once as a proposal with: "
-        f"python3 {script} propose --scope global|project [--project <repo folder name>] "
-        "--title '<short title>' --content '<the preference as one instruction>' "
-        "--quote '<the user's own words>'. "
-        "Use --scope project only when it clearly applies to this repository. "
+        "If it is meant to apply beyond the current task, record it once as a proposal, "
+        "passing a JSON object through a quoted heredoc so no shell quoting is needed: "
+        f"python3 {script} propose --stdin <<'QK_PREF'\n"
+        '{"scope": "global", "title": "<short title>", '
+        '"content": "<the preference as one instruction>", "quote": "<the user\'s own words>"}\n'
+        "QK_PREF\n"
+        'Use "scope": "project" (optionally with "project": "<repo folder name>") only when '
+        "it clearly applies to this repository. "
         "Skip one-off task details. Do not edit memory, rules, CLAUDE.md or AGENTS.md, "
         "and do not ask the user first: the proposal waits for their approval via qk-prefs. "
         "Never put secrets, tokens, credentials or customer data in a proposal. "
@@ -91,7 +104,10 @@ def hook_output(runtime):
 
 def run_hook(runtime):
     try:
-        payload = json.loads(sys.stdin.read() or "null")
+        raw = sys.stdin.read(MAX_STDIN + 1)
+        if len(raw) > MAX_STDIN:
+            return 0
+        payload = json.loads(raw or "null")
         prompt = payload.get("prompt") if isinstance(payload, dict) else None
         if isinstance(prompt, str) and has_cue(prompt):
             sys.stdout.write(hook_output(runtime) + "\n")
@@ -171,29 +187,55 @@ def normalize(text):
     return " ".join(unicodedata.normalize("NFC", text).split())
 
 
+def proposal_input(args):
+    """Proposal fields from flags, or from one JSON object on stdin with --stdin."""
+    if not args.stdin:
+        return {name: getattr(args, name) for name in PROPOSAL_FIELDS}
+    try:
+        data = json.loads(sys.stdin.read(MAX_STDIN))
+    except ValueError as error:
+        raise ValueError(f"--stdin expects one JSON object: {error}") from None
+    if not isinstance(data, dict):
+        raise ValueError("--stdin expects one JSON object")
+    unknown = set(data) - set(PROPOSAL_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown fields: {', '.join(sorted(unknown))}")
+    values = {name: data.get(name) for name in PROPOSAL_FIELDS}
+    if any(value is not None and not isinstance(value, str) for value in values.values()):
+        raise ValueError("every field must be a string")
+    return values
+
+
 def cmd_propose(args):
+    try:
+        values = proposal_input(args)
+    except ValueError as error:
+        return fail(str(error))
+    scope = values["scope"]
+    if scope not in ("global", "project"):
+        return fail("scope must be global or project")
     fields = {
-        "title": normalize(args.title),
-        "content": normalize(args.content),
-        "project": normalize(args.project or ""),
+        "title": normalize(values["title"] or ""),
+        "content": normalize(values["content"] or ""),
+        "project": normalize(values["project"] or ""),
     }
     for name in ("title", "content"):
         if not fields[name]:
-            return fail(f"--{name} must not be empty")
+            return fail(f"{name} must not be empty")
+    if scope == "project" and not fields["project"]:
+        fields["project"] = os.path.basename(os.getcwd())
+    if scope == "global":
+        fields["project"] = ""
     for name, limit in LIMITS.items():
         if len(fields[name]) > limit:
-            return fail(f"--{name} is longer than {limit} characters")
-    if args.scope == "project" and not fields["project"]:
-        fields["project"] = os.path.basename(os.getcwd())
-    if args.scope == "global":
-        fields["project"] = ""
-    quote = normalize(args.quote or "")[:MAX_QUOTE]
+            return fail(f"{name} is longer than {limit} characters")
+    quote = normalize(values["quote"] or "")[:MAX_QUOTE]
 
     with locked():
         for record in records():
             if (
                 record.get("status") == "pending"
-                and record.get("scope") == args.scope
+                and record.get("scope") == scope
                 and record.get("project", "") == fields["project"]
                 and record.get("content") == fields["content"]
             ):
@@ -205,7 +247,7 @@ def cmd_propose(args):
             "id": secrets.token_hex(4),
             "created": now(),
             "status": "pending",
-            "scope": args.scope,
+            "scope": scope,
             "project": fields["project"],
             "title": fields["title"],
             "content": fields["content"],
@@ -285,10 +327,14 @@ def parser():
     hook.set_defaults(func=cmd_hook)
 
     propose = sub.add_parser("propose", help="record one pending proposal")
-    propose.add_argument("--scope", choices=("global", "project"), required=True)
+    propose.add_argument(
+        "--stdin", action="store_true",
+        help="read one JSON object with scope, project, title, content, quote from stdin",
+    )
+    propose.add_argument("--scope", choices=("global", "project"))
     propose.add_argument("--project", help="repository folder name (scope project)")
-    propose.add_argument("--title", required=True)
-    propose.add_argument("--content", required=True)
+    propose.add_argument("--title")
+    propose.add_argument("--content")
     propose.add_argument("--quote", help="the user's own words")
     propose.set_defaults(func=cmd_propose)
 

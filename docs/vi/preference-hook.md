@@ -2,7 +2,7 @@
 
 [English](../en/preference-hook.md) · [Mục lục tài liệu](README.md)
 
-Bạn thường dặn agent những điều muốn áp dụng lâu dài: "từ nay commit message viết tiếng Anh", "đừng bao giờ amend commit đã push". Có hai kiểu thất bại: runtime quên mất, hoặc agent tự ghi thẳng vào memory mà không hỏi. Hook tuỳ chọn này nằm giữa hai kiểu đó. Khi prompt có cụm từ thể hiện ý định lâu dài, agent ghi một **đề xuất** vào file cục bộ rồi làm tiếp việc đang dở. Không có gì vào memory, rules, `CLAUDE.md` hay `AGENTS.md` cho tới khi bạn duyệt.
+Bạn thường dặn agent những điều muốn áp dụng lâu dài: "từ nay commit message viết tiếng Anh", "đừng bao giờ amend commit đã push". Có hai kiểu thất bại: runtime quên mất, hoặc agent tự ghi thẳng vào memory mà không hỏi. Hook tuỳ chọn này nằm giữa hai kiểu đó. Khi prompt có cụm từ thể hiện ý định lâu dài, hook nhắc agent ghi một **đề xuất** vào file cục bộ rồi làm tiếp việc đang dở. Không có gì vào memory, rules, `CLAUDE.md` hay `AGENTS.md` cho tới khi bạn duyệt.
 
 > **Trạng thái:** hook và kho đề xuất nằm trong [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), có test ở [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). Bạn duyệt đề xuất bằng [qk/prefs](skills/qk-prefs.md) ([ví dụ 5](#5-quyết-định-một-đề-xuất)). Hook chạy được với Claude Code và Codex; xem [Runtime](runtimes.md#hook-ghi-nhận-sở-thích) để biết từng runtime đã kiểm đến đâu.
 
@@ -10,22 +10,26 @@ Hook chỉ thêm một lời nhắc vào prompt. Nó không bắt được agent
 
 ## 1. Câu nào kích hoạt
 
-Hook chỉ tìm các cụm từ rõ nghĩa, cả tiếng Việt lẫn tiếng Anh.
+Hook tìm các cụm từ nêu quy tắc lâu dài, cả tiếng Việt lẫn tiếng Anh. Những từ thông dụng như "always", "never", "by default" và "mặc định" chỉ được tính khi đứng đầu câu hoặc sau từ dẫn như "please", "you should", "hãy", vì ở chỗ khác chúng thường chỉ mô tả việc đang làm.
 
 | Prompt | Có nhắc? | Lý do |
 |---|---|---|
 | `Từ nay commit message viết bằng tiếng Anh` | Có | "từ nay" |
 | `Mặc định trả lời bằng tiếng Việt` | Có | "mặc định" |
-| `Dùng vitest thay vì jest` | Có | "thay vì" |
-| `Never amend a pushed commit` | Có | "never" |
-| `Next time, check the changelog first` | Có | "next time" |
+| `Never amend a pushed commit` | Có | "never" đứng đầu câu |
+| `Please always use pnpm` | Có | "always" sau "please" |
+| `Next time, check the changelog first` | Có | "next time," |
+| `This function never returns` | Không | "never" ở giữa câu |
+| `Use a dict instead of a list here` | Không | "instead of" không phải cụm kích hoạt, vì thường là lựa chọn một lần |
+| `Rename it, by default the arg is None` | Không | "by default" sau dấu phẩy là đang mô tả code |
+| `Lần sau mình làm tiếp nhé` | Không | "lần sau" chỉ tính khi đi với "nhớ", "hãy", "đừng", "phải", "luôn" hoặc "cứ" |
 | `làm luôn đi` | Không | "luôn" đứng một mình thường nghĩa là "ngay". Chỉ "luôn luôn" mới được tính |
 | `never mind, revert that` | Không | "never mind" bị loại trừ |
 | ``Rename `alwaysRetry` to `retry` `` | Không | Bỏ qua inline code và khối code |
 | `> from now on use tabs` (dòng trích dẫn) | Không | Bỏ qua dòng trích dẫn |
 | `/qk-plan từ nay dùng pnpm` | Không | Bỏ qua lệnh gọi skill và slash command |
 
-Vì dựa trên danh sách cụm từ, hook vẫn có lúc bắt nhầm. Ví dụ `lần sau mình làm tiếp` vẫn khớp "lần sau" dù chỉ là chuyện một lần. Hook cũng bỏ sót sở thích nói theo cách khác. Bắt nhầm chỉ tốn một lời nhắc bị bỏ qua, vì agent quyết định có đáng ghi hay không. Danh sách đầy đủ là `CUE_RE` trong script; các ca test `POSITIVE`/`NEGATIVE` cho thấy hành vi mong muốn.
+Vì dựa trên danh sách cụm từ, hook vẫn có lúc bắt nhầm. Ví dụ `Always the same error here` khớp vì "always" đứng đầu câu, và `See you next time, bye` khớp "next time,". Hook cũng bỏ sót sở thích nói theo cách khác, ví dụ `I prefer short commit subjects` hay `Dùng vitest thay vì jest`. Hook chỉ quét 4.000 ký tự đầu của prompt, nên sở thích nêu ở cuối một tin nhắn dài sẽ bị bỏ sót. Bắt nhầm chỉ tốn một lời nhắc bị bỏ qua, vì agent quyết định có đáng ghi hay không. Danh sách đầy đủ là `CUE_RE` trong script; các ca test `POSITIVE`/`NEGATIVE` cho thấy hành vi mong muốn.
 
 ## 2. Thử hook mà chưa cần bật
 
@@ -67,20 +71,21 @@ Nếu file đã có khối `hooks`, thêm mục `UserPromptSubmit` vào khối �
 
 **Codex** dùng cùng định dạng. Đặt cùng khối JSON vào `.codex/hooks.json` của project, hoặc `~/.codex/hooks.json` cho mọi project, và đổi thành `--runtime codex`. Nếu file đã có thì gộp mục vào, đừng thay cả file. Sau đó mở Codex, gõ `/hooks` để xem và trust hook, vì Codex bỏ qua hook chưa được trust.
 
-Mỗi prompt sẽ chạy một tiến trình Python ngắn. Test độ trễ trong file test giữ phần hook cộng thêm dưới 50 ms so với lúc khởi động interpreter trống.
+Mỗi prompt sẽ chạy một tiến trình Python ngắn. Test độ trễ trong file test kiểm rằng phần hook cộng thêm dưới 50 ms so với lúc khởi động interpreter trống; test này chỉ chạy trên máy local, bị bỏ qua trên CI.
 
 ## 4. Agent ghi gì
 
 Trong phiên, bạn gõ: `Từ nay commit message viết bằng tiếng Anh`. Agent nhận lời nhắc. Nếu thấy đây là ý định lâu dài, agent chạy một lệnh kiểu:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py propose --scope global \
-  --title "Commit message language" \
-  --content "Write commit messages in English." \
-  --quote "Từ nay commit message viết bằng tiếng Anh"
+python3 ~/src/qk/scripts/qk_prefs.py propose --stdin <<'QK_PREF'
+{"scope": "global", "title": "Commit message language", "content": "Write commit messages in English.", "quote": "Từ nay commit message viết bằng tiếng Anh"}
+QK_PREF
 ```
 
-Dùng `--scope project` cho sở thích chỉ áp dụng với repo hiện tại; tên project mặc định là tên thư mục đang đứng. Ghi lại cùng nội dung lần nữa sẽ trả về ID cũ chứ không tạo bản trùng. Giới hạn của từng lệnh xem bằng `--help`.
+JSON đi qua heredoc có dấu nháy, nên dấu nháy đơn, `$` hay backtick trong lời của bạn không cần escape cho shell. Các trường này cũng dùng được dưới dạng cờ (`--scope`, `--title`, `--content`, `--quote`) khi gõ tay.
+
+Dùng `"scope": "project"` cho sở thích chỉ áp dụng với repo hiện tại; tên project mặc định là tên thư mục đang đứng, nên hai repo trùng tên thư mục sẽ dùng chung tên project. Ghi lại cùng nội dung lần nữa sẽ trả về ID cũ chứ không tạo bản trùng. Giới hạn của từng lệnh xem bằng `--help`.
 
 Xem các đề xuất đang chờ:
 
@@ -94,7 +99,7 @@ Mỗi dòng là một đề xuất dạng JSON, ví dụ:
 {"id": "2cd33227", "created": "2026-11-13T15:59:32+07:00", "status": "pending", "scope": "global", "project": "", "title": "Commit message language", "content": "Write commit messages in English.", "quote": "Từ nay commit message viết bằng tiếng Anh"}
 ```
 
-Đề xuất nằm ở `~/.local/state/qk/preferences-pending.jsonl`. Nếu có đặt `$XDG_STATE_HOME` thì là `$XDG_STATE_HOME/qk/`; nếu có đặt `$QK_PREFS_STATE_DIR` thì dùng thư mục đó. File được tạo với quyền `0600` và nằm ngoài mọi repo, vì nó chứa lời nguyên văn của bạn. Lời nhắc có dặn agent không ghi secret hay dữ liệu khách hàng, nhưng đó chỉ là chỉ dẫn, không phải bộ lọc. Hãy đọc đề xuất trước khi áp dụng.
+Đề xuất nằm ở `~/.local/state/qk/preferences-pending.jsonl`. Nếu có đặt `$XDG_STATE_HOME` thì là `$XDG_STATE_HOME/qk/`; nếu có đặt `$QK_PREFS_STATE_DIR` thì dùng thư mục đó. File được tạo với quyền `0600` và nằm ngoài mọi repo, vì nó chứa lời nguyên văn của bạn. Lời nhắc có dặn agent không ghi secret hay dữ liệu khách hàng, nhưng đó chỉ là chỉ dẫn, không phải bộ lọc. Hãy đọc đề xuất trước khi áp dụng. Trên macOS và Linux, các lần ghi được tuần tự hoá bằng khoá file; trên Windows script chạy không có khoá, nên đừng ghi hay duyệt đề xuất từ hai phiên cùng lúc.
 
 ## 5. Quyết định một đề xuất
 

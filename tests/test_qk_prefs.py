@@ -18,23 +18,25 @@ POSITIVE = [
     "Từ lần sau đừng tạo file README mới",
     "Lần sau nhớ chạy test trước khi báo xong",
     "Mặc định trả lời bằng tiếng Việt",
+    "Ok. Mặc định dùng pnpm",
     "Luôn luôn chạy lint trước khi commit",
     "Lúc nào cũng phải viết test cho bug fix",
     "Đừng bao giờ push thẳng lên main",
     "Không bao giờ được sửa file migration cũ",
     "Ghi nhớ: dự án này dùng Laravel 11",
     "Nhớ là repo này dùng tab, không dùng space",
-    "Dùng vitest thay vì jest",
     "From now on, write commit messages in English",
     "Going forward please use pnpm",
     "By default reply in Vietnamese",
     "Always run the tests before saying done",
     "Never amend a pushed commit",
+    "Thanks. Never push to main.",
+    "Please always use pnpm",
+    "You should never commit .env files",
+    "Don't ever force-push",
     "Next time, check the changelog first",
     "Remember that this repo uses tabs",
-    "I prefer short commit subjects",
     "Stop using emoji in commit messages",
-    "Use rg instead of grep",
 ]
 
 NEGATIVE = [
@@ -44,6 +46,17 @@ NEGATIVE = [
     "Fix the failing test in auth.ts",
     "Thêm endpoint health-check",
     "never mind, revert that",
+    # one-off choices that use words a standing rule would also use
+    "This function never returns",
+    "Use a dict instead of a list here",
+    "Dùng dict thay vì list ở đây",
+    "Lần sau mình làm tiếp nhé",
+    "Can you always check null here?",
+    "Rename it, by default the arg is None",
+    "giá trị mặc định là None",
+    "I prefer option B for this PR",
+    "từ giờ đến tối xong nhé",
+    "Next time we will continue",
     "/qk-plan từ nay dùng pnpm",
     "$qk-plan always use pnpm",
     "Why does this fail?\n```\nwhile (always) { never(); }\n```",
@@ -79,8 +92,10 @@ class Detection(unittest.TestCase):
 
         self.assertTrue(qk_prefs.has_cue(unicodedata.normalize("NFD", "Từ nay dùng pnpm")))
 
-    def test_overlong_prompt_is_skipped(self):
-        self.assertFalse(qk_prefs.has_cue("always " + "x" * qk_prefs.MAX_PROMPT))
+    def test_only_the_start_of_a_long_prompt_is_scanned(self):
+        filler = "x" * qk_prefs.MAX_PROMPT
+        self.assertTrue(qk_prefs.has_cue("From now on use tabs. " + filler))
+        self.assertFalse(qk_prefs.has_cue(filler + " From now on use tabs."))
 
 
 class Hook(unittest.TestCase):
@@ -96,6 +111,11 @@ class Hook(unittest.TestCase):
 
     def test_no_match_prints_nothing(self):
         done = run_hook(json.dumps({"prompt": "làm luôn đi"}))
+        self.assertEqual((done.returncode, done.stdout, done.stderr), (0, "", ""))
+
+    def test_oversized_payload_is_ignored(self):
+        prompt = "From now on use pnpm. " + "x" * qk_prefs.MAX_STDIN
+        done = run_hook(json.dumps({"prompt": prompt}))
         self.assertEqual((done.returncode, done.stdout, done.stderr), (0, "", ""))
 
     def test_bad_input_is_silent(self):
@@ -170,6 +190,46 @@ class Store(unittest.TestCase):
         self.assertEqual(resolved[first]["target"], "memory")
         self.assertEqual(resolved[second]["status"], "dismissed")
         self.assertIn("resolved", resolved[second])
+
+    def test_propose_from_stdin_json(self):
+        payload = {
+            "scope": "global",
+            "title": "Package manager",
+            "content": "Don't use npm; use pnpm.",
+            "quote": "từ nay đừng dùng npm, dùng `pnpm` $(whoami)",
+        }
+        done = subprocess.run(
+            [sys.executable, str(SCRIPT), "propose", "--stdin"],
+            input=json.dumps(payload, ensure_ascii=False),
+            env=self.env, cwd=self.tmp.name, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        item = self.listed()[0]
+        self.assertEqual(item["content"], payload["content"])
+        self.assertEqual(item["quote"], payload["quote"])
+
+    def test_propose_stdin_rejects_bad_json(self):
+        for stdin in ("not json", "[1]", '{"scope": "global", "title": "t", "content": 3}',
+                      '{"scope": "global", "title": "t", "content": "c", "extra": "x"}',
+                      '{"scope": "team", "title": "t", "content": "c"}'):
+            with self.subTest(stdin=stdin):
+                done = subprocess.run(
+                    [sys.executable, str(SCRIPT), "propose", "--stdin"], input=stdin,
+                    env=self.env, cwd=self.tmp.name, capture_output=True, text=True, timeout=30,
+                )
+                self.assertEqual(done.returncode, 1)
+        self.assertFalse((self.state / qk_prefs.STORE_NAME).exists())
+
+    def test_inferred_project_name_is_length_checked(self):
+        deep = Path(self.tmp.name) / ("p" * 120)
+        deep.mkdir()
+        done = subprocess.run(
+            [sys.executable, str(SCRIPT), "propose", "--scope", "project", "--title", "t",
+             "--content", "c"],
+            env=self.env, cwd=deep, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("project is longer", done.stderr)
 
     def test_project_scope_defaults_to_cwd_name(self):
         self.propose("Use tabs", "project")
