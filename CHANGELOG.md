@@ -32,6 +32,9 @@ All notable changes to this project are documented here. The format follows
   Claude Code, Codex or omp, with one plan-approval gate, runner-run verification,
   cross-model review, at most one fix round and runner-only commit/push/PR;
   unit tests in CI and English/Vietnamese guides.
+- English and Vietnamese lean-setup guide: measure per-session instruction load
+  with each runtime's own commands and trim skill descriptions, always-loaded
+  rules and duplicated instructions without removing other kits.
 
 ### Changed
 
