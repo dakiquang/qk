@@ -16,4 +16,4 @@ Dùng `$qk-commit` trong Codex hoặc `/skill:qk-commit` trong omp (interactive/
 
 ## Quyền hạn và khi nào xong
 
-Skill chỉ chạy các bước đã nêu. Trước khi push, nó chạy [kiểm tra danh tính](../../../scripts/qk_preflight.py) với tài khoản `gh` đang hoạt động. Kiểm tra lỗi thì dừng push; người dùng tự đổi tài khoản. Mô tả PR ghi nội dung, lý do và các lệnh kiểm đã thực sự chạy trong phiên. Skill không amend, force-push, đổi tài khoản, merge hay tag.
+Skill chỉ chạy các bước đã nêu. Trước khi push, nó chạy [kiểm tra danh tính](../../../scripts/qk_preflight.py) với tài khoản `gh` đang hoạt động. Kiểm tra lỗi thì dừng push; nếu thiếu script, skill không push và báo rằng không thể kiểm tra tài khoản. Người dùng tự đổi tài khoản. Mô tả PR ghi nội dung, lý do và các lệnh kiểm đã thực sự chạy trong phiên. Skill không amend, force-push, đổi tài khoản, merge hay tag.

@@ -21,8 +21,8 @@ disable-model-invocation: true
 2. Exclude env files, keys, unusually large files and files outside that task. Name every excluded file in the report; stage only intended files.
 3. Scan the exact content to be committed for secrets and personal home paths. Run the repository's own check, such as a validator or pre-commit check, when available. Resolve findings before committing.
 4. Write the message in the repository's convention, using contributing docs or recent commits. Add no AI attribution unless the repository requires it.
-5. Commit without `--no-verify`. Record the SHA and committed file list.
-6. Only when push was requested, first locate the identity script from this skill folder's real path: `<realpath of this skill folder>/../../scripts/qk_preflight.py`. From the repository to push, run `python3 "$(realpath <skill folder>)/../../scripts/qk_preflight.py" identity`. If the check fails, stop and report; never switch accounts. If the script is missing, say the account was not checked and ask before pushing. Push only after the check passes.
+5. Before committing, compare `git diff --cached --name-only` with the intended files, unstage and report any other paths; then commit without `--no-verify` and record the SHA and committed file list.
+6. Only when push was requested, first locate the identity script from this skill folder's real path: `<realpath of this skill folder>/../../scripts/qk_preflight.py`. From the repository to push, run `python3 "$(realpath <skill folder>)/../../scripts/qk_preflight.py" identity`. If the check fails, stop and report; never switch accounts. If the script is missing, do not push; report that the account could not be checked. Push only after the check passes.
 7. Only when a PR was requested, open it after a successful push. Its description states what changed, why, and verification evidence from this session. Never claim tests that did not run.
 
 ## Report

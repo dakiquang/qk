@@ -508,6 +508,9 @@ def publishing(state):
         state["commit"] = git(worktree, "rev-parse", "HEAD")
         save(state)
     if not state.get("pushed"):
+        ok, report = check_identity(worktree, gh_call=gh, git_call=git)
+        if not ok:
+            raise Blocked(report)
         git(worktree, "push", "-u", "origin", state["branch"])
         state["pushed"] = True
         save(state)

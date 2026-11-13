@@ -9,19 +9,19 @@ from urllib.parse import urlparse
 
 
 SECRET_RE = re.compile(r"(ghp_|github_pat_|gho_)[A-Za-z0-9_]{8,}")
-ACCOUNT_RE = re.compile(r"(?:Logged in to|account)\s+github\.com\s+account\s+([^\s(]+)|\baccount\s+([^\s(]+)")
+ACCOUNT_RE = re.compile(r"Logged in to github\.com account\s+([^\s(]+)")
 
 
 def github_repository(remote):
     """Return owner/name for a github.com origin, or None."""
-    if remote.startswith("git@github.com:"):
+    if remote.lower().startswith("git@github.com:"):
         path = remote.split(":", 1)[1]
     else:
         parsed = urlparse(remote)
         if parsed.scheme not in ("https", "ssh") or parsed.hostname != "github.com":
             return None
         path = parsed.path.lstrip("/")
-    parts = path.removesuffix(".git").strip("/").split("/")
+    parts = path.strip("/").removesuffix(".git").split("/")
     if len(parts) != 2 or not all(re.fullmatch(r"[A-Za-z0-9_.-]+", part) for part in parts):
         return None
     return "/".join(parts)
@@ -39,11 +39,13 @@ def _gh(repo, *args, check=True):
     if check and proc.returncode:
         raise RuntimeError("Not Found" if "Not Found" in proc.stderr or "404" in proc.stderr
                            else "gh command failed")
+    if args[:2] == ("auth", "status"):
+        return "\n".join(stream.strip() for stream in (proc.stdout, proc.stderr) if stream.strip())
     return (proc.stdout or proc.stderr).strip()
 
 
 def _accounts(status):
-    return sorted({match.group(1) or match.group(2) for match in ACCOUNT_RE.finditer(status)})
+    return sorted({match.group(1) for match in ACCOUNT_RE.finditer(status)})
 
 
 def check_identity(repo, gh_call=None, git_call=None):
@@ -81,6 +83,8 @@ def check_identity(repo, gh_call=None, git_call=None):
     lines = ["Field | Value", "--- | ---", f"Repository | {repository}",
              f"Active gh account | {account}", f"git user.email | {email}",
              f"Push permission | {permission if permission in ('true', 'false') else 'unavailable'}"]
+    if remote.lower().startswith("git@github.com:") or urlparse(remote).scheme == "ssh":
+        lines.append("SSH origin | Push uses your SSH key; this API check does not verify which account that key belongs to.")
     if permission == "true":
         return True, SECRET_RE.sub("[redacted]", "\n".join(lines))
 

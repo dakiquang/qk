@@ -38,8 +38,9 @@ elif args[:2] == ['api', 'repos/example/repo']:
         sys.exit(1)
     print(mode)
 elif args[:2] == ['auth', 'status']:
-    print('Logged in to github.com account active-user (' + secret + ')', file=sys.stderr)
+    print('Logged in to github.com account active-user (' + secret + ')')
     print('Logged in to github.com account other-user', file=sys.stderr)
+    print('Logged in to enterprise.example account enterprise-user', file=sys.stderr)
 else:
     sys.exit(2)
 ''')
@@ -70,12 +71,27 @@ else:
                 self.assertEqual(done.returncode, 0, done.stdout)
                 self.assertIn("Push permission | true", done.stdout)
                 self.assertIn("test@example.invalid", done.stdout)
+                if remote.startswith(("git@", "ssh://")):
+                    self.assertIn("Push uses your SSH key", done.stdout)
+                    self.assertIn("does not verify which account", done.stdout)
+                else:
+                    self.assertNotIn("SSH origin", done.stdout)
+
+    def test_github_remote_url_variants(self):
+        for remote in ("git@GITHUB.COM:example/repo.git",
+                       "https://github.com/example/repo.git/"):
+            with self.subTest(remote=remote):
+                self.remote(remote)
+                done = self.cli()
+                self.assertEqual(done.returncode, 0, done.stdout)
+                self.assertIn("Repository | example/repo", done.stdout)
 
     def test_not_found_names_active_and_other_accounts(self):
         done = self.cli("404")
         self.assertEqual(done.returncode, 1)
         self.assertIn("active-user", done.stdout)
         self.assertIn("other-user", done.stdout)
+        self.assertNotIn("enterprise-user", done.stdout)
         self.assertIn("404 / Not Found", done.stdout)
         self.assertIn("gh auth switch -u <name>", done.stdout)
 

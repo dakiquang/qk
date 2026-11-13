@@ -76,11 +76,11 @@ class RunnerTest(unittest.TestCase):
         os.environ["GIT_AUTHOR_NAME"] = os.environ["GIT_COMMITTER_NAME"] = "qk test"
         os.environ["GIT_AUTHOR_EMAIL"] = os.environ["GIT_COMMITTER_EMAIL"] = "qk@example.invalid"
         self.gh_calls = []
-        self.originals = (qk_run.call_agent, qk_run.gh)
+        self.originals = (qk_run.call_agent, qk_run.gh, qk_run.check_identity)
         qk_run.gh = self.fake_gh
 
     def tearDown(self):
-        qk_run.call_agent, qk_run.gh = self.originals
+        qk_run.call_agent, qk_run.gh, qk_run.check_identity = self.originals
         self.tmp.cleanup()
 
     @staticmethod
@@ -362,6 +362,24 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn("worktree", state)
         self.assertEqual(run(self.repo, "git", "worktree", "list", "--porcelain").count("worktree "), 1)
 
+    def test_identity_failure_at_publishing_prevents_push(self):
+        checks = []
+
+        def changing_identity(repo, gh_call=None, git_call=None):
+            checks.append(Path(repo))
+            return (True, "preflight passed") if len(checks) == 1 else (False, "publishing identity denied")
+
+        qk_run.check_identity = changing_identity
+        state = self.start(Agent())
+        self.cli("approve", state["id"])
+        blocked = self.latest()
+        self.assertEqual(blocked["stage"], "blocked")
+        self.assertEqual(blocked["blocked_at"], "publishing")
+        self.assertEqual(blocked["reason"], "publishing identity denied")
+        self.assertEqual([path.resolve() for path in checks],
+                         [self.repo.resolve(), Path(blocked["worktree"]).resolve()])
+        self.assertNotIn(blocked["branch"], self.remote_branches())
+
     def test_hidden_repository_blocks_with_identity_report(self):
         run(self.repo, "git", "remote", "set-url", "origin", "git@github.com:example/repo.git")
 
@@ -478,6 +496,7 @@ class RunnerTest(unittest.TestCase):
         blocked = self.latest()
         self.assertEqual(blocked["stage"], "blocked")
         self.assertEqual(blocked["blocked_at"], "publishing")
+        qk_run.check_identity = lambda *args, **kwargs: self.fail("identity rechecked after push")
         self.cli("resume", state["id"])
         done = self.latest()
         self.assertEqual(done["stage"], "done")
