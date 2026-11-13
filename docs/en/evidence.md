@@ -77,6 +77,8 @@ Not covered: these are single runs on one model, not a complete workflow matrix 
 
 **2026-11-13.** First run on a real task: a documentation change in this repository. omp with Opus 5.5 implemented and Codex reviewed. There was one `revise` before approval; both verify commands passed, the review returned no findings, and no fix round was needed. A ready-for-review PR opened about eight minutes after `start`. The push identity check passed at preflight and again before the push.
 
+**2026-11-14.** Second real task: a code change to the runner itself, making it type the commit and PR title from the repository's commit convention, with tests and EN/VI docs. omp with Opus 5.5 implemented and Codex reviewed. There was one `revise` before approval to settle two open questions in the plan; both verify commands passed, the review returned no findings, and no fix round was needed. A ready-for-review PR opened about four minutes after `approve`, and CI passed. Because the run itself used the previous runner code, its PR title was the bare plan title and was set to the conventional form when squash-merging.
+
 ## Lean setup measurements
 
 The commands in [Lean setup](lean-setup.md) were checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 on 2026-11-13. Qwen Code was not checked.
