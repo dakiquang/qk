@@ -78,6 +78,18 @@ Tool chỉ đọc, ngoại trừ quyền sửa plan và lệnh Git/mtime chỉ �
 bao phủ mọi workflow của cả mười skill. Bản tiếng Anh chưa được chạy lại trên
 Codex, Claude Code, Qwen hoặc omp tương tác.
 
+## Hook ghi nhận sở thích
+
+[Hook ghi nhận sở thích](preference-hook.md) là hook lệnh `UserPromptSubmit`, bật tuỳ chọn. Hai runtime dưới đây ghi trong tài liệu cùng một định dạng output (`hookSpecificOutput.additionalContext`), và hook in đúng định dạng đó cho cả hai.
+
+| Runtime | Đăng ký ở đâu | Đã kiểm |
+|---|---|---|
+| Claude Code 2.1.322 | `hooks` trong `settings.json` (user) hoặc `.claude/settings.local.json` (project) | Đã chạy phiên `claude -p` thật trong project tạm. Với prompt bình thường "Từ nay commit message viết bằng tiếng Anh nhé.", agent ghi đúng một đề xuất và báo đề xuất đang chờ `qk/prefs`. Prompt "làm luôn đi" không ghi gì. `/qk-prefs` liệt kê đề xuất mà không sửa file, coi "ok" là chưa quyết; khi được duyệt rõ ràng thì ghi một dòng vào đích đã nêu và chuyển đề xuất sang `applied`. Không file rules, `CLAUDE.md` hay memory nào bị đổi. Mỗi ca chỉ chạy một lần, chưa phải tỷ lệ tuân thủ |
+| Codex 0.160.0 | `~/.codex/hooks.json`, `.codex/hooks.json` của project, hoặc `[hooks]` trong `config.toml` | Một phiên `codex exec` trong thư mục tạm: lời nhắc được chèn, agent chạy `propose`, đề xuất nằm đúng kho đã cấu hình. Prompt thử có bảo agent làm theo hướng dẫn hệ thống, nên kết quả chứng minh đường đi hoạt động, chưa nói được agent làm theo thường xuyên đến đâu |
+| omp, Qwen Code | — | Chưa hỗ trợ, chưa kiểm |
+
+Codex bỏ qua hook mới hoặc vừa sửa cho tới khi bạn trust nó bằng `/hooks`; hook của project còn cần lớp `.codex/` của project đó được trust.
+
 ## Đặc điểm đã thấy
 
 - **omp print mode:** `omp -p "/skill:qk-plan …"` gửi nguyên văn, không mở rộng skill; đã đối chứng bằng `find-skills`. Dùng phiên tương tác hoặc RPC; phiên tương tác chưa được kiểm trực tiếp ở đợt trên.

@@ -81,6 +81,18 @@ read-only Git/mtime commands. These are single runs on one model, not sandbox
 security proof or a complete workflow matrix for all ten skills. The English
 version has not been rerun on Codex, Claude Code or Qwen, or in interactive omp.
 
+## Preference hook
+
+The opt-in [preference hook](preference-hook.md) is a `UserPromptSubmit` command hook. Both runtimes below document the same output shape (`hookSpecificOutput.additionalContext`), and the hook prints that shape for both.
+
+| Runtime | Where you register it | Checked |
+|---|---|---|
+| Claude Code 2.1.322 | `hooks` in `settings.json` (user) or `.claude/settings.local.json` (project) | Live `claude -p` sessions in a scratch project with a plain prompt ("Từ nay commit message viết bằng tiếng Anh nhé."): the agent recorded one proposal and told the user it awaits `qk/prefs`. A `làm luôn đi` prompt recorded nothing. `/qk-prefs` listed the proposal without editing, treated "ok" as no decision, and on an explicit approval wrote one line to the named target and resolved the proposal. No rules, `CLAUDE.md` or memory file changed. Single runs, not a compliance rate |
+| Codex 0.160.0 | `~/.codex/hooks.json`, a project's `.codex/hooks.json`, or `[hooks]` in `config.toml` | One `codex exec` session in a scratch folder: the context was injected, the agent ran `propose` and the proposal landed in the configured store. The prompt asked the agent to follow system guidance, so this proves the plumbing, not how often agents comply |
+| omp, Qwen Code | — | Not supported or tested |
+
+Codex skips new or changed hooks until you trust them with `/hooks`; project hooks also need the project's `.codex/` layer to be trusted.
+
 ## Known runtime quirks
 
 - **omp print mode.** `omp -p "/skill:qk-plan …"` sends the text to the model unexpanded, for every skill (checked against the built-in `find-skills`). Use an interactive session or RPC mode.

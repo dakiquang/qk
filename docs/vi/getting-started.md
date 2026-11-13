@@ -60,6 +60,8 @@ Thử skill chỉ đọc trong một repo:
 
 Kỳ vọng: một câu nêu vấn đề, bảng hướng đi với lợi/hại, giả định, khuyến nghị và quyết định dành cho bạn. Không ghi file. Sau đó thử vòng plan → cook với việc nhỏ; xem [Quy trình](workflows.md).
 
+Tuỳ chọn: [hook ghi nhận sở thích](preference-hook.md) biến câu "từ nay…" thành đề xuất để bạn duyệt bằng `qk/prefs`. Bật tay, riêng biệt.
+
 ## 4. Cập nhật
 
 ```bash

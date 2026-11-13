@@ -11,6 +11,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 - [Runtime](runtimes.md) — cách gọi, bằng chứng đã thử và giới hạn hiện tại.
 - [Case study: xuất CSV](case-study-csv-export.md) — ví dụ từ brainstorm/plan qua worker cô lập, PR review, merge đến kiểm chứng ship.
 - [Runner qk-run](runner.md) — tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, một cổng duyệt plan.
+- [Hook ghi nhận sở thích](preference-hook.md) — hook tuỳ chọn biến câu "từ nay…" thành đề xuất chờ bạn duyệt, kèm ví dụ.
 
 ## Skill
 
@@ -26,6 +27,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 | [qk/agent-coord](skills/qk-agent-coord.md) | Giao việc có giới hạn cho agent/model chỉ định |
 | [qk/release-notes](skills/qk-release-notes.md) | Soạn nháp release notes và changelog |
 | [qk/dogfood](skills/qk-dogfood.md) | Đề xuất cải thiện instruction tối thiểu từ bằng chứng, không áp dụng |
+| [qk/prefs](skills/qk-prefs.md) | Duyệt đề xuất sở thích đã ghi và áp dụng mục bạn đồng ý |
 
 Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), một dự án riêng.
 

@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format follows
   `qk-test`, `qk-handoff`, `qk-agent-coord` and `qk-release-notes`.
 - `qk-dogfood`: explicit-only, evidence-based instruction improvement proposals
   in chat, with ownership checks and no apply mode; English/Vietnamese guides.
+- `qk-prefs` and the opt-in preference hook (`scripts/qk_prefs.py`): prompts with
+  a lasting-preference phrase become pending proposals; the skill applies only
+  the ones the user approves. Idea from nghiacr002/personal-brain-style (MIT),
+  implemented separately.
 - Explicit-invocation only: `disable-model-invocation: true` for Claude Code and
   omp, `policy.allow_implicit_invocation: false` for Codex.
 - `scripts/validate.py` and CI checks for structure, naming, invocation policy,
