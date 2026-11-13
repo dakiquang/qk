@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The format follows
 - Documentation prepared for a public repository: rewritten README, regrouped
   docs index, and dated runtime and runner test records moved to a separate
   English/Vietnamese test evidence page so the guides stay evergreen.
+- `qk-run` now prefixes the commit and PR title with a Conventional Commits type
+  and lowercases the subject's first letter (acronyms excepted) when most of the
+  base branch's last 20 non-merge commits follow Conventional Commits.
 
 ### Removed
 

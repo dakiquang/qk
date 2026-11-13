@@ -29,6 +29,10 @@ DEFAULT_TIMEOUT = 1800
 PLAN_RE = re.compile(r"<<<QK-PLAN\s*\n(.*?)\n\s*QK-PLAN>>>", re.S)
 RESULT_RE = re.compile(r"```qk-result\s*\n(.*?)\n```", re.S)
 VERIFY_RE = re.compile(r"```qk-verify\s*\n(.*?)\n```", re.S)
+CONVENTIONAL_RE = re.compile(r"^[a-z]+(\([^()\r\n]+\))?!?: \S")
+TITLE_TYPES = {"fix": "fix", "fixes": "fix", "repair": "fix", "resolve": "fix", "correct": "fix",
+               "doc": "docs", "docs": "docs", "document": "docs", "test": "test", "tests": "test",
+               "refactor": "refactor", "simplify": "refactor", "rename": "refactor"}
 TERMINAL = ("done", "aborted")
 
 
@@ -484,6 +488,29 @@ def plan_title(state):
     return state["task"].splitlines()[0][:72]
 
 
+def uses_conventional_commits(subjects):
+    return sum(1 for s in subjects if CONVENTIONAL_RE.match(s)) * 2 > len(subjects)
+
+
+def conventional_title(title, subjects):
+    """Prefix a type and lowercase the first letter (acronyms excepted) when the history is conventional."""
+    if not uses_conventional_commits(subjects) or CONVENTIONAL_RE.match(title):
+        return title
+    words = title.split()
+    first = words[0] if words else ""
+    word = re.sub(r"[^a-z]", "", first.lower())
+    second = first[1:2]
+    subject = title if second.isupper() or second.isdigit() else title[:1].lower() + title[1:]
+    return f"{TITLE_TYPES.get(word, 'feat')}: {subject}"[:72]
+
+
+def commit_title(state):
+    """Plan title, typed when most of the base branch's last 20 non-merge subjects are conventional."""
+    subjects = git(Path(state["worktree"]), "log", "-n", "20", "--no-merges", "--format=%s",
+                   state["base_sha"]).splitlines()
+    return conventional_title(plan_title(state), subjects)
+
+
 def pr_body(state):
     _, plan = approved_plan(state)
     checks = "\n".join(f"- `{r['cmd']}` → exit {r['exit']}" for r in state.get("verify_results", []))
@@ -499,8 +526,8 @@ def pr_body(state):
 def publishing(state):
     worktree = Path(state["worktree"])
     check_worktree(state, worktree)
+    title = commit_title(state)
     if not state.get("commit"):
-        title = plan_title(state)
         git(worktree, "add", "-A")
         if not git(worktree, "diff", "--cached", "--name-only"):
             raise Blocked("nothing to commit")
@@ -523,7 +550,7 @@ def publishing(state):
             body = run_dir(state["id"]) / "pr-body.md"
             body.write_text(pr_body(state), encoding="utf-8")
             state["pr_url"] = gh(worktree, "pr", "create", "--base", state["base"], "--head", state["branch"],
-                                 "--title", plan_title(state), "--body-file", str(body)).splitlines()[-1]
+                                 "--title", title, "--body-file", str(body)).splitlines()[-1]
         save(state)
     print(f"\nPR ready for review: {state['pr_url']} (head {state['commit']})")
     return "done"

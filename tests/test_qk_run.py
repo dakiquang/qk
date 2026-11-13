@@ -62,7 +62,7 @@ class RunnerTest(unittest.TestCase):
         root = Path(self.tmp.name)
         self.remote = root / "remote.git"
         run(root, "git", "init", "-q", "--bare", "-b", "main", str(self.remote))
-        seed = root / "seed"
+        seed = self.seed = root / "seed"
         run(root, "git", "clone", "-q", str(self.remote), str(seed))
         self.identity(seed)
         (seed / "README").write_text("seed\n")
@@ -114,6 +114,28 @@ class RunnerTest(unittest.TestCase):
     def remote_branches(self):
         return run(self.repo, "git", "ls-remote", "--heads", "origin")
 
+    def push_history(self, *subjects):
+        for subject in subjects:
+            run(self.seed, "git", "commit", "--allow-empty", "-q", "-m", subject)
+        run(self.seed, "git", "push", "-q", "origin", "HEAD:main")
+
+    def push_merged(self, *subjects):
+        for n, subject in enumerate(subjects, 1):
+            run(self.seed, "git", "checkout", "-q", "-b", f"topic-{n}")
+            run(self.seed, "git", "commit", "--allow-empty", "-q", "-m", subject)
+            run(self.seed, "git", "checkout", "-q", "-")
+            run(self.seed, "git", "merge", "-q", "--no-ff", "--no-edit",
+                "-m", f"Merge pull request #{n} from example/topic-{n}", f"topic-{n}")
+        run(self.seed, "git", "push", "-q", "origin", "HEAD:main")
+
+    def published_titles(self):
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        commit = run(Path(state["worktree"]), "git", "log", "-1", "--format=%B")
+        creates = [c for c in self.gh_calls if c[:2] == ("pr", "create")]
+        self.assertEqual(len(creates), 1)
+        return commit, creates[0][creates[0].index("--title") + 1]
+
     def test_full_run_stops_at_plan_then_opens_one_pr(self):
         state = self.start(Agent())
         self.assertEqual(state["stage"], "awaiting_approval")
@@ -129,6 +151,43 @@ class RunnerTest(unittest.TestCase):
         creates = [c for c in self.gh_calls if c[:2] == ("pr", "create")]
         self.assertEqual(len(creates), 1)
         self.assertNotIn("--draft", creates[0])
+        self.assertEqual(creates[0][creates[0].index("--title") + 1], "Add greeting")
+
+    def test_conventional_history_types_commit_and_pr_title(self):
+        self.push_history("feat: a", "fix(x): b", "docs!: c")
+        state = self.start(Agent())
+        self.cli("approve", state["id"])
+        self.assertEqual(self.published_titles(), ("feat: add greeting", "feat: add greeting"))
+
+    def test_only_the_last_20_subjects_decide_the_convention(self):
+        self.push_history(*[f"feat: old {i}" for i in range(15)], *[f"Plain {i}" for i in range(11)],
+                          *[f"fix: new {i}" for i in range(9)])
+        state = self.start(Agent())
+        self.cli("approve", state["id"])
+        self.assertEqual(self.published_titles(), ("Add greeting", "Add greeting"))
+
+    def test_merge_commits_do_not_count_toward_the_convention(self):
+        self.push_merged("feat: a", "fix: b", "docs: c")
+        state = self.start(Agent())
+        self.cli("approve", state["id"])
+        self.assertEqual(self.published_titles(), ("feat: add greeting", "feat: add greeting"))
+
+    def test_conventional_title_rules(self):
+        half = ["feat: x"] * 10 + ["plain"] * 10
+        most = ["feat: x"] * 11 + ["plain"] * 9
+        self.assertEqual(qk_run.conventional_title("Add greeting", half), "Add greeting")
+        self.assertEqual(qk_run.conventional_title("Add greeting", most), "feat: add greeting")
+        cases = {"Fix crash on resume": "fix: fix crash on resume",
+                 "Document runner": "docs: document runner",
+                 "A greeting": "feat: a greeting",
+                 "README badges": "feat: README badges",
+                 "CI cache for tests": "feat: CI cache for tests",
+                 "E2E runner tests": "feat: E2E runner tests",
+                 "fix(runner): keep title": "fix(runner): keep title"}
+        for title, expected in cases.items():
+            self.assertEqual(qk_run.conventional_title(title, most), expected, title)
+        self.assertEqual(qk_run.conventional_title("Add greeting", []), "Add greeting")
+        self.assertLessEqual(len(qk_run.conventional_title("Add " + "x" * 68, most)), 72)
 
     def test_verification_artifacts_are_not_committed(self):
         def plan(cwd, state_dir):
