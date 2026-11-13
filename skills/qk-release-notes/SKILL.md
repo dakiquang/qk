@@ -29,7 +29,7 @@ Input: a tag range (`v0.1.0..HEAD`), a list of PRs, or the upcoming version. The
 
 ## Report
 
-Dropped changes (one-line reason each). Tagging and releasing belong to the repo's release process or the release mode of `pr-orchestrator`, and need a separate request.
+Dropped changes (one-line reason each). Under Needs your decision, list the version and any breaking changes to confirm. Tagging and releasing belong to the repo's release process or the release mode of `pr-orchestrator`, and need a separate request.
 
 Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
 

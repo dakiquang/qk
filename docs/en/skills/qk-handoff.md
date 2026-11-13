@@ -15,7 +15,7 @@ Use this before switching sessions or agents, and when resuming a saved handoff.
 
 ## Write mode
 
-Default mode. Save according to repository convention, normally `plans/handoff-<YYYYMMDD>-<slug>.md`; if the repository offers no suitable location, ask for a path. Print exactly the saved content in the reply.
+Default mode. Save according to repository convention, normally `plans/handoff-<YYYYMMDD>-<slug>.md`; if the repository offers no suitable location, ask for a path. Print the saved content unchanged in the reply, followed by the four closing report lines, which are not part of the file.
 
 Include the goal, real status with revision, decisions/reasons, rejected approaches and traps, evidence pointers, remaining work/dependencies, authority granted in this session and a re-entry checklist. Link plans/issues/commits instead of duplicating them. Mark unrun verification as unverified. Remove secrets, tokens, customer data and private URLs.
 
