@@ -26,7 +26,7 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 5. **verifying** — runner tự chạy mọi lệnh `qk-verify`, xoá file do các lệnh đó tạo ra và chặn nếu chúng đổi nội dung khác của worktree (file đã track hoặc file mới).
 6. **reviewing** — model khác họ review toàn bộ diff ở chế độ chỉ đọc, trả finding có cấu trúc.
 7. **fixing** — tối đa một vòng cho lệnh kiểm lỗi hoặc finding blocker/important trên file đã đổi, rồi kiểm và review lại.
-8. **publishing** — runner commit (tiêu đề plan, không dòng tác giả AI), push nhánh và mở PR ready-for-review kèm lệnh kiểm, vấn đề đã xử lý trong vòng sửa, finding còn lại và plan đã duyệt. Runner kiểm tra lại quyền push ngay trước khi push.
+8. **publishing** — runner commit với tiêu đề của plan đã duyệt (không dòng tác giả AI). Runner thêm type theo quy ước (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`) và viết thường chữ cái đầu (từ viết tắt như `README` hay `CI` giữ nguyên) khi phần lớn trong 20 tiêu đề commit gần nhất không phải merge của nhánh base theo dạng `type(scope): subject`. Sau đó runner push nhánh và mở PR ready-for-review cùng tiêu đề đó, kèm lệnh kiểm, vấn đề đã xử lý trong vòng sửa, finding còn lại và plan đã duyệt. Runner kiểm tra lại quyền push ngay trước khi push.
 
 Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (mặc định `~/.local/state/qk-run/`). Worktree được giữ lại sau khi chạy.
 
@@ -42,7 +42,7 @@ Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (m
 
 - Worktree không phải sandbox. Agent triển khai chạy ở chế độ ghi của runtime (`claude --permission-mode acceptEdits` cho phép Bash, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), nên vẫn có thể chạm file và mạng ngoài repo.
 - Thành công được định nghĩa bằng lệnh `qk-verify` của plan và một lần review chéo model; lệnh kiểm yếu thì bằng chứng yếu.
-- Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Nếu repo có quy ước commit message, hãy đặt tiêu đề khi squash-merge.
+- Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Với repo theo Conventional Commits, type lấy từ từ đầu tiên của tiêu đề plan (`fix`, `docs`, `test`, `refactor` và các biến thể), còn lại mặc định là `feat`; tiêu đề plan đã đúng quy ước thì giữ nguyên; commit merge không được tính. Các quy ước khác (tiền tố ticket, scope, quy tắc viết hoa khác) không được nhận diện, nên hãy sửa tiêu đề plan trước khi `approve` hoặc chỉnh tiêu đề khi merge.
 - Mỗi lần chạy một việc; không có queue, daemon hay chạy song song.
 
 ## Bằng chứng

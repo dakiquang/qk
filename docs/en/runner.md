@@ -26,7 +26,7 @@ Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:ant
 5. **verifying** — the runner itself runs every `qk-verify` command, removes files those commands created, and blocks if they changed any other worktree content (tracked or new files).
 6. **reviewing** — a different model family reviews the full diff read-only and returns structured findings.
 7. **fixing** — at most one round for failed checks or blocker/important findings on changed files, then verify and review again.
-8. **publishing** — the runner commits (plan title, no AI attribution), pushes the branch and opens a ready-for-review PR with the checks, the problems addressed in the fix round, remaining findings and the approved plan. It re-checks push permission immediately before pushing.
+8. **publishing** — the runner commits with the approved plan's title (no AI attribution). The runner adds a conventional type (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`) and lowercases the first letter (acronyms such as `README` or `CI` keep their case) when most of the base branch's last 20 non-merge commit subjects follow `type(scope): subject`. It then pushes the branch and opens a ready-for-review PR with the same title, the checks, the problems addressed in the fix round, remaining findings and the approved plan. It re-checks push permission immediately before pushing.
 
 State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (default `~/.local/state/qk-run/`). The worktree stays there after the run.
 
@@ -42,7 +42,7 @@ State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (d
 
 - A worktree is not a sandbox. Implementing agents run with their runtime's write mode (`claude --permission-mode acceptEdits` with Bash allowed, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), so they can still reach files and network outside the repository.
 - Success is defined by the plan's `qk-verify` commands and one cross-model review; weak commands mean weak evidence.
-- The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. If the repository uses a commit convention, set the title when squash-merging.
+- The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. In a repository that follows Conventional Commits, the type comes from the plan title's first word (`fix`, `docs`, `test`, `refactor` and their variants) and otherwise defaults to `feat`; a plan title that is already conventional is kept as written; merge commits are not counted. Other conventions (ticket prefixes, scopes, other casing rules) are not detected, so edit the plan title before `approve` or adjust the title when merging.
 - One task per run; no queue, daemon or parallel runs.
 
 ## Evidence
