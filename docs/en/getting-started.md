@@ -76,6 +76,26 @@ git -C ~/src/qk pull
 
 Links pick up the new version at the next session. Read the [changelog](../../CHANGELOG.md) for what changed.
 
+Skills are symlinks to the clone, so whatever is checked out is live in every runtime at the next session. To pin the v0.1.0 release:
+
+```bash
+git -C ~/src/qk fetch --tags
+```
+
+```bash
+git -C ~/src/qk checkout v0.1.0
+```
+
+To return to the latest on `main`:
+
+```bash
+git -C ~/src/qk checkout main
+```
+
+```bash
+git -C ~/src/qk pull
+```
+
 ## 5. Uninstall
 
 Remove only links you have verified point at your qk clone, never the whole skills directory. For example, inspect one link:

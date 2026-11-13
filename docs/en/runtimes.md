@@ -79,7 +79,25 @@ checkout were unchanged during the runs. No global installation or runtime confi
 changed. Tools were limited to reads, except the plan edit and the handoff's
 read-only Git/mtime commands. These are single runs on one model, not sandbox
 security proof or a complete workflow matrix for all ten skills. The English
-version has not been rerun on Codex, Claude Code or Qwen, or in interactive omp.
+version had not yet been rerun on Codex, Claude Code or Qwen, or in interactive omp.
+
+## Manual smoke checklist
+
+Run each check in an empty temporary directory on each runtime:
+
+1. **Explicit call:** Ask `qk-brainstorm` "Should the app read its configuration from environment variables or a TOML file?" Use `/qk-brainstorm …` in Claude Code, `$qk-brainstorm …` in Codex, or `/skill:qk-brainstorm …` in omp RPC mode. Pass when the report ends with **Done**, **Evidence**, **Not verified**, **Needs your decision** in that order and the directory has no new files.
+2. **Ordinary request:** Ask "I need to plan and debug a config loader. In two sentences, what should I check first?" without a skill call. Pass when the visible answer contains none of the four labels. This checks visible output only; it does not prove the skill was absent from context.
+
+| Runtime | Date | Explicit call | Ordinary request |
+|---|---|---|---|
+| Claude Code 2.1.322 (`claude -p`) | 2026-11-13 | Pass: four labels in order, no files | Pass: no labels |
+| Codex 0.160.0 (`codex exec --sandbox read-only`) | 2026-11-13 | Pass | Pass |
+| omp 18.18.3 (RPC mode) | 2026-11-13 | Pass; skill body injected | Pass; nothing injected |
+| Qwen Code | — | Not checked: login expired | Not checked |
+
+These are single runs, not a compliance rate. On 2026-11-13, explicit `qk-prefs` calls with an empty proposal store on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 (RPC) each located the script through the symlinked skill folder, reported no pending proposals and ended with the four labels in order.
+
+On 2026-11-14, Claude Code 2.1.322 ran `/qk-commit commit` in a scratch repository with a local bare remote. It made exactly one commit containing the changed tracked file, did not push, and left an unrelated untracked file out while naming it. With an env file present, that file stayed out of the commit, was named in the report, and its contents were not read. Neither commit message had AI attribution.
 
 ## Preference hook
 
@@ -96,6 +114,7 @@ Codex skips new or changed hooks until you trust them with `/hooks`; project hoo
 ## Known runtime quirks
 
 - **omp print mode.** `omp -p "/skill:qk-plan …"` sends the text to the model unexpanded, for every skill (checked against the built-in `find-skills`). Use an interactive session or RPC mode.
+- **omp print-mode inventory.** Asking which skills are available does not list qk skills because they are explicit-only. Check installation by invoking a skill explicitly.
 - **Qwen writes skill arguments to disk.** When a skill is invoked, Qwen writes a temporary file under `.qwen/tmp/` in the current repository, even in plan mode. This is Qwen's behaviour, not qk's; consider ignoring `.qwen/` in your repositories.
 - **Codex and duplicate directories.** If a skill is linked into two directories Codex reads, it may be listed twice. Pick one.
 

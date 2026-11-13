@@ -70,6 +70,26 @@ git -C ~/src/qk pull
 
 Link dùng phiên bản mới ở phiên tiếp theo. Đọc [changelog](../../CHANGELOG.md) trước khi cập nhật.
 
+Các skill là symlink trỏ tới clone, nên phiên bản đang checkout sẽ có hiệu lực trên mọi runtime ở phiên tiếp theo. Để cố định ở bản phát hành v0.1.0:
+
+```bash
+git -C ~/src/qk fetch --tags
+```
+
+```bash
+git -C ~/src/qk checkout v0.1.0
+```
+
+Để trở lại bản mới nhất trên `main`:
+
+```bash
+git -C ~/src/qk checkout main
+```
+
+```bash
+git -C ~/src/qk pull
+```
+
 ## 5. Gỡ
 
 Chỉ xoá link đã xác minh trỏ tới clone qk của bạn, không xoá toàn bộ thư mục skill. Kiểm một link:

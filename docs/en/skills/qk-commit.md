@@ -16,4 +16,6 @@ Use `$qk-commit` in Codex or `/skill:qk-commit` in interactive/RPC omp.
 
 ## Authority and completion
 
-The skill runs only the named steps. Before pushing, it runs the [identity preflight](../../../scripts/qk_preflight.py) against the active `gh` account. A failed check stops the push; if the script is missing, it does not push and reports that the account could not be checked. The user switches accounts themselves. A PR description includes what changed, why and checks actually run in the session. The skill never amends, force-pushes, switches accounts, merges or tags.
+The skill runs only the named steps. Before pushing, it runs the [identity preflight](../../../scripts/qk_preflight.py) against the active `gh` account. A failed check stops the push; if the script is missing, it does not push and reports that the account could not be checked. The user chooses the account to use. A PR description includes what changed, why and checks actually run in the session. The skill never amends, force-pushes, switches accounts, merges or tags.
+
+Tip: If the identity check fails because another logged-in account owns the repository, you can run one command as that account without switching the active one, for example `GH_TOKEN=$(gh auth token --user <name>) git push -u origin <branch>`. This works when git uses `gh` as its credential helper (`gh auth setup-git`). The skill never reads tokens or switches accounts; run this yourself or explicitly ask for it.
