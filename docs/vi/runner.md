@@ -19,7 +19,7 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 
 ## Các bước
 
-1. **preflight** — từ chối checkout chính còn thay đổi chưa commit (không stash), kiểm `gh auth`, tìm nhánh base, tạo worktree trên nhánh mới `qk/<slug>-<id>`.
+1. **preflight** — từ chối checkout chính còn thay đổi chưa commit (không stash), kiểm quyền push của tài khoản `gh` đang hoạt động với origin trên GitHub, tìm nhánh base, tạo worktree trên nhánh mới `qk/<slug>-<id>`.
 2. **planning** — `qk/plan` chỉ đọc; runner lưu plan, plan phải có khối `qk-verify` chứa lệnh kiểm của repo.
 3. **awaiting_approval** — cổng người duy nhất. Có thể sửa `plan.md` trước khi duyệt; `approve` đọc lại file, in các lệnh kiểm sẽ chạy và đóng băng thành `approved-plan.md`. Reviewer, vòng sửa và PR dùng bản đóng băng này; bản đó bị sửa thì run dừng.
 4. **implementing** — `qk/cook` trong worktree.

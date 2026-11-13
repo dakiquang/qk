@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `qk-commit` for scoped commits, optional push and PR, plus `scripts/qk_preflight.py`
+  to check push permission for the active GitHub account before publishing.
 - Skills `qk-brainstorm`, `qk-research`, `qk-plan`, `qk-cook`, `qk-debug`,
   `qk-test`, `qk-handoff`, `qk-agent-coord` and `qk-release-notes`.
 - `qk-dogfood`: explicit-only, evidence-based instruction improvement proposals

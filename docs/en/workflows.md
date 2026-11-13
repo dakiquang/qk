@@ -39,6 +39,8 @@ Gate: you approve the plan. Approval of a plan is not approval to commit, merge 
 
 Gate: you decide on commit, push and merge; cook does none of these unless you ask in the chat for that specific action.
 
+When ready to commit or open a PR, invoke [qk/commit](skills/qk-commit.md) with the steps you authorize.
+
 ## Bug → fix
 
 1. `qk/debug <symptom>` — reproduction, root cause with `file:line`, rejected hypotheses, proposed minimal fix. No product code is changed.

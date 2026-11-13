@@ -39,6 +39,8 @@ Cổng: bạn duyệt plan. Duyệt plan không duyệt commit, merge hoặc đ�
 
 Cổng: bạn quyết commit/push/merge. Cook không làm các việc đó nếu chat chưa yêu cầu rõ hành động cụ thể.
 
+Khi sẵn sàng commit hoặc mở PR, gọi [qk/commit](skills/qk-commit.md) và nêu các bước được phép.
+
 ## Lỗi → bản sửa
 
 1. `qk/debug <triệu chứng>`: tái hiện, nguyên nhân có `file:line`, giả thuyết đã loại, bản sửa tối thiểu đề xuất. Mặc định chưa sửa sản phẩm.

@@ -90,6 +90,10 @@ class RunnerTest(unittest.TestCase):
 
     def fake_gh(self, cwd, *args, check=True):
         self.gh_calls.append(args)
+        if args == ("api", "user", "--jq", ".login"):
+            return "active-user"
+        if args[:2] == ("api", "repos/example/repo"):
+            return "true"
         if args[:2] == ("pr", "create"):
             return "https://github.com/example/repo/pull/7"
         return ""
@@ -338,6 +342,42 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(state["blocked_at"], "preflight")
         self.assertTrue((self.repo / "local.txt").is_file())
         self.assertEqual(run(self.repo, "git", "stash", "list"), "")
+
+    def test_identity_failure_blocks_before_worktree(self):
+        run(self.repo, "git", "remote", "set-url", "origin", "git@github.com:example/repo.git")
+
+        def denied_gh(cwd, *args, check=True):
+            if args[:2] == ("api", "repos/example/repo"):
+                return "false"
+            if args[:2] == ("auth", "status"):
+                return "Logged in to github.com account active-user\nLogged in to github.com account other-user"
+            return self.fake_gh(cwd, *args, check=check)
+
+        qk_run.gh = denied_gh
+        state = self.start(Agent())
+        self.assertEqual(state["stage"], "blocked")
+        self.assertEqual(state["blocked_at"], "preflight")
+        self.assertIn("Push permission | false", state["reason"])
+        self.assertIn("other-user", state["reason"])
+        self.assertNotIn("worktree", state)
+        self.assertEqual(run(self.repo, "git", "worktree", "list", "--porcelain").count("worktree "), 1)
+
+    def test_hidden_repository_blocks_with_identity_report(self):
+        run(self.repo, "git", "remote", "set-url", "origin", "git@github.com:example/repo.git")
+
+        def hidden_gh(cwd, *args, check=True):
+            if args[:2] == ("api", "repos/example/repo"):
+                raise qk_run.Blocked("gh api repos/example/repo failed (1): gh: Not Found (HTTP 404)")
+            if args[:2] == ("auth", "status"):
+                return "Logged in to github.com account active-user\nLogged in to github.com account other-user"
+            return self.fake_gh(cwd, *args, check=check)
+
+        qk_run.gh = hidden_gh
+        state = self.start(Agent())
+        self.assertEqual(state["stage"], "blocked")
+        self.assertIn("not visible to the active account", state["reason"])
+        self.assertIn("other-user", state["reason"])
+        self.assertNotIn("worktree", state)
 
     def test_same_model_family_is_rejected(self):
         qk_run.call_agent = Agent()

@@ -28,6 +28,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 | [qk/release-notes](skills/qk-release-notes.md) | Draft release notes and changelog entries |
 | [qk/dogfood](skills/qk-dogfood.md) | Propose minimal instruction improvements from work evidence, without applying them |
 | [qk/prefs](skills/qk-prefs.md) | Review recorded preference proposals and apply the ones you approve |
+| [qk/commit](skills/qk-commit.md) | Commit scoped work; push and open a PR only when asked |
 
 Pull-request review and scoring are handled by the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), a separate project.
 
