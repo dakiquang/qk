@@ -76,11 +76,11 @@ class RunnerTest(unittest.TestCase):
         os.environ["GIT_AUTHOR_NAME"] = os.environ["GIT_COMMITTER_NAME"] = "qk test"
         os.environ["GIT_AUTHOR_EMAIL"] = os.environ["GIT_COMMITTER_EMAIL"] = "qk@example.invalid"
         self.gh_calls = []
-        self.originals = (qk_run.call_agent, qk_run.gh)
+        self.originals = (qk_run.call_agent, qk_run.gh, qk_run.check_identity)
         qk_run.gh = self.fake_gh
 
     def tearDown(self):
-        qk_run.call_agent, qk_run.gh = self.originals
+        qk_run.call_agent, qk_run.gh, qk_run.check_identity = self.originals
         self.tmp.cleanup()
 
     @staticmethod
@@ -90,6 +90,10 @@ class RunnerTest(unittest.TestCase):
 
     def fake_gh(self, cwd, *args, check=True):
         self.gh_calls.append(args)
+        if args == ("api", "user", "--jq", ".login"):
+            return "active-user"
+        if args[:2] == ("api", "repos/example/repo"):
+            return "true"
         if args[:2] == ("pr", "create"):
             return "https://github.com/example/repo/pull/7"
         return ""
@@ -339,6 +343,60 @@ class RunnerTest(unittest.TestCase):
         self.assertTrue((self.repo / "local.txt").is_file())
         self.assertEqual(run(self.repo, "git", "stash", "list"), "")
 
+    def test_identity_failure_blocks_before_worktree(self):
+        run(self.repo, "git", "remote", "set-url", "origin", "git@github.com:example/repo.git")
+
+        def denied_gh(cwd, *args, check=True):
+            if args[:2] == ("api", "repos/example/repo"):
+                return "false"
+            if args[:2] == ("auth", "status"):
+                return "Logged in to github.com account active-user\nLogged in to github.com account other-user"
+            return self.fake_gh(cwd, *args, check=check)
+
+        qk_run.gh = denied_gh
+        state = self.start(Agent())
+        self.assertEqual(state["stage"], "blocked")
+        self.assertEqual(state["blocked_at"], "preflight")
+        self.assertIn("Push permission | false", state["reason"])
+        self.assertIn("other-user", state["reason"])
+        self.assertNotIn("worktree", state)
+        self.assertEqual(run(self.repo, "git", "worktree", "list", "--porcelain").count("worktree "), 1)
+
+    def test_identity_failure_at_publishing_prevents_push(self):
+        checks = []
+
+        def changing_identity(repo, gh_call=None, git_call=None):
+            checks.append(Path(repo))
+            return (True, "preflight passed") if len(checks) == 1 else (False, "publishing identity denied")
+
+        qk_run.check_identity = changing_identity
+        state = self.start(Agent())
+        self.cli("approve", state["id"])
+        blocked = self.latest()
+        self.assertEqual(blocked["stage"], "blocked")
+        self.assertEqual(blocked["blocked_at"], "publishing")
+        self.assertEqual(blocked["reason"], "publishing identity denied")
+        self.assertEqual([path.resolve() for path in checks],
+                         [self.repo.resolve(), Path(blocked["worktree"]).resolve()])
+        self.assertNotIn(blocked["branch"], self.remote_branches())
+
+    def test_hidden_repository_blocks_with_identity_report(self):
+        run(self.repo, "git", "remote", "set-url", "origin", "git@github.com:example/repo.git")
+
+        def hidden_gh(cwd, *args, check=True):
+            if args[:2] == ("api", "repos/example/repo"):
+                raise qk_run.Blocked("gh api repos/example/repo failed (1): gh: Not Found (HTTP 404)")
+            if args[:2] == ("auth", "status"):
+                return "Logged in to github.com account active-user\nLogged in to github.com account other-user"
+            return self.fake_gh(cwd, *args, check=check)
+
+        qk_run.gh = hidden_gh
+        state = self.start(Agent())
+        self.assertEqual(state["stage"], "blocked")
+        self.assertIn("not visible to the active account", state["reason"])
+        self.assertIn("other-user", state["reason"])
+        self.assertNotIn("worktree", state)
+
     def test_same_model_family_is_rejected(self):
         qk_run.call_agent = Agent()
         with self.assertRaises(SystemExit):
@@ -438,6 +496,7 @@ class RunnerTest(unittest.TestCase):
         blocked = self.latest()
         self.assertEqual(blocked["stage"], "blocked")
         self.assertEqual(blocked["blocked_at"], "publishing")
+        qk_run.check_identity = lambda *args, **kwargs: self.fail("identity rechecked after push")
         self.cli("resume", state["id"])
         done = self.latest()
         self.assertEqual(done["stage"], "done")

@@ -19,14 +19,14 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 
 ## Các bước
 
-1. **preflight** — từ chối checkout chính còn thay đổi chưa commit (không stash), kiểm `gh auth`, tìm nhánh base, tạo worktree trên nhánh mới `qk/<slug>-<id>`.
+1. **preflight** — từ chối checkout chính còn thay đổi chưa commit (không stash), kiểm quyền push của tài khoản `gh` đang hoạt động với origin trên GitHub, tìm nhánh base, tạo worktree trên nhánh mới `qk/<slug>-<id>`.
 2. **planning** — `qk/plan` chỉ đọc; runner lưu plan, plan phải có khối `qk-verify` chứa lệnh kiểm của repo.
 3. **awaiting_approval** — cổng người duy nhất. Có thể sửa `plan.md` trước khi duyệt; `approve` đọc lại file, in các lệnh kiểm sẽ chạy và đóng băng thành `approved-plan.md`. Reviewer, vòng sửa và PR dùng bản đóng băng này; bản đó bị sửa thì run dừng.
 4. **implementing** — `qk/cook` trong worktree.
 5. **verifying** — runner tự chạy mọi lệnh `qk-verify`, xoá file do các lệnh đó tạo ra và chặn nếu chúng đổi nội dung khác của worktree (file đã track hoặc file mới).
 6. **reviewing** — model khác họ review toàn bộ diff ở chế độ chỉ đọc, trả finding có cấu trúc.
 7. **fixing** — tối đa một vòng cho lệnh kiểm lỗi hoặc finding blocker/important trên file đã đổi, rồi kiểm và review lại.
-8. **publishing** — runner commit (tiêu đề plan, không dòng tác giả AI), push nhánh và mở PR ready-for-review kèm lệnh kiểm, vấn đề đã xử lý trong vòng sửa, finding còn lại và plan đã duyệt.
+8. **publishing** — runner commit (tiêu đề plan, không dòng tác giả AI), push nhánh và mở PR ready-for-review kèm lệnh kiểm, vấn đề đã xử lý trong vòng sửa, finding còn lại và plan đã duyệt. Runner kiểm tra lại quyền push ngay trước khi push.
 
 Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (mặc định `~/.local/state/qk-run/`). Worktree được giữ lại sau khi chạy.
 

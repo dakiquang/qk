@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk commit"
+  short_description: "Commit scoped work, optionally push and open a PR"
+policy:
+  allow_implicit_invocation: false

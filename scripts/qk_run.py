@@ -19,6 +19,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from qk_preflight import check_identity
 
 QK_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_IMPL = "omp:anthropic/claude-opus-5-5"
@@ -90,7 +91,8 @@ def git(cwd, *args, check=True):
 
 def gh(cwd, *args, check=True):
     """GitHub CLI call. Separate function so tests can replace it."""
-    return sh(["gh", *args], cwd, check=check).stdout.strip()
+    proc = sh(["gh", *args], cwd, check=check)
+    return (proc.stdout or proc.stderr if args[:2] == ("auth", "status") else proc.stdout).strip()
 
 
 # ---------------------------------------------------------------- agents
@@ -284,7 +286,9 @@ def preflight(state):
     state["repo"] = str(repo)
     if git(repo, "status", "--porcelain"):
         raise Blocked("primary checkout has uncommitted changes; commit or move them first (the runner never stashes)")
-    gh(repo, "auth", "status")
+    ok, report = check_identity(repo, gh_call=gh, git_call=git)
+    if not ok:
+        raise Blocked(report)
     remote = git(repo, "remote", "get-url", "origin")
     base = git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).removeprefix("origin/")
     if not base:
@@ -504,6 +508,9 @@ def publishing(state):
         state["commit"] = git(worktree, "rev-parse", "HEAD")
         save(state)
     if not state.get("pushed"):
+        ok, report = check_identity(worktree, gh_call=gh, git_call=git)
+        if not ok:
+            raise Blocked(report)
         git(worktree, "push", "-u", "origin", state["branch"])
         state["pushed"] = True
         save(state)

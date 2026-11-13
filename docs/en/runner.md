@@ -19,14 +19,14 @@ Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:ant
 
 ## Stages
 
-1. **preflight** — refuses a dirty primary checkout (never stashes), checks `gh auth`, discovers the base branch, creates a worktree on a new branch `qk/<slug>-<id>`.
+1. **preflight** — refuses a dirty primary checkout (never stashes), checks push permission for the active `gh` account on GitHub origin, discovers the base branch, creates a worktree on a new branch `qk/<slug>-<id>`.
 2. **planning** — read-only `qk/plan`; the runner saves the plan, which must contain a `qk-verify` block of repository commands.
 3. **awaiting_approval** — the only human gate. You may edit `plan.md` before approving; `approve` re-reads it, prints the verify commands that will run and freezes it as `approved-plan.md`. The reviewer, the fix round and the PR use that frozen copy, and the run blocks if it changes.
 4. **implementing** — `qk/cook` in the worktree.
 5. **verifying** — the runner itself runs every `qk-verify` command, removes files those commands created, and blocks if they changed any other worktree content (tracked or new files).
 6. **reviewing** — a different model family reviews the full diff read-only and returns structured findings.
 7. **fixing** — at most one round for failed checks or blocker/important findings on changed files, then verify and review again.
-8. **publishing** — the runner commits (plan title, no AI attribution), pushes the branch and opens a ready-for-review PR with the checks, the problems addressed in the fix round, remaining findings and the approved plan.
+8. **publishing** — the runner commits (plan title, no AI attribution), pushes the branch and opens a ready-for-review PR with the checks, the problems addressed in the fix round, remaining findings and the approved plan. It re-checks push permission immediately before pushing.
 
 State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (default `~/.local/state/qk-run/`). The worktree stays there after the run.
 
