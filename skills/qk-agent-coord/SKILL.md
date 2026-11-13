@@ -78,8 +78,14 @@ Result:     <summary>
 Accepted:   <point — verified evidence>
 Rejected:   <point — reason>
 Checkout:   <unchanged / unexpected changes: ...>
-Next:       <what the user needs to decide>
 ```
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
 
 ## Boundaries
 

@@ -24,7 +24,7 @@ Two modes: `write [next-session focus]` (default) and `resume <path>`.
 2. Record the actual state; do not record intended work as done. Anything whose verification has not been run is recorded as "not verified".
 3. Record permissions: which were granted in this session and **do not** carry over automatically to the next session (commit, push, merge, publish...).
 4. Remove secrets, tokens, customer data and private URLs. Do not copy transcripts.
-5. Save per repo convention, default `plans/handoff-<YYYYMMDD>-<slug>.md`. If the repo has no suitable place, ask for a path. Print the identical content in the reply.
+5. Save per repo convention, default `plans/handoff-<YYYYMMDD>-<slug>.md`. If the repo has no suitable place, ask for a path. Print the saved content unchanged in the reply, then add the four closing lines below; they are not part of the saved file.
 
 ```markdown
 # Handoff — <task> (<date and time>)
@@ -47,6 +47,15 @@ Read <files>. Re-check the revision and repo state before working. Ask the user 
 2. Re-check: branch, revision, `git status`, whether the files mentioned are still accurate, whether the plan changed after the handoff.
 3. Report: what still holds, what has drifted, the reasonable next step, and the permissions that must be requested again.
 4. Wait for the user to confirm before changing anything.
+
+## Report
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
 
 ## Boundaries
 

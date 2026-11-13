@@ -17,6 +17,7 @@ NAME_RE = re.compile(r"^qk-[a-z0-9]+(-[a-z0-9]+)*$")
 LINK_RE = re.compile(r"\]\((?!https?:|mailto:|#)([^)#\s]+)")
 PERSONAL_RE = re.compile("/" + "Users/|/" + r"home/[a-z]")
 SECRET_RE = re.compile(r"\b(ghp_|github_pat_|sk-ant-|sk-proj-|AKIA|xox[bp]-)[A-Za-z0-9_-]{8,}")
+REPORT_LABELS = ("**Done**", "**Evidence**", "**Not verified**", "**Needs your decision**")
 DESCRIPTION_BLOCKS = {">", ">-", "|", "|-"}
 SELF = Path(__file__).resolve()
 
@@ -87,6 +88,8 @@ def check_skill(skill_dir):
     if unknown:
         fail(skill_md, f"unsupported frontmatter fields: {', '.join(sorted(unknown))}")
 
+    check_contracts(skill_md, text)
+
     if text.count("\n") > 500:
         fail(skill_md, "SKILL.md is longer than 500 lines; move detail into references/")
 
@@ -98,6 +101,44 @@ def check_skill(skill_dir):
 
     for doc in skill_dir.rglob("*.md"):
         check_links(doc, boundary=skill_dir)
+
+
+def sections(text):
+    """Split a SKILL.md body into (heading, lines) outside fenced code blocks.
+
+    Lines inside fences are dropped, so examples cannot satisfy or break the checks.
+    """
+    body = text.split("\n---\n", 1)[1] if text.startswith("---\n") else text
+    result, heading, lines, fenced = [], None, [], False
+    for line in body.splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        if line.startswith("## "):
+            result.append((heading, lines))
+            heading, lines = line[3:].strip(), []
+        else:
+            lines.append(line)
+    result.append((heading, lines))
+    return result
+
+
+def check_contracts(skill_md, text):
+    """Input contract: the table before the first heading. Output contract: the
+    four report labels as the last label lines of the Report section, in order."""
+    parts = sections(text)
+    intro = parts[0][1]
+    for row in ("**Result**", "**Authority**", "**Done when**"):
+        if not any(line.startswith(f"| {row} |") for line in intro):
+            fail(skill_md, f"missing {row} row in the contract table before the first section")
+    report = [lines for heading, lines in parts if heading in ("Report", "Chat report")]
+    found = [line.split(":", 1)[0] for line in (report[-1] if report else [])
+             if line.split(":", 1)[0] in REPORT_LABELS]
+    if found[-len(REPORT_LABELS):] != list(REPORT_LABELS):
+        fail(skill_md, "the Report section must end its instructions with "
+             + ", ".join(REPORT_LABELS) + " in that order")
 
 
 def check_policy_file(path):

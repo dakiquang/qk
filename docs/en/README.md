@@ -40,3 +40,4 @@ Pull-request review and scoring are handled by the companion skill [pr-orchestra
 5. **Pick the process by what is missing.** Unclear direction → brainstorm; missing facts → research; clear work → cook. No mandatory pipeline.
 6. **Continue within approved scope**; stop for a new decision, a blocker, or new authority.
 7. **Extend the runtime, never take it over.** The runtime keeps its tools, plan mode, subagents, model settings and permissions; repository rules beat qk.
+8. **Close every report consistently.** End with Done, Evidence, Not verified, Needs your decision, in that order.

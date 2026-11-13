@@ -34,10 +34,16 @@ Use when verification must be broader than, or independent of, the checks in `qk
 New failures:  <test — message — suspected cause>
 Baseline:      <pre-existing failures>
 Flaky:         <...>
-Not verified:  <behavior / environment — reason>
 ```
 
 Report remote CI status as CI, not as local tests.
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
 
 ## Boundaries
 

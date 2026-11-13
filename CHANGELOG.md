@@ -33,6 +33,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Skill reports now end with Done, Evidence, Not verified and Needs your decision;
+  the validator checks each skill's contract rows and ordered report labels.
 - Canonical instructions for all ten skills and the worker prompt reference are
   now English; human documentation remains available in English and Vietnamese.
 - Reports localize human-facing labels to the user's requested language; edits

@@ -15,7 +15,7 @@ Dùng trước khi chuyển phiên/agent và khi nhận lại bản bàn giao. G
 
 ## Chế độ write
 
-Là mặc định. Lưu theo quy ước repo, thường là `plans/handoff-<YYYYMMDD>-<slug>.md`; repo không có nơi phù hợp thì hỏi đường dẫn. In nội dung giống hệt file đã lưu trong câu trả lời.
+Là mặc định. Lưu theo quy ước repo, thường là `plans/handoff-<YYYYMMDD>-<slug>.md`; repo không có nơi phù hợp thì hỏi đường dẫn. In nguyên nội dung file đã lưu trong câu trả lời, rồi thêm bốn dòng kết báo cáo; bốn dòng này không nằm trong file.
 
 Gồm mục tiêu, trạng thái thật kèm revision, quyết định/lý do, hướng đã bác và bẫy, nguồn bằng chứng, việc mở/phụ thuộc, quyền đã cấp trong phiên và checklist vào lại. Trỏ plan/issue/commit thay vì chép lại. Kiểm chưa chạy phải ghi chưa kiểm. Loại secret, token, dữ liệu khách hàng và URL riêng.
 
