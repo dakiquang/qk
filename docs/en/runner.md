@@ -45,8 +45,6 @@ State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (d
 - The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. If the repository uses a commit convention, set the title when squash-merging.
 - One task per run; no queue, daemon or parallel runs.
 
-## Verified
+## Evidence
 
-On 2026-11-08: 30 unit tests with a scripted agent and real Git repositories, run on Python 3.9 and 3.12+, cover the main path, the single fix round (verification failure and a second serious review both block without publishing; a fixer updating the plan status still publishes), agent commits and branch switches, commits in the primary checkout, read-only violations and their resume, verification artifacts and mutations, plan edits before approval and the frozen approved plan, model-family checks, dirty checkouts, existing branches and PRs, and resume after a failed PR call. Real end-to-end runs on a private scratch GitHub repository opened ready-for-review PRs containing only the intended files with each implementer: omp (Opus 5.5) reviewed by Codex, Claude Code (Sonnet) reviewed by Codex, and Codex reviewed by omp (Opus 5.5). After the review fixes, the default omp/Codex pair was rerun once with the same result. These are single runs, not certification.
-
-On 2026-11-13, the runner completed its first run on a real repository task: a documentation change in this repository. omp with Opus 5.5 implemented and Codex reviewed. There was one `revise` before approval; both verify commands passed, the review returned no findings, and no fix round was needed. A ready-for-review PR opened about eight minutes after `start`. The push identity check passed at preflight and again before the push. This is one run, not certification.
+The runner's behaviour is covered by [`tests/test_qk_run.py`](../../tests/test_qk_run.py), which drives it with a scripted agent against real Git repositories. Real end-to-end runs are recorded in [Test evidence](evidence.md#qk-run-runner).

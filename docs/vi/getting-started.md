@@ -4,7 +4,9 @@
 
 ## 1. Cài đặt
 
-qk là Markdown thuần: không build, không dependency runtime. Clone một lần rồi tạo symlink từng thư mục skill vào nơi runtime đọc. Mọi runtime dùng cùng nguồn; `git pull` cập nhật các link đó. Repo hiện riêng tư nên cần tài khoản GitHub có quyền đọc.
+qk là Markdown thuần: không build, không có package phải cài. Clone một lần rồi tạo symlink từng thư mục skill vào nơi runtime đọc. Mọi runtime dùng cùng nguồn; `git pull` cập nhật các link đó.
+
+Bạn cần `git` và ít nhất một runtime được hỗ trợ. Các script tuỳ chọn (`qk_run.py`, `qk_prefs.py`, `qk_preflight.py` và validator) cần Python 3.9 trở lên; `qk-run` và bước kiểm account trước khi push còn cần GitHub CLI `gh`.
 
 ```bash
 (
@@ -70,7 +72,7 @@ git -C ~/src/qk pull
 
 Link dùng phiên bản mới ở phiên tiếp theo. Đọc [changelog](../../CHANGELOG.md) trước khi cập nhật.
 
-Các skill là symlink trỏ tới clone, nên phiên bản đang checkout sẽ có hiệu lực trên mọi runtime ở phiên tiếp theo. Để cố định ở bản phát hành v0.1.0:
+Các skill là symlink trỏ tới clone, nên phiên bản đang checkout sẽ có hiệu lực trên mọi runtime ở phiên tiếp theo. Để cố định ở một bản phát hành, checkout tag của bản đó (danh sách bản phát hành nằm trong [changelog](../../CHANGELOG.md)):
 
 ```bash
 git -C ~/src/qk fetch --tags
@@ -114,4 +116,4 @@ Từ thư mục gốc clone:
 python3 scripts/validate.py
 ```
 
-Kiểm tên folder/frontmatter, cấu hình gọi đích danh Claude Code/omp/Codex, link nội bộ và cặp docs EN/VI. Kiểm đường dẫn cá nhân và mẫu secret áp cho file text UTF-8 mọi hậu tố ngoài `.git`, trừ mẫu phát hiện của chính validator. `QK_DENYLIST` là file UTF-8 chứa term literal, mỗi dòng một term; khớp không phân biệt hoa thường theo biên ký tự chữ và áp cả cho validator. Không kiểm file binary, tên file hoặc lịch sử Git. Đây là kiểm tĩnh, không chứng nhận mọi runtime sẽ tuân thủ.
+Kiểm tên folder/frontmatter, cấu hình gọi đích danh Claude Code/omp/Codex, link nội bộ và cặp docs EN/VI. Kiểm đường dẫn cá nhân và mẫu secret áp cho file text UTF-8 mọi hậu tố ngoài `.git`, trừ mẫu phát hiện của chính validator. `QK_DENYLIST` là file UTF-8 chứa term literal, mỗi dòng một term; khớp không phân biệt hoa thường theo biên ký tự chữ và áp cả cho validator. Không kiểm file binary, tên file hoặc lịch sử Git. Trên CI, gitleaks quét dải commit của từng sự kiện push hoặc pull request, không quét toàn bộ lịch sử. Đây là kiểm tĩnh, không chứng nhận mọi runtime sẽ tuân thủ.

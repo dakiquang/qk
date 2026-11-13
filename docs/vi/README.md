@@ -6,13 +6,20 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 
 ## Bắt đầu từ đây
 
-- [Bắt đầu](getting-started.md) — cài, gọi skill, cập nhật và gỡ.
-- [Quy trình](workflows.md) — ghép skill cho ý tưởng mơ hồ, thay đổi đã rõ, lỗi, chuyển phiên và phát hành.
-- [Runtime](runtimes.md) — cách gọi, bằng chứng đã thử và giới hạn hiện tại.
-- [Case study: xuất CSV](case-study-csv-export.md) — ví dụ từ brainstorm/plan qua worker cô lập, PR review, merge đến kiểm chứng ship.
-- [Runner qk-run](runner.md) — tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, một cổng duyệt plan.
-- [Hook ghi nhận sở thích](preference-hook.md) — hook tuỳ chọn biến câu "từ nay…" thành đề xuất chờ bạn duyệt, kèm ví dụ.
-- [Thiết lập gọn nhẹ](lean-setup.md) — đo và cắt bớt phần runtime nạp vào mỗi phiên, dùng chung với các bộ skill khác.
+- [Bắt đầu](getting-started.md): cài, gọi skill, cập nhật, cố định bản phát hành, gỡ.
+- [Quy trình](workflows.md): ghép skill cho ý tưởng mơ hồ, thay đổi đã rõ, lỗi, chuyển phiên và phát hành.
+- [Case study: xuất CSV](case-study-csv-export.md): một tính năng mẫu từ brainstorm và plan qua worker cô lập, PR review, merge đến ship.
+
+## Hướng dẫn
+
+- [Runner qk-run](runner.md): tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, với một cổng duyệt plan.
+- [Hook ghi nhận sở thích](preference-hook.md): hook tuỳ chọn biến câu "từ nay…" thành đề xuất chờ bạn duyệt.
+- [Thiết lập gọn nhẹ](lean-setup.md): đo và cắt bớt phần runtime nạp vào mỗi phiên, dùng chung với các bộ skill khác.
+
+## Tham khảo
+
+- [Runtime](runtimes.md): mức hỗ trợ, thiết lập chỉ-gọi-đích-danh, nơi đăng ký hook, đặc điểm đã thấy và cách chọn model.
+- [Bằng chứng kiểm thử](evidence.md): bản ghi theo ngày về những gì đã kiểm, trên phiên bản nào, kèm checklist kiểm thủ công.
 
 ## Skill
 

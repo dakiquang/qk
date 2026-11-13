@@ -4,7 +4,7 @@
 
 You often tell an agent something meant to last: "from now on, commit messages in English", "never amend a pushed commit". The runtime forgets it, or the agent writes it straight into memory without asking. The opt-in preference hook sits between the two. When a prompt contains a lasting-preference phrase, the hook asks the agent to record a **proposal** in a local file and carry on with the task. Nothing reaches memory, rules, `CLAUDE.md` or `AGENTS.md` until you approve it.
 
-> **Status:** the hook and the proposal store are [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), tested by [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). You review proposals with [qk/prefs](skills/qk-prefs.md) ([example 5](#5-decide-on-a-proposal)). It works with Claude Code and Codex; see [Runtimes](runtimes.md#preference-hook) for what has been checked on each.
+> **Status:** the hook and the proposal store are [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), tested by [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). You review proposals with [qk/prefs](skills/qk-prefs.md) ([example 5](#5-decide-on-a-proposal)). It works with Claude Code and Codex; see [Runtimes](runtimes.md#preference-hook) for where to register it and [Test evidence](evidence.md#preference-hook) for what was checked on each.
 
 The hook only adds a reminder to the prompt. It cannot make the agent record anything, and it never decides what counts as a preference: the agent judges, and you approve.
 

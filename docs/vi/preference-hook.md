@@ -4,7 +4,7 @@
 
 Bạn thường dặn agent những điều muốn áp dụng lâu dài: "từ nay commit message viết tiếng Anh", "đừng bao giờ amend commit đã push". Có hai kiểu thất bại: runtime quên mất, hoặc agent tự ghi thẳng vào memory mà không hỏi. Hook tuỳ chọn này nằm giữa hai kiểu đó. Khi prompt có cụm từ thể hiện ý định lâu dài, hook nhắc agent ghi một **đề xuất** vào file cục bộ rồi làm tiếp việc đang dở. Không có gì vào memory, rules, `CLAUDE.md` hay `AGENTS.md` cho tới khi bạn duyệt.
 
-> **Trạng thái:** hook và kho đề xuất nằm trong [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), có test ở [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). Bạn duyệt đề xuất bằng [qk/prefs](skills/qk-prefs.md) ([ví dụ 5](#5-quyết-định-một-đề-xuất)). Hook chạy được với Claude Code và Codex; xem [Runtime](runtimes.md#hook-ghi-nhận-sở-thích) để biết từng runtime đã kiểm đến đâu.
+> **Trạng thái:** hook và kho đề xuất nằm trong [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), có test ở [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). Bạn duyệt đề xuất bằng [qk/prefs](skills/qk-prefs.md) ([ví dụ 5](#5-quyết-định-một-đề-xuất)). Hook chạy được với Claude Code và Codex; xem [Runtime](runtimes.md#hook-ghi-nhận-sở-thích) để biết đăng ký ở đâu và [Bằng chứng kiểm thử](evidence.md#hook-ghi-nhận-sở-thích) để biết từng runtime đã kiểm đến đâu.
 
 Hook chỉ thêm một lời nhắc vào prompt. Nó không bắt được agent ghi, và nó không quyết định câu nào là sở thích: agent tự đánh giá, còn bạn là người duyệt.
 

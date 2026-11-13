@@ -4,9 +4,9 @@
 
 ## 1. Install
 
-qk is plain Markdown: no build, no runtime dependency. Clone it once and link each skill folder into the skills directory of every runtime you use. All runtimes then read the same files, and `git pull` updates them all.
+qk is plain Markdown: no build and no package to install. Clone it once and link each skill folder into the skills directory of every runtime you use. All runtimes then read the same files, and `git pull` updates them all.
 
-The repository is currently private; cloning requires a GitHub account with access.
+You need `git` and at least one supported runtime. The optional scripts (`qk_run.py`, `qk_prefs.py`, `qk_preflight.py` and the validator) need Python 3.9 or later; `qk-run` and the push identity check also need the GitHub CLI `gh`.
 
 ```bash
 (
@@ -76,7 +76,7 @@ git -C ~/src/qk pull
 
 Links pick up the new version at the next session. Read the [changelog](../../CHANGELOG.md) for what changed.
 
-Skills are symlinks to the clone, so whatever is checked out is live in every runtime at the next session. To pin the v0.1.0 release:
+Skills are symlinks to the clone, so whatever is checked out is live in every runtime at the next session. To pin a release, check out its tag (see the [changelog](../../CHANGELOG.md) for the list):
 
 ```bash
 git -C ~/src/qk fetch --tags
@@ -118,4 +118,4 @@ Repeat for each owned link in the directories you installed into. Do not remove 
 python3 scripts/validate.py
 ```
 
-It checks folder and frontmatter names, explicit-only settings for Claude Code, omp and Codex, internal links and EN/VI documentation pairs. Personal-path and secret-pattern checks cover UTF-8 text files of any suffix outside `.git`, except the validator's own detection patterns. `QK_DENYLIST` is a UTF-8 file of literal terms (one per line); matching is case-insensitive with word-character boundaries and includes the validator itself. Binary files, filenames and Git history are outside these content checks.
+It checks folder and frontmatter names, explicit-only settings for Claude Code, omp and Codex, internal links and EN/VI documentation pairs. Personal-path and secret-pattern checks cover UTF-8 text files of any suffix outside `.git`, except the validator's own detection patterns. `QK_DENYLIST` is a UTF-8 file of literal terms (one per line); matching is case-insensitive with word-character boundaries and includes the validator itself. Binary files, filenames and Git history are outside these content checks. In CI, gitleaks scans the commit range of each push or pull-request event, not the full history. These are static checks; they do not prove that every runtime complies.

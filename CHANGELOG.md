@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation prepared for a public repository: rewritten README, regrouped
+  docs index, and dated runtime and runner test records moved to a separate
+  English/Vietnamese test evidence page so the guides stay evergreen.
+
+### Removed
+
+- Internal planning notes and a dated project summary that were not user
+  documentation.
+
 ## [0.1.0] - 2026-11-14
 
 ### Added
