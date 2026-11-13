@@ -79,7 +79,7 @@ git -C ~/src/qk fetch --tags
 ```
 
 ```bash
-git -C ~/src/qk checkout v0.1.0
+git -C ~/src/qk checkout v0.2.0
 ```
 
 Để trở lại bản mới nhất trên `main`:
