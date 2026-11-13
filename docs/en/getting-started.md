@@ -66,6 +66,8 @@ You should get a short problem statement, a table of options with what each gain
 
 Then try the plan → cook loop on something small. See [Workflows](workflows.md).
 
+Optional: the [preference hook](preference-hook.md) turns "from now on…" requests into proposals you review with `qk/prefs`. It is a separate, manual opt-in.
+
 ## 4. Update
 
 ```bash

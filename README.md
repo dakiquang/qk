@@ -22,6 +22,7 @@ qk is an **extension of Claude Code, Codex and omp**, not a replacement. Skills 
 | [qk/agent-coord](docs/en/skills/qk-agent-coord.md) | A bounded task on the agent/model you name, with checked results |
 | [qk/release-notes](docs/en/skills/qk-release-notes.md) | Traceable release-note and changelog drafts, not publication |
 | [qk/dogfood](docs/en/skills/qk-dogfood.md) | Evidence-based instruction improvement proposals in chat; no changes applied |
+| [qk/prefs](docs/en/skills/qk-prefs.md) | Recorded preference proposals reviewed one by one; only approved ones written to the target you choose |
 
 Each skill states its result, authority and done criteria. Skills never call each other and there is no mandatory pipeline. Implementing code does not grant authority to commit, push, open a PR, merge, tag, deploy or publish.
 

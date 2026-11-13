@@ -11,6 +11,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 - [Runtimes](runtimes.md) — how each runtime calls the skills, what has been tested, known quirks.
 - [Case study: CSV export](case-study-csv-export.md) — a worked feature from brainstorm and planning through an isolated worker, PR review, merge and shipping.
 - [qk-run runner](runner.md) — opt-in automation from request to a ready-for-review PR, with one plan-approval gate.
+- [Preference hook](preference-hook.md) — opt-in hook that turns "from now on…" requests into proposals you approve, with examples.
 
 ## Skills
 
@@ -26,6 +27,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 | [qk/agent-coord](skills/qk-agent-coord.md) | Give a bounded task to a named agent and model |
 | [qk/release-notes](skills/qk-release-notes.md) | Draft release notes and changelog entries |
 | [qk/dogfood](skills/qk-dogfood.md) | Propose minimal instruction improvements from work evidence, without applying them |
+| [qk/prefs](skills/qk-prefs.md) | Review recorded preference proposals and apply the ones you approve |
 
 Pull-request review and scoring are handled by the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), a separate project.
 

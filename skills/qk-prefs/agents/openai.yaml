@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk prefs"
+  short_description: "Review and apply recorded preference proposals"
+policy:
+  allow_implicit_invocation: false
