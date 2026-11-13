@@ -77,6 +77,8 @@ Chưa phủ: đây là các lần chạy đơn lẻ trên một model, chưa ph�
 
 **13/11/2026.** Lần chạy đầu tiên trên việc thật: một thay đổi tài liệu trong chính repo này. omp với Opus 5.5 triển khai, Codex review. Có một lần `revise` trước khi duyệt; cả hai lệnh verify đều đạt, review không có finding và không cần vòng sửa. PR ready-for-review được mở khoảng tám phút sau `start`. Kiểm tra account để push đạt ở preflight và ngay trước khi push.
 
+**14/11/2026.** Việc thật thứ hai: một thay đổi code cho chính runner, để tiêu đề commit và PR có type theo quy ước commit của repo, kèm test và docs EN/VI. omp với Opus 5.5 triển khai, Codex review. Có một lần `revise` trước khi duyệt để chốt hai câu hỏi còn mở trong plan; cả hai lệnh verify đều đạt, review không có finding và không cần vòng sửa. PR ready-for-review được mở khoảng bốn phút sau `approve`, và CI đạt. Vì chính run này dùng code runner cũ, tiêu đề PR của nó là tiêu đề plan trần và được đặt lại theo quy ước khi squash-merge.
+
 ## Số đo thiết lập gọn nhẹ
 
 Các lệnh trong [Thiết lập gọn nhẹ](lean-setup.md) được kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 ngày 13/11/2026. Qwen Code chưa kiểm.
