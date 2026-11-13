@@ -42,15 +42,19 @@ Input: a request with done criteria, or the path to an approved plan (optionally
 ## Report
 
 ```text
-Done:          <summary>
 Files changed: <path — reason>
-Verification:  <command → actual result>
-Not verified:  <what, why>
 Decisions:     <deviations from the plan and reasons, if any>
 Next:          <command the user can invoke, e.g. pr-orchestrator review>
 ```
 
 Update the status in the plan when working from a plan.
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
 
 ## Boundaries
 

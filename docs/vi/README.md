@@ -40,3 +40,4 @@ Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://git
 5. **Chọn quy trình theo điều còn thiếu.** Chưa rõ hướng → brainstorm; thiếu dữ kiện → research; việc đã rõ → cook. Không có pipeline bắt buộc.
 6. **Tiếp tục trong phạm vi đã duyệt;** dừng khi cần quyết định mới, gặp blocker hoặc cần quyền mới.
 7. **Mở rộng runtime, không chiếm quyền.** Runtime giữ tool, plan mode, subagent, cấu hình model và quyền; luật repo vẫn thắng.
+8. **Kết báo cáo nhất quán.** Kết thúc bằng Đã làm, Bằng chứng, Chưa kiểm chứng, Cần bạn quyết định, theo đúng thứ tự.

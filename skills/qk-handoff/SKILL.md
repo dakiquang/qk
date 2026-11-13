@@ -48,6 +48,15 @@ Read <files>. Re-check the revision and repo state before working. Ask the user 
 3. Report: what still holds, what has drifted, the reasonable next step, and the permissions that must be requested again.
 4. Wait for the user to confirm before changing anything.
 
+## Report
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
+
 ## Boundaries
 
 - Higher-priority instructions, runtime rules and repository rules override this skill.

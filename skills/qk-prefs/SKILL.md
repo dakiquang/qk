@@ -38,6 +38,15 @@ Run the script in the same environment as the hook, so a `QK_PREFS_STATE_DIR` or
 
 If `resolve` fails (for example the proposal was already resolved in another session), report it and do not repeat the edit.
 
+## Report
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
+
 ## Boundaries
 
 - Higher-priority instructions, runtime rules and repository rules override this skill. A target file's own rules (for example a repository's contribution rules for `AGENTS.md`) apply to the edit.

@@ -17,6 +17,7 @@ NAME_RE = re.compile(r"^qk-[a-z0-9]+(-[a-z0-9]+)*$")
 LINK_RE = re.compile(r"\]\((?!https?:|mailto:|#)([^)#\s]+)")
 PERSONAL_RE = re.compile("/" + "Users/|/" + r"home/[a-z]")
 SECRET_RE = re.compile(r"\b(ghp_|github_pat_|sk-ant-|sk-proj-|AKIA|xox[bp]-)[A-Za-z0-9_-]{8,}")
+REPORT_LABELS = ("**Done**", "**Evidence**", "**Not verified**", "**Needs your decision**")
 DESCRIPTION_BLOCKS = {">", ">-", "|", "|-"}
 SELF = Path(__file__).resolve()
 
@@ -86,6 +87,13 @@ def check_skill(skill_dir):
     unknown = set(fields) - ALLOWED_FIELDS
     if unknown:
         fail(skill_md, f"unsupported frontmatter fields: {', '.join(sorted(unknown))}")
+
+    for row in ("**Result**", "**Authority**", "**Done when**"):
+        if f"| {row} |" not in text:
+            fail(skill_md, f"missing {row} row in the contract table")
+    positions = [text.find(f"\n{label}: ") for label in REPORT_LABELS]
+    if -1 in positions or positions != sorted(positions):
+        fail(skill_md, "report must close with " + ", ".join(REPORT_LABELS) + " in that order")
 
     if text.count("\n") > 500:
         fail(skill_md, "SKILL.md is longer than 500 lines; move detail into references/")

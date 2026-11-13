@@ -30,12 +30,18 @@ disable-model-invocation: true
 Symptom:       <...>
 Reproduction:  <command> → <result>
 Cause:         <file:line — mechanism>
-Evidence:      <what was read / run>
 Ruled out:     <hypothesis — why>
 Proposed fix:  <smallest> — verify with: <command>
 ```
 
 If the user wants a fix: give a `qk/cook` command with the verified cause as input. If the chat has already asked for an immediate fix, follow the qk/cook contract: smallest change, rerun the reproduction command and regression tests.
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
 
 ## Boundaries
 

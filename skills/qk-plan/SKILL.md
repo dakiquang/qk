@@ -56,7 +56,14 @@ Apply the decisions and findings the user has accepted. Then review the whole pl
 
 ## Report
 
-Plan path, summary of changes, open questions. State the next step as a command for the user to invoke, e.g. `qk/cook <path>`.
+State the next step as a command for the user to invoke, e.g. `qk/cook <path>`.
+
+Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
+
+**Done**: what was produced or changed, with paths
+**Evidence**: commands run and their results, sources read
+**Not verified**: what was not checked, and why
+**Needs your decision**: what waits on the user
 
 ## Boundaries
 
