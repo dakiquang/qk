@@ -12,6 +12,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 - [Case study: CSV export](case-study-csv-export.md) — a worked feature from brainstorm and planning through an isolated worker, PR review, merge and shipping.
 - [qk-run runner](runner.md) — opt-in automation from request to a ready-for-review PR, with one plan-approval gate.
 - [Preference hook](preference-hook.md) — opt-in hook that turns "from now on…" requests into proposals you approve, with examples.
+- [Lean setup](lean-setup.md) — measure and trim what your runtimes load into every session, alongside other kits.
 
 ## Skills
 
