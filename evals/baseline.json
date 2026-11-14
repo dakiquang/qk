@@ -1,0 +1,84 @@
+{
+  "claude:claude-opus-5-5": {
+    "bundle-malformed": {
+      "criteria": {
+        "capacity": true,
+        "clean": true,
+        "list-name": true,
+        "nested-statement": true,
+        "no-outside-important": true,
+        "result": true
+      },
+      "date": "2026-11-14",
+      "seconds": 34,
+      "tokens": 99628
+    },
+    "csv-export": {
+      "criteria": {
+        "clean": true,
+        "csv-module": true,
+        "hidden-tests": true,
+        "repo-tests": true,
+        "report": true,
+        "scope": true
+      },
+      "date": "2026-11-14",
+      "seconds": 35,
+      "tokens": 249702
+    },
+    "pagination-empty-page": {
+      "criteria": {
+        "clean": true,
+        "hidden-regression": true,
+        "repo-tests": true,
+        "report": true,
+        "scope": true,
+        "test-catches-bug": true
+      },
+      "date": "2026-11-14",
+      "seconds": 35,
+      "tokens": 371524
+    }
+  },
+  "omp:anthropic/claude-opus-5-5": {
+    "bundle-malformed": {
+      "criteria": {
+        "capacity": true,
+        "clean": true,
+        "list-name": true,
+        "nested-statement": true,
+        "no-outside-important": true,
+        "result": true
+      },
+      "date": "2026-11-14",
+      "seconds": 50,
+      "tokens": 60361
+    },
+    "csv-export": {
+      "criteria": {
+        "clean": true,
+        "csv-module": true,
+        "hidden-tests": true,
+        "repo-tests": true,
+        "report": true,
+        "scope": true
+      },
+      "date": "2026-11-14",
+      "seconds": 40,
+      "tokens": 88481
+    },
+    "pagination-empty-page": {
+      "criteria": {
+        "clean": true,
+        "hidden-regression": true,
+        "repo-tests": true,
+        "report": true,
+        "scope": true,
+        "test-catches-bug": true
+      },
+      "date": "2026-11-14",
+      "seconds": 41,
+      "tokens": 116182
+    }
+  }
+}
