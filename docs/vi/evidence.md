@@ -111,6 +111,20 @@ Chưa phủ trong `HOME` trống: gọi skill sau khi cài (chưa đăng nhập)
 
 **14/11/2026.** Việc thật thứ hai: một thay đổi code cho chính runner, để tiêu đề commit và PR có type theo quy ước commit của repo, kèm test và docs EN/VI. omp với Opus 5.5 triển khai, Codex review. Có một lần `revise` trước khi duyệt để chốt hai câu hỏi còn mở trong plan; cả hai lệnh verify đều đạt, review không có finding và không cần vòng sửa. PR ready-for-review được mở khoảng bốn phút sau `approve`, và CI đạt. Vì chính run này dùng code runner cũ, tiêu đề PR của nó là tiêu đề plan trần và được đặt lại theo quy ước khi squash-merge.
 
+**14/11/2026, run thứ ba tới thứ năm.** Cả ba run đều dùng omp với Opus 5.5 để triển khai và Codex (`gpt-6-sol`) để review.
+
+| Run | Việc | Trước khi duyệt | Sau khi duyệt | Review |
+|---|---|---|---|---|
+| 3 | Lệnh `versions` và `diff` của một CLI Python nhỏ, 16 file | Một plan, duyệt nguyên văn | PR sau khoảng 5 phút; CI đạt trên Python 3.10–3.15 | Một finding mức important: test vẫn có thể đọc credential AWS thật của máy. Đã sửa trong vòng sửa duy nhất |
+| 4 | Runner in từng thao tác của agent, báo khi agent im lâu, và dừng cả process group khi quá giờ; 8 file | Một plan, duyệt nguyên văn | PR sau khoảng 12 phút; CI đạt | Một finding mức important: timeout âm của hàng đợi ở ranh giới heartbeat. Đã sửa trong vòng sửa; còn một nit |
+| 5 | Lệnh `check` của cùng CLI, 10 file, chạy bằng runner của run 4 | Một lần `revise` để chốt hai câu hỏi do chính bên lập plan nêu ra | PR sau khoảng 7 phút; CI đạt | Không có finding, không cần vòng sửa |
+
+Tiêu đề PR của run 3 bị cắt giữa chữ ở ký tự thứ 72 và còn tiền tố tên dự án (`feat: waf-upgrade-check: … (project plan st`); tiêu đề được đặt lại khi merge, và run 4 đã sửa nguyên nhân.
+
+Run 5 là run đầu tiên có output trực tiếp: 33 dòng thao tác khi lập plan, 29 dòng khi triển khai và 46 dòng khi review, đồng thời mọi sự kiện thô được lưu trong `<stage>-<ts>.events.jsonl`. Log cho thấy hai điều trước đây không thấy được: bên lập plan đã đọc mô tả dịch vụ wafv2 trong botocore để kiểm dạng dữ liệu, và reviewer Codex đã đọc skill `ak-code-review` cài toàn cục trên máy, tức skill cài toàn cục có thể ảnh hưởng tới bước review của runner.
+
+Một lượt review chéo riêng cho PR của run 4 tìm thêm một lỗi mức important (tin nhắn omp chỉ có tool call có thể ghi đè câu trả lời cuối) và bốn nit; cả năm đã được sửa trước khi merge, bốn trong số đó có test hồi quy fail với code cũ.
+
 ## Số đo thiết lập gọn nhẹ
 
 Các lệnh trong [Thiết lập gọn nhẹ](lean-setup.md) được kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 ngày 13/11/2026. Qwen Code chưa kiểm.
