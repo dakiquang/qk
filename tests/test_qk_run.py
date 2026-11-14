@@ -50,12 +50,13 @@ class Agent:
         self.calls.append((stage, spec, write))
         action = self.behaviour.get(stage, "default")
         if callable(action):
-            return action(Path(cwd), Path(extra_dirs[0]))
+            out = action(Path(cwd), Path(extra_dirs[0]))
+            return out if isinstance(out, tuple) else (out, None)
         if stage == "plan":
-            return planned()
+            return planned(), None
         if stage in ("cook", "fix"):
             (Path(cwd) / "greeting.txt").write_text("hello\n")
-        return result()
+        return result(), None
 
 
 class RunnerTest(unittest.TestCase):
@@ -412,11 +413,51 @@ class RunnerTest(unittest.TestCase):
             return result()
         state = self.start(Agent(review=review))
         self.cli("approve", state["id"])
+        (Path(self.latest()["worktree"]) / "notes.txt").write_text("hand fix\n")
         self.cli("resume", state["id"])
         state = self.latest()
         self.assertEqual(state["stage"], "blocked")
         self.assertIn("read-only stage expects", state["reason"])
         self.assertNotIn(state["branch"], self.remote_branches())
+
+    def test_resume_after_hand_fix_verifies_and_publishes(self):
+        finding = {"severity": "blocker", "file": "greeting.txt", "line": 1, "claim": "x", "fix": "y"}
+        serious = {"on": True}
+        agent = Agent(review=lambda cwd, state_dir: result(findings=[finding] if serious["on"] else []))
+        state = self.start(agent)
+        self.cli("approve", state["id"])
+        blocked = self.latest()
+        self.assertEqual(blocked["blocked_at"], "reviewing")
+        worktree = Path(blocked["worktree"])
+        (worktree / "greeting.txt").write_text("hello, fixed by hand\n")
+        (worktree / "notes.txt").write_text("why\n")
+        serious["on"] = False
+        self.cli("resume", state["id"])
+        self.assertEqual(self.latest()["stage"], "done")
+        self.assertEqual([c[0] for c in agent.calls].count("fix"), 1)
+        run_log = (qk_run.run_dir(state["id"]) / "run.log").read_text()
+        recorded = run_log.index("manual changes recorded: greeting.txt, notes.txt")
+        self.assertIn("$ test -f greeting.txt", run_log[recorded:])
+        files = run(worktree, "git", "show", "--name-only", "--format=", "HEAD").split()
+        self.assertEqual(sorted(files), ["greeting.txt", "notes.txt"])
+
+    def test_agent_usage_is_stored_per_stage(self):
+        usage = {"input": 100, "cached": 40, "output": 7}
+        state = self.start(Agent(review=lambda cwd, state_dir: (result(), dict(usage))))
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertEqual(state["usage"], {"reviewing": [{"spec": "codex:", **usage}]})
+
+    def test_read_only_mcp_is_refused_when_codex_runs_a_read_only_stage(self):
+        qk_run.call_agent = Agent()
+        for roles in ([], ["--impl", "codex:", "--review", "claude:"]):
+            with self.assertRaises(SystemExit) as caught:
+                self.cli("start", "task", "--repo", str(self.repo), "--read-only-mcp", "aws-mcp", *roles)
+            self.assertIn("not supported for codex", str(caught.exception.code))
+        state = self.start(Agent(), extra=["--read-only-mcp", "aws-mcp", "--review", "omp:openai-codex/gpt-6.1-sol"])
+        self.assertEqual(state["stage"], "awaiting_approval")
+        self.assertEqual(state["read_only_mcp"], ["aws-mcp"])
 
     def test_plan_without_verify_block_cannot_be_approved(self):
         def plan(cwd, state_dir):
@@ -631,11 +672,13 @@ class AgentStreamTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def fake_agent(self, script, *args):
-        qk_run.agent_command = lambda spec, write, cwd, extra_dirs: ([sys.executable, "-c", script, *args], None)
+        qk_run.agent_command = (lambda spec, write, cwd, extra_dirs, read_only_mcp=():
+                                ([sys.executable, "-c", script, *args], None, None))
 
-    def call(self, timeout=30):
-        return qk_run.call_agent("omp:anthropic/x", "prompt", self.dir, True, timeout, [self.dir],
-                                 events=self.dir / "events.jsonl", progress=self.progress.append)
+    def call(self, timeout=30, spec="omp:anthropic/x", write=True, read_only_mcp=()):
+        return qk_run.call_agent(spec, "prompt", self.dir, write, timeout, [self.dir],
+                                 events=self.dir / "events.jsonl", progress=self.progress.append,
+                                 read_only_mcp=read_only_mcp)
 
     def test_event_parsers_match_captured_streams(self):
         expected = {"claude": ["read /work/a.txt", "run ls"],
@@ -695,7 +738,7 @@ class AgentStreamTest(unittest.TestCase):
                         f"print({read_event!r}, flush=True)\n"
                         "time.sleep(0.5)\n"
                         f"print({end_event!r}, flush=True)\n")
-        self.assertEqual(self.call(), "DONE")
+        self.assertEqual(self.call()[0], "DONE")
         self.assertIn("read a.txt", self.progress)
         for last in ("no action yet", "read a.txt"):
             pattern = re.compile(rf"still running \(\d+s, last: {last}\)")
@@ -718,8 +761,8 @@ class AgentStreamTest(unittest.TestCase):
             if message == "read a.txt":
                 time.sleep(0.4)
 
-        result = qk_run.call_agent("omp:anthropic/x", "prompt", self.dir, True, 30, [self.dir],
-                                   events=self.dir / "events.jsonl", progress=slow_progress)
+        result, _ = qk_run.call_agent("omp:anthropic/x", "prompt", self.dir, True, 30, [self.dir],
+                                      events=self.dir / "events.jsonl", progress=slow_progress)
         self.assertEqual(result, "DONE")
         pattern = re.compile(r"still running \(\d+s, last: read a\.txt\)")
         self.assertTrue(any(pattern.fullmatch(line) for line in self.progress), self.progress)
@@ -748,6 +791,135 @@ class AgentStreamTest(unittest.TestCase):
                 gone = True
         self.assertTrue(gone, "grandchild survived the timeout")
         self.assertLess(time.monotonic() - started, 5)
+
+    def test_agent_command_isolates_skills_and_read_only_mcp(self):
+        def command(spec, write, read_only_mcp=()):
+            return qk_run.agent_command(spec, write, self.dir, [self.dir], read_only_mcp)
+        claude_read, _, env = command("claude:", False)
+        self.assertIsNone(env)
+        self.assertIn("--disable-slash-commands", claude_read)
+        self.assertIn("--strict-mcp-config", claude_read)
+        self.assertNotIn("--strict-mcp-config", command("claude:", False, ["aws-mcp"])[0])
+        claude_write = command("claude:", True)[0]
+        self.assertIn("--disable-slash-commands", claude_write)
+        self.assertNotIn("--strict-mcp-config", claude_write)
+        for write in (False, True):
+            omp, _, env = command("omp:anthropic/x", write)
+            self.assertIsNone(env)
+            for flag in ("--no-skills", "--no-extensions", "--no-rules"):
+                self.assertIn(flag, omp, (flag, write))
+
+    def test_codex_runs_in_a_private_home_reused_across_calls(self):
+        from unittest import mock
+        real_home, real_codex, run_directory = self.dir / "home", self.dir / "codex", self.dir / "run"
+        for directory in (real_home, real_codex, run_directory):
+            directory.mkdir()
+        (real_codex / "config.toml").write_text('model = "gpt-x"\nmodel_reasoning_effort = "high"\n'
+                                                'approval_policy = "never"\n\n[mcp_servers.x]\n'
+                                                'command = "srv"\nmodel = "inner"\n')
+        (real_codex / "auth.json").write_text("{}\n")
+        home = run_directory / "codex-home"
+        with mock.patch.dict(os.environ, {"HOME": str(real_home), "CODEX_HOME": str(real_codex)}):
+            for key in ("XDG_CACHE_HOME", "XDG_DATA_HOME", "UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR"):
+                os.environ.pop(key, None)
+            _, _, env = qk_run.agent_command("codex:", False, self.dir, [run_directory])
+            self.assertEqual((env["HOME"], env["CODEX_HOME"]), (str(home), str(home / ".codex")))
+            self.assertEqual(env["UV_CACHE_DIR"], str(real_home / ".cache" / "uv"))
+            self.assertEqual(env["UV_PYTHON_INSTALL_DIR"], str(real_home / ".local" / "share" / "uv" / "python"))
+            config = home / ".codex" / "config.toml"
+            self.assertEqual(config.read_text(), 'model = "gpt-x"\nmodel_reasoning_effort = "high"\n')
+            auth = home / ".codex" / "auth.json"
+            self.assertTrue(auth.is_symlink())
+            self.assertEqual(Path(os.readlink(auth)), real_codex / "auth.json")
+            config.write_text('model = "kept"\n')
+            os.environ.update(UV_CACHE_DIR="/preset/cache", UV_PYTHON_INSTALL_DIR="/preset/python")
+            _, _, env = qk_run.agent_command("codex:", True, self.dir, [run_directory])
+        self.assertEqual(env["HOME"], str(home))
+        self.assertEqual(config.read_text(), 'model = "kept"\n')
+        self.assertEqual((env["UV_CACHE_DIR"], env["UV_PYTHON_INSTALL_DIR"]), ("/preset/cache", "/preset/python"))
+
+    def test_read_only_mcp_call_stops_agent_and_blocks(self):
+        qk_run.KILL_GRACE_SECONDS = 0.5
+        pid_file = self.dir / "child.pid"
+        self.fake_agent("import subprocess, sys, time\n"
+                        "child = subprocess.Popen(['sleep', '60'])\n"
+                        "open(sys.argv[1], 'w').write(str(child.pid))\n"
+                        f"print({MCP_WRITE!r}, flush=True)\n"
+                        "time.sleep(60)\n", str(pid_file))
+        started = time.monotonic()
+        with self.assertRaises(qk_run.Blocked) as caught:
+            self.call(write=False)
+        self.assertEqual(str(caught.exception), "read-only stage called mcp mcp__aws_mcp_aws_run_script")
+        self.assertLess(time.monotonic() - started, 5)
+        pid = int(pid_file.read_text())
+        gone = False
+        while time.monotonic() - started < 4.5 and not gone:
+            try:
+                os.kill(pid, 0)
+                time.sleep(0.05)
+            except ProcessLookupError:
+                gone = True
+        self.assertTrue(gone, "agent child survived the guard")
+        self.assertEqual((self.dir / "events.jsonl").read_text(encoding="utf-8").splitlines(), [MCP_WRITE])
+        self.assertIn("mcp mcp__aws_mcp_aws_run_script", self.progress)
+
+    def test_read_only_guard_names_runtime_devices_and_claude_mcp_tools(self):
+        claude_mcp = json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t1", "name": "mcp__srv__tool", "input": {"q": "x"}}]}})
+        for spec, event, shown in (("omp:anthropic/x", REPORT_ISSUE, "tool report_issue"),
+                                   ("claude:", claude_mcp, "mcp mcp__srv__tool")):
+            self.fake_agent(f"import time\nprint({event!r}, flush=True)\ntime.sleep(60)\n")
+            with self.assertRaises(qk_run.Blocked) as caught:
+                self.call(spec=spec, write=False)
+            self.assertEqual(str(caught.exception), f"read-only stage called {shown}")
+
+    def test_read_only_mcp_allows_only_listed_servers(self):
+        done = (FIXTURES / "omp.jsonl").read_text(encoding="utf-8").splitlines()[3]
+        self.fake_agent(f"print({MCP_WRITE!r}, flush=True)\nprint({done!r}, flush=True)\n")
+        self.assertEqual(self.call(write=False, read_only_mcp=["aws-mcp"])[0], "DONE")
+        self.assertEqual(self.call(write=True)[0], "DONE")
+        self.fake_agent(f"import time\nprint({REPORT_ISSUE!r}, flush=True)\ntime.sleep(60)\n")
+        with self.assertRaises(qk_run.Blocked) as caught:
+            self.call(write=False, read_only_mcp=["aws-mcp"])
+        self.assertEqual(str(caught.exception), "read-only stage called tool report_issue")
+
+    def test_call_agent_sums_usage_per_runtime(self):
+        expected = {"claude": ({"input": 4812, "cached": 4500, "output": 80}, 0.0123,
+                               "tokens in=4812 cached=4500 out=80 cost=$0.0123"),
+                    "codex": ({"input": 5200, "cached": 4100, "output": 150}, None,
+                              "tokens in=5200 cached=4100 out=150"),
+                    "omp": ({"input": 5115, "cached": 4600, "output": 100}, 0.0073,
+                            "tokens in=5115 cached=4600 out=100 cost=$0.0073")}
+        for runtime, (tokens, cost, line) in expected.items():
+            self.progress.clear()
+            lines = (FIXTURES / f"{runtime}.jsonl").read_text(encoding="utf-8").splitlines()
+            self.fake_agent("import sys\nfor line in sys.argv[1:]:\n    print(line, flush=True)\n", *lines)
+            text, usage = self.call(spec=f"{runtime}:x")
+            self.assertEqual(text, "DONE", runtime)
+            found_cost = usage.pop("cost_usd", None)
+            self.assertEqual(usage, tokens, runtime)
+            if cost is None:
+                self.assertIsNone(found_cost, runtime)
+            else:
+                self.assertAlmostEqual(found_cost, cost, msg=runtime)
+            self.assertEqual(self.progress[-1], line, runtime)
+
+    def test_mcp_calls_display_with_their_identifier(self):
+        omp, claude = qk_run.EVENT_PARSERS["omp"], qk_run.EVENT_PARSERS["claude"]
+
+        def omp_call(name, args):
+            return omp({"type": "tool_execution_start", "toolName": name, "args": args})[0]
+        self.assertEqual(omp_call("write", {"path": "xd://mcp__a_b", "content": "{}"}), "mcp mcp__a_b")
+        self.assertEqual(omp_call("mcp__a_b", {"q": "x"}), "mcp mcp__a_b")
+        self.assertEqual(omp_call("write", {"path": "xd://report_issue", "content": "x"}), "tool report_issue")
+        self.assertEqual(claude({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "mcp__aws-docs__search", "input": {}}]}})[0], "mcp mcp__aws-docs__search")
+
+
+MCP_WRITE = json.dumps({"type": "tool_execution_start", "toolCallId": "m1", "toolName": "write",
+                        "args": {"path": "xd://mcp__aws_mcp_aws_run_script", "content": "{}"}})
+REPORT_ISSUE = json.dumps({"type": "tool_execution_start", "toolCallId": "r1", "toolName": "write",
+                           "args": {"path": "xd://report_issue", "content": "x"}})
 
 
 if __name__ == "__main__":

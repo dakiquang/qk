@@ -2,4 +2,6 @@
 {"type": "tool_execution_start", "toolCallId": "p9Cb", "toolName": "bash", "args": {"command": "ls"}}
 {"type": "tool_execution_end", "toolCallId": "HMyT", "toolName": "read", "isError": false}
 {"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": "DONE"}]}}
+{"type": "turn_end", "message": {"role": "assistant", "usage": {"input": 10, "output": 40, "cacheRead": 2000, "cacheWrite": 500, "cost": {"total": 0.0042}}}}
+{"type": "turn_end", "message": {"role": "assistant", "usage": {"input": 5, "output": 60, "cacheRead": 2600, "cacheWrite": 0, "cost": {"total": 0.0031}}}}
 {"type": "agent_end"}

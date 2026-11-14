@@ -12,6 +12,11 @@ All notable changes to this project are documented here. The format follows
   prints `still running (...)` after every 60 s without events, saves the raw
   events of each turn to `<stage>-<ts>.events.jsonl` in the run directory, and
   `status` prints the run directory and the last 10 lines of `run.log`.
+- `qk-run` logs each agent call's token usage as
+  `tokens in=... cached=... out=...` (plus `cost=$...` when the runtime
+  reports it) and stores it per stage under `usage` in `state.json`.
+- `qk-run start --read-only-mcp NAME` (repeatable, Claude and omp only) lets
+  read-only stages call that MCP server.
 
 ### Changed
 
@@ -20,6 +25,18 @@ All notable changes to this project are documented here. The format follows
 - Commit and PR titles are cut at a word boundary at 72 characters, a
   non-conventional `<word>: ` prefix is dropped when a conventional type is
   added, and the planner is asked for a title of at most 60 characters.
+- `qk-run` agents no longer load globally installed skills: Claude runs with
+  `--disable-slash-commands`, omp with `--no-skills --no-extensions --no-rules`,
+  and Codex in a private home inside the run directory.
+  Read-only Claude stages also run with `--strict-mcp-config`.
+- A read-only `qk-run` stage that calls MCP or another `xd://` runtime device
+  is stopped and blocks with `read-only stage called <action>`.
+- `qk-run` logs MCP calls as `mcp <identifier>` and `xd://report_issue` as
+  `tool report_issue` instead of `write xd://...`.
+- `qk-run resume` after a block at verify, review or fix accepts hand edits
+  made after the block, logs `manual changes recorded: <files>` and continues
+  at `verifying`. Changes made while a read-only stage ran still keep the run
+  blocked.
 
 ## [0.4.0] - 2026-11-14
 
