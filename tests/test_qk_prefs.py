@@ -8,7 +8,7 @@ import time
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "qk_prefs.py"
+SCRIPT = Path(__file__).resolve().parent.parent / "skills" / "qk-prefs" / "scripts" / "qk_prefs.py"
 sys.path.insert(0, str(SCRIPT.parent))
 import qk_prefs  # noqa: E402
 

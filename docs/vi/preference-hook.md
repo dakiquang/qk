@@ -4,7 +4,7 @@
 
 Bạn thường dặn agent những điều muốn áp dụng lâu dài: "từ nay commit message viết tiếng Anh", "đừng bao giờ amend commit đã push". Có hai kiểu thất bại: runtime quên mất, hoặc agent tự ghi thẳng vào memory mà không hỏi. Hook tuỳ chọn này nằm giữa hai kiểu đó. Khi prompt có cụm từ thể hiện ý định lâu dài, hook nhắc agent ghi một **đề xuất** vào file cục bộ rồi làm tiếp việc đang dở. Không có gì vào memory, rules, `CLAUDE.md` hay `AGENTS.md` cho tới khi bạn duyệt.
 
-> **Trạng thái:** hook và kho đề xuất nằm trong [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), có test ở [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). Bạn duyệt đề xuất bằng [qk/prefs](skills/qk-prefs.md) ([ví dụ 5](#5-quyết-định-một-đề-xuất)). Hook chạy được với Claude Code và Codex; xem [Runtime](runtimes.md#hook-ghi-nhận-sở-thích) để biết đăng ký ở đâu và [Bằng chứng kiểm thử](evidence.md#hook-ghi-nhận-sở-thích) để biết từng runtime đã kiểm đến đâu.
+> **Trạng thái:** hook và kho đề xuất nằm trong [`skills/qk-prefs/scripts/qk_prefs.py`](../../skills/qk-prefs/scripts/qk_prefs.py), có test ở [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). Bạn duyệt đề xuất bằng [qk/prefs](skills/qk-prefs.md) ([ví dụ 5](#5-quyết-định-một-đề-xuất)). Hook chạy được với Claude Code và Codex; xem [Runtime](runtimes.md#hook-ghi-nhận-sở-thích) để biết đăng ký ở đâu và [Bằng chứng kiểm thử](evidence.md#hook-ghi-nhận-sở-thích) để biết từng runtime đã kiểm đến đâu.
 
 Hook chỉ thêm một lời nhắc vào prompt. Nó không bắt được agent ghi, và nó không quyết định câu nào là sở thích: agent tự đánh giá, còn bạn là người duyệt.
 
@@ -36,14 +36,14 @@ Vì dựa trên danh sách cụm từ, hook vẫn có lúc bắt nhầm. Ví d�
 Tự đưa payload vào hook. Khi khớp, hook in lời nhắc ở dạng JSON hook của Claude Code; khi không khớp thì không in gì.
 
 ```bash
-echo '{"prompt":"Từ nay commit message viết bằng tiếng Anh"}' | python3 ~/src/qk/scripts/qk_prefs.py hook --runtime claude
+echo '{"prompt":"Từ nay commit message viết bằng tiếng Anh"}' | python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py hook --runtime claude
 ```
 
 ```bash
-echo '{"prompt":"làm luôn đi"}' | python3 ~/src/qk/scripts/qk_prefs.py hook --runtime claude
+echo '{"prompt":"làm luôn đi"}' | python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py hook --runtime claude
 ```
 
-Đường dẫn giả định bạn clone qk theo [Bắt đầu](getting-started.md).
+Script nằm trong thư mục skill `qk-prefs`. Đường dẫn ở đây giả định thư mục skill của Claude Code; với runtime khác, dùng thư mục nơi `qk-prefs` được cài.
 
 ## 3. Bật thử ở một project trước
 
@@ -57,7 +57,7 @@ qk không bao giờ sửa config của runtime. Bạn tự thêm hook, và nên 
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/src/qk/scripts/qk_prefs.py hook --runtime claude",
+            "command": "python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py hook --runtime claude",
             "timeout": 5
           }
         ]
@@ -78,7 +78,7 @@ Mỗi prompt sẽ chạy một tiến trình Python ngắn. Test độ trễ tro
 Trong phiên, bạn gõ: `Từ nay commit message viết bằng tiếng Anh`. Agent nhận lời nhắc. Nếu thấy đây là ý định lâu dài, agent chạy một lệnh kiểu:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py propose --stdin <<'QK_PREF'
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py propose --stdin <<'QK_PREF'
 {"scope": "global", "title": "Commit message language", "content": "Write commit messages in English.", "quote": "Từ nay commit message viết bằng tiếng Anh"}
 QK_PREF
 ```
@@ -90,7 +90,7 @@ Dùng `"scope": "project"` cho sở thích chỉ áp dụng với repo hiện t�
 Xem các đề xuất đang chờ:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py list
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py list
 ```
 
 Mỗi dòng là một đề xuất dạng JSON, ví dụ:
@@ -108,13 +108,13 @@ Gọi `/qk-prefs`. Skill hiện bảng các đề xuất đang chờ, gợi ý �
 Muốn làm tay thì chép `content` của đề xuất vào file memory, rules hoặc `AGENTS.md` phù hợp, rồi đánh dấu:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py resolve 2cd33227 applied --target "~/.claude/rules/development-rules.md"
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py resolve 2cd33227 applied --target "~/.claude/rules/development-rules.md"
 ```
 
 Hoặc bỏ đề xuất:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py resolve 2cd33227 dismissed
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py resolve 2cd33227 dismissed
 ```
 
 Mỗi đề xuất chỉ quyết được một lần; quyết lại sẽ báo lỗi `already applied` hoặc `already dismissed`. `list --all` hiện cả các đề xuất đã quyết.

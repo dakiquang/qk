@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "qk_preflight.py"
+SCRIPT = Path(__file__).resolve().parent.parent / "skills" / "qk-commit" / "scripts" / "qk_preflight.py"
 TOKEN_RE = re.compile(r"(ghp_|github_pat_|gho_)[A-Za-z0-9_]{8,}")
 
 
