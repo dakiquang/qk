@@ -203,7 +203,8 @@ def claude_event(event):
     message = event.get("message")
     content = message.get("content") if event.get("type") == "assistant" and isinstance(message, dict) else None
     for part in content if isinstance(content, list) else []:
-        if isinstance(part, dict) and part.get("type") == "tool_use" and part.get("name") in CLAUDE_TOOLS:
+        if (isinstance(part, dict) and part.get("type") == "tool_use"
+                and isinstance(part.get("name"), str) and part["name"] in CLAUDE_TOOLS):
             verb, key = CLAUDE_TOOLS[part["name"]]
             args = part.get("input")
             return action(verb, args.get(key) if isinstance(args, dict) else None), None
@@ -226,7 +227,8 @@ def codex_event(event):
 
 def omp_event(event):
     """omp `--mode json` event -> (display line or None, final text or None)."""
-    if event.get("type") == "tool_execution_start" and event.get("toolName") in OMP_TOOLS:
+    if (event.get("type") == "tool_execution_start" and isinstance(event.get("toolName"), str)
+            and event["toolName"] in OMP_TOOLS):
         verb, key = OMP_TOOLS[event["toolName"]]
         args = event.get("args")
         return action(verb, args.get(key) if isinstance(args, dict) else None), None

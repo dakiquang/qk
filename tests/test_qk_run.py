@@ -630,6 +630,13 @@ class AgentStreamTest(unittest.TestCase):
             self.assertEqual(shown, displays, runtime)
             self.assertEqual(final, "DONE", runtime)
 
+    def test_event_parsers_skip_unhashable_tool_names(self):
+        events = {"claude": {"type": "assistant", "message": {"content": [
+                      {"type": "tool_use", "name": ["Read"], "input": {"file_path": "x"}}]}},
+                  "omp": {"type": "tool_execution_start", "toolName": {"read": 1}, "args": {"path": "x"}}}
+        for runtime, event in events.items():
+            self.assertEqual(qk_run.EVENT_PARSERS[runtime](event), (None, None), runtime)
+
     def test_heartbeat_reports_quiet_agent(self):
         qk_run.HEARTBEAT_SECONDS = 0.2
         lines = (FIXTURES / "omp.jsonl").read_text(encoding="utf-8").splitlines()
