@@ -4,9 +4,34 @@
 
 ## 1. Cài đặt
 
-qk là Markdown thuần: không build, không có package phải cài. Clone một lần rồi tạo symlink từng thư mục skill vào nơi runtime đọc. Mọi runtime dùng cùng nguồn; `git pull` cập nhật các link đó.
+qk là Markdown thuần cùng hai script Python nhỏ; không có gì phải build. Bạn cần ít nhất một runtime được hỗ trợ. Script mà `qk/commit` và `qk/prefs` dùng cần Python 3.9 trở lên; bước kiểm account trước khi push còn cần GitHub CLI `gh`.
 
-Bạn cần `git` và ít nhất một runtime được hỗ trợ. Các script tuỳ chọn (`qk_run.py`, `qk_prefs.py`, `qk_preflight.py` và validator) cần Python 3.9 trở lên; `qk-run` và bước kiểm account trước khi push còn cần GitHub CLI `gh`.
+### Bằng `npx skills` (khuyên dùng)
+
+[`npx skills`](https://github.com/vercel-labs/skills) chép các thư mục skill vào thư mục skill của từng runtime. Lệnh này cần Node.js.
+
+```bash
+npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
+```
+
+- `-g` cài cho tài khoản của bạn thay vì một project; `-a` chọn runtime; `-y` bỏ qua câu hỏi.
+- Khi chọn nhiều runtime, file nằm một chỗ ở `~/.agents/skills`, các runtime còn lại nhận symlink tới đó. Bản của Codex chính là `~/.agents/skills`, thư mục skill của người dùng theo tài liệu Codex.
+- **omp** không có đích riêng. Tài liệu omp liệt kê `~/.agents/skills` và `~/.claude/skills` trong số thư mục nó đọc, nên cài cho Codex hoặc Claude Code là omp cũng dùng được.
+- Nếu có đặt `CLAUDE_CONFIG_DIR`, bản cho Claude Code nằm ở `$CLAUDE_CONFIG_DIR/skills` thay vì `~/.claude/skills`.
+- Trên Claude Code, skill giữ tên gốc, nên bạn gọi `/qk-plan`, không phải `/qk:qk-plan`.
+- Nếu thư mục skill đã có skill qk cùng tên, ví dụ link của bản cài thủ công, `npx skills` sẽ thay nó. Khi chuyển từ cài thủ công, gỡ các link cũ trước (xem [Gỡ](#5-gỡ)) để không runtime nào còn giữ bản cũ.
+
+Để cố định ở một bản phát hành, thêm tag sau dấu `#` (từ `v0.3.0` trở đi bản phát hành mới có layout mà cách này cần):
+
+```bash
+npx skills add 'dakiquang/qk#v0.3.0' -g -a claude-code codex qwen-code -y
+```
+
+`dakiquang/qk@<tên>` không chọn phiên bản: `npx skills` hiểu phần sau `@` là tên skill.
+
+### Cài thủ công (clone và link)
+
+Dùng cách này khi bạn muốn chạy [`qk-run`](runner.md) hay validator, sửa skill, hoặc không có Node.js. Clone một lần rồi tạo symlink từng thư mục skill vào nơi runtime đọc; `git pull` sẽ cập nhật mọi runtime.
 
 ```bash
 (
@@ -38,7 +63,11 @@ Khối lệnh chạy trong subshell: clone lỗi hoặc nguồn skill thiếu/kh
 | Qwen Code | `~/.qwen/skills` |
 | Orca | Không cài riêng; thấy skill của agent nó chạy |
 
-Một số runtime đọc nhiều thư mục. Cài cùng skill ở hai nơi có thể khiến liệt kê trùng; omp gộp link cùng trỏ về một thư mục. Nếu chưa chắc, kiểm danh sách skill của runtime. Mở phiên mới để runtime nhận skill.
+Một số runtime đọc nhiều thư mục. Cài cùng skill ở hai nơi có thể khiến liệt kê trùng; omp gộp link cùng trỏ về một thư mục. Nếu chưa chắc, kiểm danh sách skill của runtime.
+
+Muốn thử bản đang sửa trong clone theo layout của `npx skills`, cài từ đường dẫn của clone: `npx skills add ~/src/qk -g -a claude-code -y`. Bản cài từ đường dẫn local là bản chép, nên chạy lại lệnh sau mỗi lần sửa.
+
+Mở phiên mới để runtime nhận skill.
 
 ## 2. Gọi skill
 
@@ -66,20 +95,34 @@ Tuỳ chọn: [hook ghi nhận sở thích](preference-hook.md) biến câu "t�
 
 ## 4. Cập nhật
 
+Với `npx skills`:
+
+```bash
+npx skills check
+```
+
+```bash
+npx skills update -g -y
+```
+
+Bản cài cố định bằng `#<tag>` sẽ đứng yên ở tag đó; muốn lên bản mới thì cài lại với tag mới hơn. Bản cài từ đường dẫn local không kiểm hay cập nhật được; chạy lại đúng lệnh `npx skills add <đường dẫn>`.
+
+Với bản cài thủ công:
+
 ```bash
 git -C ~/src/qk pull
 ```
 
 Link dùng phiên bản mới ở phiên tiếp theo. Đọc [changelog](../../CHANGELOG.md) trước khi cập nhật.
 
-Các skill là symlink trỏ tới clone, nên phiên bản đang checkout sẽ có hiệu lực trên mọi runtime ở phiên tiếp theo. Để cố định ở một bản phát hành, checkout tag của bản đó (danh sách bản phát hành nằm trong [changelog](../../CHANGELOG.md)):
+Link của bản cài thủ công trỏ tới clone, nên phiên bản đang checkout sẽ có hiệu lực trên mọi runtime ở phiên tiếp theo. Để cố định ở một bản phát hành, checkout tag của bản đó (danh sách bản phát hành nằm trong [changelog](../../CHANGELOG.md)):
 
 ```bash
 git -C ~/src/qk fetch --tags
 ```
 
 ```bash
-git -C ~/src/qk checkout v0.2.0
+git -C ~/src/qk checkout v0.3.0
 ```
 
 Để trở lại bản mới nhất trên `main`:
@@ -94,7 +137,13 @@ git -C ~/src/qk pull
 
 ## 5. Gỡ
 
-Chỉ xoá link đã xác minh trỏ tới clone qk của bạn, không xoá toàn bộ thư mục skill. Kiểm một link:
+Với `npx skills`, gỡ các skill qk theo tên:
+
+```bash
+npx skills remove -g -y qk-agent-coord qk-brainstorm qk-commit qk-cook qk-debug qk-dogfood qk-handoff qk-plan qk-prefs qk-release-notes qk-research qk-test
+```
+
+Với bản cài thủ công, chỉ xoá link đã xác minh trỏ tới clone qk của bạn, không xoá toàn bộ thư mục skill. Kiểm một link:
 
 ```bash
 readlink ~/.claude/skills/qk-plan

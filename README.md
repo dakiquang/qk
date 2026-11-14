@@ -44,7 +44,13 @@ Pull-request review and scoring live in the companion project [pr-orchestrator](
 
 ## Quick start
 
-Clone the repository and link the skill folders into your runtime's skills directory; [Getting started](docs/en/getting-started.md) has a safe install script and the directory for each runtime. No build or package installation is needed. Then open a new session and call a skill:
+Install for the runtimes you use with one command (needs Node.js):
+
+```bash
+npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
+```
+
+[Getting started](docs/en/getting-started.md) covers pinning a release, updating, removing, and a manual install without Node.js. Then open a new session and call a skill:
 
 | Runtime | Example |
 |---|---|

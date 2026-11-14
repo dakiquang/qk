@@ -44,7 +44,13 @@ Review và chấm điểm pull request nằm ở dự án đồng hành [pr-orch
 
 ## Bắt đầu nhanh
 
-Clone repo và link các thư mục skill vào thư mục skill của runtime; [Bắt đầu](docs/vi/getting-started.md) có script cài an toàn và thư mục cho từng runtime. Không cần build hay cài package. Sau đó mở phiên mới và gọi một skill:
+Cài cho các runtime bạn dùng bằng một lệnh (cần Node.js):
+
+```bash
+npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
+```
+
+[Bắt đầu](docs/vi/getting-started.md) có cách cố định bản phát hành, cập nhật, gỡ, và cách cài thủ công không cần Node.js. Sau đó mở phiên mới và gọi một skill:
 
 | Runtime | Ví dụ |
 |---|---|

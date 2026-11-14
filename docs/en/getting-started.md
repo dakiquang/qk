@@ -4,9 +4,34 @@
 
 ## 1. Install
 
-qk is plain Markdown: no build and no package to install. Clone it once and link each skill folder into the skills directory of every runtime you use. All runtimes then read the same files, and `git pull` updates them all.
+qk is plain Markdown plus two small Python helpers; there is nothing to build. You need at least one supported runtime. The helpers used by `qk/commit` and `qk/prefs` need Python 3.9 or later, and the push identity check also needs the GitHub CLI `gh`.
 
-You need `git` and at least one supported runtime. The optional scripts (`qk_run.py`, `qk_prefs.py`, `qk_preflight.py` and the validator) need Python 3.9 or later; `qk-run` and the push identity check also need the GitHub CLI `gh`.
+### With `npx skills` (recommended)
+
+[`npx skills`](https://github.com/vercel-labs/skills) copies the skill folders into each runtime's skills directory. It needs Node.js.
+
+```bash
+npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
+```
+
+- `-g` installs for your user rather than one project; `-a` picks the runtimes; `-y` skips the prompts.
+- With more than one runtime, the files live once in `~/.agents/skills` and the other runtimes get symlinks to them. Codex's copy is `~/.agents/skills` itself, the user skills directory in Codex's documentation.
+- **omp** has no target of its own. Its documentation lists `~/.agents/skills` and `~/.claude/skills` among the directories it reads, so an install for Codex or Claude Code also serves omp.
+- If `CLAUDE_CONFIG_DIR` is set, the Claude Code copy goes to `$CLAUDE_CONFIG_DIR/skills` instead of `~/.claude/skills`.
+- On Claude Code the skills keep their plain names, so you call `/qk-plan`, not `/qk:qk-plan`.
+- If a skills directory already has a qk skill of the same name, for example a link from a manual install, `npx skills` replaces it. When switching from a manual install, remove its links first (see [Uninstall](#5-uninstall)) so no runtime keeps an old copy.
+
+To pin a release, add its tag after `#` (releases from `v0.3.0` include the layout this method needs):
+
+```bash
+npx skills add 'dakiquang/qk#v0.3.0' -g -a claude-code codex qwen-code -y
+```
+
+`dakiquang/qk@<name>` does not select a version: `npx skills` reads the part after `@` as a skill name.
+
+### Manual install (clone and link)
+
+Use this when you want to run [`qk-run`](runner.md) or the validator, edit the skills, or work without Node.js. Clone once and link each skill folder into the skills directory of every runtime you use; `git pull` then updates them all.
 
 ```bash
 (
@@ -40,6 +65,8 @@ The block runs in a subshell: clone failure or a missing/invalid source stops it
 
 Some runtimes read more than one directory. Linking the same skill into two directories a runtime reads may list it twice; omp collapses links that resolve to the same folder. If in doubt, check the runtime's skill list after installing.
 
+To try local edits of a clone through the `npx skills` layout instead, install from the clone's path: `npx skills add ~/src/qk -g -a claude-code -y`. A local install is a copy, so run the command again after each change.
+
 Start a new session so the runtime discovers the skills.
 
 ## 2. Call a skill
@@ -70,20 +97,34 @@ Optional: the [preference hook](preference-hook.md) turns "from now on…" reque
 
 ## 4. Update
 
+With `npx skills`:
+
+```bash
+npx skills check
+```
+
+```bash
+npx skills update -g -y
+```
+
+An install pinned with `#<tag>` stays on that tag; install again with a newer tag to move. An install from a local path cannot be checked or updated; run the same `npx skills add <path>` command again.
+
+With a manual install:
+
 ```bash
 git -C ~/src/qk pull
 ```
 
 Links pick up the new version at the next session. Read the [changelog](../../CHANGELOG.md) for what changed.
 
-Skills are symlinks to the clone, so whatever is checked out is live in every runtime at the next session. To pin a release, check out its tag (see the [changelog](../../CHANGELOG.md) for the list):
+Manual links point at the clone, so whatever is checked out is live in every runtime at the next session. To pin a release, check out its tag:
 
 ```bash
 git -C ~/src/qk fetch --tags
 ```
 
 ```bash
-git -C ~/src/qk checkout v0.2.0
+git -C ~/src/qk checkout v0.3.0
 ```
 
 To return to the latest on `main`:
@@ -98,7 +139,13 @@ git -C ~/src/qk pull
 
 ## 5. Uninstall
 
-Remove only links you have verified point at your qk clone, never the whole skills directory. For example, inspect one link:
+With `npx skills`, remove the qk skills by name:
+
+```bash
+npx skills remove -g -y qk-agent-coord qk-brainstorm qk-commit qk-cook qk-debug qk-dogfood qk-handoff qk-plan qk-prefs qk-release-notes qk-research qk-test
+```
+
+With a manual install, remove only links you have verified point at your qk clone, never the whole skills directory. For example, inspect one link:
 
 ```bash
 readlink ~/.claude/skills/qk-plan
