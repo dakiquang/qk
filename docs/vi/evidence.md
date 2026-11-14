@@ -129,7 +129,7 @@ Một lượt review chéo riêng cho PR của run 4 tìm thêm một lỗi mứ
 
 **14/11/2026, Claude Opus 5.5.** Bài mẫu cố định và bộ chấm bằng code nằm trong [`evals/`](../../evals/). Baseline dùng prompt review cũ. `bundle-malformed` đạt cả sáu tiêu chí trên hai runtime. Với `waf-bundle-review`, diff 1.200 dòng dựng lại từ PR WAF thật, cả hai runtime đều bắt 0/8 lỗi ở mức blocker hoặc important. Một lần chạy baseline omp bị chốt chặn MCP dừng khi reviewer gọi AWS MCP trong bước chỉ đọc; lần chạy lại hợp lệ đã được ghi vào `baseline.json`.
 
-Với prompt đề xuất yêu cầu soát theo loại lỗi và định nghĩa mức độ cho đầu vào ngoài sai cấu trúc:
+Với prompt trong [PR nháp #26](https://github.com/dakiquang/qk/pull/26), yêu cầu soát theo loại lỗi và định nghĩa mức độ cho đầu vào ngoài sai cấu trúc:
 
 | Runtime và bài | Baseline | Kết quả mới | Token |
 |---|---:|---:|---:|

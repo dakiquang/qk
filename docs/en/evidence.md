@@ -129,7 +129,7 @@ A separate cross-model review of run 4's pull request found one more important i
 
 **2026-11-14, Claude Opus 5.5.** The fixed cases and code graders are in [`evals/`](../../evals/). The baseline was recorded with the previous review prompt. `bundle-malformed` passed all six criteria on both runtimes. On `waf-bundle-review`, a 1,200-line diff reconstructed from a real WAF pull request, both runtimes caught 0 of eight defects at blocker or important severity. A baseline omp attempt was stopped when the read-only MCP guard detected an AWS MCP call; the valid rerun is recorded in `baseline.json`.
 
-With the proposed prompt that asks reviewers to search by defect class and defines severity for malformed external input:
+With the prompt proposed in [draft PR #26](https://github.com/dakiquang/qk/pull/26), which asks reviewers to search by defect class and defines severity for malformed external input:
 
 | Runtime and case | Baseline | New result | Tokens |
 |---|---:|---:|---:|
