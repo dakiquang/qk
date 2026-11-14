@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `qk-cook`, `qk-test`, `qk-debug`, `qk-research` and `qk-plan` audit now check
+  only what could change the decision, once, and reuse what the session already
+  saw, instead of re-verifying everything.
+
 ### Added
 
 - A one-page philosophy in English and Vietnamese: understand enough to decide,

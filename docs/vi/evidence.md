@@ -91,6 +91,10 @@ Chưa phủ trong `HOME` trống: gọi skill sau khi cài (chưa đăng nhập)
 `npx skills check` không báo bản cập nhật nào cho qk. Mỗi thư mục skill chỉ có một bản của mỗi skill qk.
 
 
+## Luật "vừa đủ"
+
+**14/11/2026.** Claude Code 2.1.325, `claude -p` cho phép sửa file, trong một repo tạm mới có một unit test đang fail: `/qk-cook Fix the failing test. Done when python3 -m unittest passes.` Trước thay đổi (v0.3.0): 5 lượt, tổng 250.999 token. Sau khi thêm luật vào `qk-cook`, `qk-test`, `qk-debug`, `qk-research` và `qk-plan`: 5 lượt, 251.201 token. Cả hai lần đều sửa được test, có chạy test, và kết thúc bằng bốn nhãn đúng thứ tự. Mỗi bên một lần chạy, trên việc quá nhỏ để thấy tiết kiệm; kết quả chỉ cho thấy luật không làm hỏng skill và không thêm chi phí.
+
 ## Hook ghi nhận sở thích
 
 | Runtime | Kết quả |

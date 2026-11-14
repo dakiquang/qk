@@ -45,7 +45,7 @@ Status: draft | approved | in progress | done — <date>
 
 Check the plan against sources, without editing the plan:
 
-- Claims about code, versions, APIs: re-read the exact source or rerun the stated command.
+- Claims the plan's decisions rest on: re-read the exact source or rerun the stated command; leave the rest as questions.
 - Whether done criteria are verifiable; which steps are missing dependencies; whether scope has grown or contradicts settled decisions.
 - Each finding: severity (blocker / important / nit), location in the plan, evidence, suggested fix. Without evidence, record it as a question, not an error.
 - Another model's opinion is input to verify, not a conclusion.

@@ -20,7 +20,7 @@ disable-model-invocation: true
 1. Record the exact symptom: error, input, environment, since when. Distinguish what the user observed from what you inferred.
 2. Reproduce with the smallest command. If it cannot be reproduced, narrow the conditions before guessing.
 3. Narrow the area: compare against base or a working version, read logs, bisect commits or input.
-4. Pair each hypothesis with a test that could refute it. Run the test and record the result. Do not try fixes just to see whether the bug goes away.
+4. Pair each hypothesis that would change the fix with a test that could refute it; run it once and record the result. Do not try fixes just to see whether the bug goes away.
 5. Separate symptom from cause: fix where the error surfaces, or where the bad data originates? Look for the same bug pattern elsewhere.
 6. If the failure comes from the environment or tooling, not the code: state it clearly and do not propose code changes.
 
