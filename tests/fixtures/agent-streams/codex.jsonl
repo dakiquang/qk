@@ -1,0 +1,6 @@
+{"type": "thread.started"}
+{"type": "turn.started"}
+{"type": "item.started", "item": {"id": "item_2", "type": "command_execution", "command": "/bin/zsh -lc 'cat a.txt'", "exit_code": null, "status": "in_progress"}}
+{"type": "item.completed", "item": {"id": "item_2", "type": "command_execution", "command": "/bin/zsh -lc 'cat a.txt'", "exit_code": 0, "status": "completed"}}
+{"type": "item.completed", "item": {"id": "item_4", "type": "agent_message", "text": "DONE"}}
+{"type": "turn.completed"}

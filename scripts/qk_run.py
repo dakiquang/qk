@@ -12,11 +12,14 @@ and opens the PR. It never merges, releases, deletes branches or switches models
 import argparse
 import json
 import os
+import queue
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -27,10 +30,15 @@ DEFAULT_IMPL = "omp:anthropic/claude-opus-5-5"
 DEFAULT_REVIEW = "codex:"
 RUNTIMES = ("omp", "claude", "codex")
 DEFAULT_TIMEOUT = 1800
+HEARTBEAT_SECONDS = 60
+KILL_GRACE_SECONDS = 10
+DISPLAY_LIMIT = 120
+TITLE_LIMIT = 72
 PLAN_RE = re.compile(r"<<<QK-PLAN\s*\n(.*?)\n\s*QK-PLAN>>>", re.S)
 RESULT_RE = re.compile(r"```qk-result\s*\n(.*?)\n```", re.S)
 VERIFY_RE = re.compile(r"```qk-verify\s*\n(.*?)\n```", re.S)
 CONVENTIONAL_RE = re.compile(r"^[a-z]+(\([^()\r\n]+\))?!?: \S")
+FOREIGN_PREFIX_RE = re.compile(r"^[^\s:]+: ")
 TITLE_TYPES = {"fix": "fix", "fixes": "fix", "repair": "fix", "resolve": "fix", "correct": "fix",
                "doc": "docs", "docs": "docs", "document": "docs", "test": "test", "tests": "test",
                "refactor": "refactor", "simplify": "refactor", "rename": "refactor"}
@@ -139,7 +147,7 @@ def family(spec):
 def agent_command(spec, write, cwd, extra_dirs):
     runtime, model = parse_spec(spec)
     if runtime == "claude":
-        cmd = ["claude", "-p", "--output-format", "text",
+        cmd = ["claude", "-p", "--output-format", "stream-json", "--verbose",
                "--permission-mode", "acceptEdits" if write else "plan"]
         if write:
             cmd += ["--allowedTools", "Bash,Edit,Write,Read,Grep,Glob"]
@@ -153,13 +161,13 @@ def agent_command(spec, write, cwd, extra_dirs):
     if runtime == "codex":
         out = Path(extra_dirs[0]) / f"codex-last-{secrets.token_hex(4)}.txt"
         cmd = ["codex", "exec", "--sandbox", "workspace-write" if write else "read-only",
-               "--ephemeral", "-C", str(cwd), "--output-last-message", str(out)]
+               "--ephemeral", "--json", "-C", str(cwd), "--output-last-message", str(out)]
         for directory in extra_dirs:
             cmd += ["--add-dir", str(directory)]
         if model:
             cmd += ["-m", model]
         return cmd + ["-"], out
-    cmd = ["omp", "-p", "--no-session", "--no-title", "--cwd", str(cwd)]
+    cmd = ["omp", "-p", "--mode", "json", "--no-session", "--no-title", "--cwd", str(cwd)]
     profile = os.environ.get("QK_RUN_OMP_PROFILE")
     if profile:
         cmd += ["--profile", profile]
@@ -174,22 +182,164 @@ def agent_command(spec, write, cwd, extra_dirs):
     return cmd, None
 
 
-def call_agent(spec, prompt, cwd, write, timeout, extra_dirs):
-    """Run one headless agent turn; return its final text. Replaced in tests."""
-    cmd, out_file = agent_command(spec, write, cwd, extra_dirs)
+def action(verb, target, suffix=""):
+    """One display line `<verb> <target><suffix>` of at most DISPLAY_LIMIT characters; only the target is clipped."""
+    if not isinstance(target, str) or not target.strip():
+        return None
+    room = DISPLAY_LIMIT - len(verb) - 1 - len(suffix)
+    return f"{verb} {' '.join(target.split())[:room]}{suffix}"
+
+
+CLAUDE_TOOLS = {"Read": ("read", "file_path"), "Edit": ("edit", "file_path"),
+                "Write": ("write", "file_path"), "Bash": ("run", "command")}
+OMP_TOOLS = {"read": ("read", "path"), "edit": ("edit", "path"),
+             "write": ("write", "path"), "bash": ("run", "command")}
+
+
+def claude_event(event):
+    """Claude Code stream-json event -> (display line or None, final text or None)."""
+    if event.get("type") == "result":
+        return None, event["result"] if isinstance(event.get("result"), str) else None
+    message = event.get("message")
+    content = message.get("content") if event.get("type") == "assistant" and isinstance(message, dict) else None
+    for part in content if isinstance(content, list) else []:
+        if isinstance(part, dict) and part.get("type") == "tool_use" and part.get("name") in CLAUDE_TOOLS:
+            verb, key = CLAUDE_TOOLS[part["name"]]
+            args = part.get("input")
+            return action(verb, args.get(key) if isinstance(args, dict) else None), None
+    return None, None
+
+
+def codex_event(event):
+    """Codex `exec --json` event -> (display line or None, final text or None)."""
+    item = event.get("item")
+    if event.get("type") not in ("item.started", "item.completed") or not isinstance(item, dict):
+        return None, None
+    if item.get("type") == "command_execution":
+        code = item.get("exit_code")
+        suffix = f" -> exit {code}" if isinstance(code, int) and not isinstance(code, bool) else ""
+        return action("run", item.get("command"), suffix), None
+    if event["type"] == "item.completed" and item.get("type") == "agent_message" and isinstance(item.get("text"), str):
+        return None, item["text"]
+    return None, None
+
+
+def omp_event(event):
+    """omp `--mode json` event -> (display line or None, final text or None)."""
+    if event.get("type") == "tool_execution_start" and event.get("toolName") in OMP_TOOLS:
+        verb, key = OMP_TOOLS[event["toolName"]]
+        args = event.get("args")
+        return action(verb, args.get(key) if isinstance(args, dict) else None), None
+    message = event.get("message")
+    if event.get("type") == "message_end" and isinstance(message, dict) and message.get("role") == "assistant":
+        content = message.get("content")
+        parts = content if isinstance(content, list) else []
+        return None, "".join(p["text"] for p in parts
+                             if isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str))
+    return None, None
+
+
+EVENT_PARSERS = {"claude": claude_event, "codex": codex_event, "omp": omp_event}
+
+
+def stop_agent(proc):
+    """SIGTERM the agent's process group, then SIGKILL it after the grace period."""
     try:
-        proc = subprocess.run(cmd, cwd=str(cwd), input=prompt, capture_output=True,
-                              text=True, timeout=timeout)
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        proc.wait(timeout=KILL_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+
+
+def feed(stream, text):
+    try:
+        stream.write(text)
+        stream.close()
+    except OSError:
+        pass
+
+
+def pump(stream, put):
+    for line in stream:
+        put(line)
+    put(None)
+
+
+def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress):
+    """Run one headless agent turn, streaming its tool actions to `progress`; return its final text.
+
+    Raw JSON events are appended to `events`. Replaced in tests."""
+    cmd, out_file = agent_command(spec, write, cwd, extra_dirs)
+    parse = EVENT_PARSERS[parse_spec(spec)[0]]
+    try:
+        proc = subprocess.Popen(cmd, cwd=str(cwd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                start_new_session=True)
     except FileNotFoundError:
         raise Blocked(f"runtime binary not found: {cmd[0]}")
-    except subprocess.TimeoutExpired:
-        raise Blocked(f"{spec} timed out after {timeout}s; the agent may still be running")
-    text = proc.stdout
+    lines, errors = queue.Queue(), []
+    stderr_reader = threading.Thread(target=pump, args=(proc.stderr, errors.append), daemon=True)
+    for thread in (threading.Thread(target=feed, args=(proc.stdin, prompt), daemon=True),
+                   threading.Thread(target=pump, args=(proc.stdout, lines.put), daemon=True), stderr_reader):
+        thread.start()
+    start = quiet_since = time.monotonic()
+    deadline = start + timeout
+    last, final = "no action yet", None
+    try:
+        with open(events, "a", encoding="utf-8") as sink:
+            while True:
+                now = time.monotonic()
+                if now >= deadline:
+                    stop_agent(proc)
+                    raise Blocked(f"{spec} timed out after {timeout}s; agent stopped")
+                if now >= quiet_since + HEARTBEAT_SECONDS:
+                    progress(f"still running ({int(now - start)}s, last: {last})")
+                    quiet_since = now
+                try:
+                    line = lines.get(timeout=min(deadline, quiet_since + HEARTBEAT_SECONDS) - now)
+                except queue.Empty:
+                    continue
+                if line is None:
+                    break
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                sink.write(line if line.endswith("\n") else line + "\n")
+                sink.flush()
+                quiet_since = time.monotonic()
+                display, text = parse(event)
+                if display:
+                    last = display
+                    progress(display)
+                if text is not None:
+                    final = text
+        try:
+            proc.wait(timeout=max(deadline - time.monotonic(), 0))
+        except subprocess.TimeoutExpired:
+            stop_agent(proc)
+            raise Blocked(f"{spec} timed out after {timeout}s; agent stopped")
+    finally:
+        if proc.poll() is None:
+            stop_agent(proc)
+    stderr_reader.join(timeout=max(deadline - time.monotonic(), 0))
+    text = final or ""
     if out_file and out_file.is_file():
         text = out_file.read_text(encoding="utf-8")
         out_file.unlink()
     if proc.returncode != 0:
-        raise Blocked(f"{spec} exited {proc.returncode}: {(proc.stderr or text).strip()[-800:]}")
+        stderr = "".join(line for line in errors if line)
+        raise Blocked(f"{spec} exited {proc.returncode}: {(stderr or text).strip()[-800:]}")
     return text
 
 
@@ -250,12 +400,14 @@ def run_agent(state, role, prompt, write=None):
                       "restore it or abort the run")
     primary = checkout_state(Path(state["repo"]))
     log(state, f"{spec} ({'write' if write else 'read-only'})")
+    stem = run_dir(state["id"]) / f"{state['stage']}-{int(time.time())}"
     error, text = None, ""
     try:
-        text = call_agent(spec, prompt, worktree, write, state["timeout"], [run_dir(state["id"])])
+        text = call_agent(spec, prompt, worktree, write, state["timeout"], [run_dir(state["id"])],
+                          events=Path(f"{stem}.events.jsonl"), progress=lambda message: log(state, message))
     except Blocked as exc:
         error = exc
-    (run_dir(state["id"]) / f"{state['stage']}-{int(time.time())}.out.md").write_text(text or "", encoding="utf-8")
+    Path(f"{stem}.out.md").write_text(text or "", encoding="utf-8")
     if checkout_state(Path(state["repo"])) != primary:
         raise Blocked("agent changed the user's primary checkout (branch, HEAD or files); stop and inspect it")
     check_worktree(state, worktree)
@@ -320,7 +472,8 @@ def planning(state):
 Repository checkout: {state['worktree']} (base {state['base']}). Do not edit files or run commands that write.
 Task: {state['task']}
 Instead of saving a file, put the complete plan between a line `<<<QK-PLAN` and a line `QK-PLAN>>>`;
-the runner saves it. The plan MUST contain a fenced block ```qk-verify``` listing, one per line, the shell
+the runner saves it. Start the plan with a `# <title>` line: an imperative title of at most 60 characters,
+without a project-name prefix. The plan MUST contain a fenced block ```qk-verify``` listing, one per line, the shell
 commands discovered from this repository that prove the done criteria. Each runs from the repository root
 and must exit 0 on success. Do not invent commands; if none can be discovered, report needs_input.
 {revision}
@@ -481,12 +634,20 @@ Problems:
     return "verifying"
 
 
+def clip_title(text, limit=TITLE_LIMIT):
+    """Cut a title longer than `limit` at its last space within `limit + 1` characters; hard-cut a single word."""
+    if len(text) <= limit:
+        return text
+    cut = text.rfind(" ", 0, limit + 1)
+    return text[:cut].rstrip() if cut > 0 else text[:limit]
+
+
 def plan_title(state):
     _, plan = approved_plan(state)
     for line in plan.splitlines():
         if line.startswith("# "):
-            return line[2:].strip()[:72]
-    return state["task"].splitlines()[0][:72]
+            return clip_title(line[2:].strip())
+    return clip_title(state["task"].splitlines()[0])
 
 
 def uses_conventional_commits(subjects):
@@ -494,15 +655,20 @@ def uses_conventional_commits(subjects):
 
 
 def conventional_title(title, subjects):
-    """Prefix a type and lowercase the first letter (acronyms excepted) when the history is conventional."""
+    """Prefix a type and lowercase the first letter (acronyms excepted) when the history is conventional.
+
+    A non-conventional `<word>: ` prefix (e.g. a project or ticket name) is dropped before the type is added."""
     if not uses_conventional_commits(subjects) or CONVENTIONAL_RE.match(title):
         return title
+    prefix = FOREIGN_PREFIX_RE.match(title)
+    if prefix and title[prefix.end():].strip():
+        title = title[prefix.end():].strip()
     words = title.split()
     first = words[0] if words else ""
     word = re.sub(r"[^a-z]", "", first.lower())
     second = first[1:2]
     subject = title if second.isupper() or second.isdigit() else title[:1].lower() + title[1:]
-    return f"{TITLE_TYPES.get(word, 'feat')}: {subject}"[:72]
+    return clip_title(f"{TITLE_TYPES.get(word, 'feat')}: {subject}")
 
 
 def commit_title(state):
@@ -633,6 +799,13 @@ def cmd_status(args):
     state = load(args.id)
     keys = ("id", "stage", "reason", "branch", "worktree", "fix_rounds", "pr_url", "commit")
     print(json.dumps({k: state[k] for k in keys if k in state}, ensure_ascii=False, indent=2))
+    directory = run_dir(args.id)
+    print(f"run dir: {directory}")
+    run_log = directory / "run.log"
+    if run_log.is_file():
+        print("last log lines:")
+        for line in run_log.read_text(encoding="utf-8").splitlines()[-10:]:
+            print(line)
     return 0
 
 

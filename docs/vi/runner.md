@@ -30,6 +30,8 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 
 Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (mặc định `~/.local/state/qk-run/`). Worktree được giữ lại sau khi chạy.
 
+Khi agent chạy, runner in mỗi thao tác công cụ của nó thành một dòng (`read <path>`, `edit <path>`, `write <path>`, `run <lệnh>`, kèm ` -> exit <mã>` khi runtime báo) và in `still running (<n>s, last: <thao tác>)` sau mỗi 60 giây không có sự kiện. Sự kiện thô của từng lượt được ghi vào `<stage>-<ts>.events.jsonl` cạnh `<stage>-<ts>.out.md`, còn log của runner là `run.log`, cả hai nằm trong thư mục run; `status` in đường dẫn thư mục run và 10 dòng log cuối. Khi hết `--timeout`, runner gửi SIGTERM tới process group của agent, SIGKILL sau 10 giây, và run dừng ở `blocked`.
+
 ## Quyền
 
 - Agent chỉ sửa file trong worktree. Chỉ runner commit, push và mở PR.
@@ -42,7 +44,7 @@ Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (m
 
 - Worktree không phải sandbox. Agent triển khai chạy ở chế độ ghi của runtime (`claude --permission-mode acceptEdits` cho phép Bash, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), nên vẫn có thể chạm file và mạng ngoài repo.
 - Thành công được định nghĩa bằng lệnh `qk-verify` của plan và một lần review chéo model; lệnh kiểm yếu thì bằng chứng yếu.
-- Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Với repo theo Conventional Commits, type lấy từ từ đầu tiên của tiêu đề plan (`fix`, `docs`, `test`, `refactor` và các biến thể), còn lại mặc định là `feat`; tiêu đề plan đã đúng quy ước thì giữ nguyên; commit merge không được tính. Các quy ước khác (tiền tố ticket, scope, quy tắc viết hoa khác) không được nhận diện, nên hãy sửa tiêu đề plan trước khi `approve` hoặc chỉnh tiêu đề khi merge.
+- Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Với repo theo Conventional Commits, type lấy từ từ đầu tiên của tiêu đề plan (`fix`, `docs`, `test`, `refactor` và các biến thể), còn lại mặc định là `feat`; tiêu đề plan đã đúng quy ước thì giữ nguyên; tiền tố `<từ>: ` không theo quy ước (tên dự án, cả tiền tố ticket như `ABC-123: ` hay `Fix: ` viết hoa) bị bỏ trước khi thêm type; commit merge không được tính. Tiêu đề dài hơn 72 ký tự được cắt ở ranh giới từ. Các quy ước khác (scope, quy tắc viết hoa khác) không được nhận diện, nên hãy sửa tiêu đề plan trước khi `approve` hoặc chỉnh tiêu đề khi merge.
 - Mỗi lần chạy một việc; không có queue, daemon hay chạy song song.
 
 ## Bằng chứng

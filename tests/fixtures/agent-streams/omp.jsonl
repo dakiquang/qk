@@ -1,0 +1,5 @@
+{"type": "tool_execution_start", "toolCallId": "HMyT", "toolName": "read", "args": {"path": "a.txt"}}
+{"type": "tool_execution_start", "toolCallId": "p9Cb", "toolName": "bash", "args": {"command": "ls"}}
+{"type": "tool_execution_end", "toolCallId": "HMyT", "toolName": "read", "isError": false}
+{"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": "DONE"}]}}
+{"type": "agent_end"}
