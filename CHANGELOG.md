@@ -23,7 +23,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - The runner's review prompt is built by `qk_run.review_prompt` so evals use
-  the same text; the text is unchanged.
+  the same text. Reviewers now classify findings, search the full diff for
+  further instances of a defect class, and rate crashes on accepted external
+  input at least important.
 
 ## [0.5.0] - 2026-11-14
 

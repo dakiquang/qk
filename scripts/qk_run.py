@@ -783,12 +783,19 @@ def approved_plan(state):
 
 
 def review_prompt(worktree, plan, diff_file):
-    """Prompt of the independent review turn; qk_eval reuses it so evals review under the runner's exact text."""
+    """Prompt of the independent review turn; qk_eval reuses the runner's exact text."""
     return f"""Independent read-only review. Do not edit files and do not run commands that write.
 Repository: {worktree}. Approved plan: {plan}. Full diff: {diff_file}.
 Check correctness, security, regressions, scope versus the plan, and missing tests. Re-read every line you cite.
+Read files only; do not call MCP or other external tools.
+Review by defect class: when you find a problem, name its class and search the whole diff for every other
+instance of that class in this same pass, and report each instance as its own finding.
+Severity: blocker = data loss, a security hole, or the change does not do what the plan requires;
+important = a wrong result, or a crash or unhandled error on input the code accepts from outside (files, APIs,
+users, other tools), or a missing check or test the plan requires; nit = style, wording, or a minor gap.
 Report only verified problems introduced by this diff. Put them in "findings" as
-{{"severity": "blocker|important|nit", "file": "<repo-relative path>", "line": N, "claim": "...", "fix": "..."}}.
+{{"severity": "blocker|important|nit", "class": "...", "file": "<repo-relative path>", "line": N, "claim": "...",
+"fix": "..."}}.
 Use status "done" when the review itself completed, even if there are findings.
 {RESULT_CONTRACT}"""
 
