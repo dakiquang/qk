@@ -77,7 +77,19 @@ Chưa phủ: đây là các lần chạy đơn lẻ trên một model, chưa ph�
 - `npx skills remove -g -y <mười hai tên>` gỡ hết thư mục và link của qk.
 - Khi môi trường có `CLAUDE_CONFIG_DIR`, link cho Claude Code nằm ở `$CLAUDE_CONFIG_DIR/skills` dù `HOME` trỏ nơi khác.
 
-Chưa phủ: gọi skill sau khi cài trên Claude Code, Codex và omp (`HOME` trống chưa đăng nhập), việc Codex 0.160.0 có đọc `~/.agents/skills` không, và Qwen Code.
+Chưa phủ trong `HOME` trống: gọi skill sau khi cài (chưa đăng nhập), và Qwen Code.
+
+**14/11/2026, một máy thật chuyển từ link thủ công.** Sau khi gỡ các link qk thủ công, `npx skills add 'dakiquang/qk#v0.3.0' -g -a claude-code codex qwen-code -y` đặt skill ở `~/.agents/skills`, kèm symlink trong `~/.claude/skills` và `~/.qwen/skills`; `~/.codex/skills` không còn mục qk nào. Trong một thư mục trống:
+
+| Runtime | Lời gọi | Kết quả |
+|---|---|---|
+| Claude Code 2.1.325 (`claude -p`) | `/qk-brainstorm …` | Đạt: bốn nhãn đúng thứ tự, không tạo file |
+| Codex 0.160.0 (`codex exec --sandbox read-only`) | `$qk-brainstorm …` | Đạt: bốn nhãn đúng thứ tự. `~/.codex/skills` không có skill qk nên Codex nạp từ `~/.agents/skills` |
+| omp 18.18.3 (RPC) | `/skill:qk-brainstorm …` | Đạt: nội dung skill được chèn, đủ bốn nhãn |
+| Qwen Code | — | Chưa kiểm: phiên đăng nhập hết hạn |
+
+`npx skills check` không báo bản cập nhật nào cho qk. Mỗi thư mục skill chỉ có một bản của mỗi skill qk.
+
 
 ## Hook ghi nhận sở thích
 

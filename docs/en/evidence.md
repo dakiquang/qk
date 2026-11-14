@@ -77,7 +77,19 @@ Not covered: these are single runs on one model, not a complete workflow matrix 
 - `npx skills remove -g -y <the twelve names>` removed every qk folder and link.
 - When `CLAUDE_CONFIG_DIR` was set in the environment, the Claude Code links went to `$CLAUDE_CONFIG_DIR/skills` even though `HOME` pointed elsewhere.
 
-Not covered: calling skills after this install on Claude Code, Codex and omp (no login in an empty `HOME`), Codex reading `~/.agents/skills` on 0.160.0, and Qwen Code.
+Not covered in the empty `HOME`: calling skills after this install (no login there), and Qwen Code.
+
+**2026-11-14, a real machine switched from manual links.** After removing its manual qk links, `npx skills add 'dakiquang/qk#v0.3.0' -g -a claude-code codex qwen-code -y` placed the skills in `~/.agents/skills` with symlinks in `~/.claude/skills` and `~/.qwen/skills`; `~/.codex/skills` had no qk entry. In an empty directory:
+
+| Runtime | Call | Result |
+|---|---|---|
+| Claude Code 2.1.325 (`claude -p`) | `/qk-brainstorm …` | Pass: four labels in order, no files |
+| Codex 0.160.0 (`codex exec --sandbox read-only`) | `$qk-brainstorm …` | Pass: four labels in order. With no qk skill in `~/.codex/skills`, Codex loaded it from `~/.agents/skills` |
+| omp 18.18.3 (RPC mode) | `/skill:qk-brainstorm …` | Pass: skill body injected, four labels |
+| Qwen Code | — | Not checked: login expired |
+
+`npx skills check` reported no qk update pending. Each skills directory held one copy of each qk skill.
+
 
 ## Preference hook
 
