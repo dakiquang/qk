@@ -63,6 +63,22 @@ Bốn lần RPC dùng bản sao project-local `.omp/skills`: `/skill:qk-dogfood`
 
 Chưa phủ: đây là các lần chạy đơn lẻ trên một model, chưa phải ma trận đầy đủ cho mười skill thời điểm đó. Bản instruction tiếng Anh khi ấy chưa được chạy lại trên Codex, Claude Code, Qwen hoặc omp tương tác; kết quả smoke ngày 13/11/2026 ở trên sau đó đã phủ Claude Code và Codex.
 
+## Cài bằng `npx skills`
+
+**14/11/2026.** skills 1.8.1 trên macOS, mỗi lần chạy đặt `HOME` vào một thư mục tạm trống.
+
+- `npx skills add <bản clone local> -g -a claude-code codex qwen-code -y`, và lệnh tương tự từ `dakiquang/qk` trên GitHub: mười hai thư mục skill ở `~/.agents/skills`, kèm symlink tới đó trong `~/.claude/skills` và `~/.qwen/skills`. Mọi thư mục còn `agents/openai.yaml` và `disable-model-invocation: true`; `qk-commit` và `qk-prefs` còn thư mục `scripts/`.
+- Từ bản đã cài, `qk_prefs.py list` chạy và thoát 0, `qk_preflight.py identity` chạy được (báo chưa có account GitHub nào đăng nhập, đúng như dự kiến với `HOME` trống).
+- Claude Code 2.1.325 `/context` liệt kê mười hai skill là `qk-agent-coord` … `qk-test`, không có tiền tố `qk:`. Chưa kiểm việc gọi skill vì `HOME` tạm chưa đăng nhập.
+- Khi chỉ có `-a claude-code`, các thư mục được chép thẳng vào `~/.claude/skills`.
+- Symlink thủ công có sẵn `~/.claude/skills/qk-plan` bị thay bằng bản cài.
+- `dakiquang/qk#v0.2.0` cài đúng tag đó và ghi `ref: v0.2.0` vào file lock; sau đó `npx skills check` báo bản cài đã mới nhất. `dakiquang/qk@main` lỗi "No matching skills found for: main", vì phần sau `@` được hiểu là tên skill.
+- Bản cài từ đường dẫn local được `check` báo là không kiểm được; muốn làm mới thì chạy lại `add`.
+- `npx skills remove -g -y <mười hai tên>` gỡ hết thư mục và link của qk.
+- Khi môi trường có `CLAUDE_CONFIG_DIR`, link cho Claude Code nằm ở `$CLAUDE_CONFIG_DIR/skills` dù `HOME` trỏ nơi khác.
+
+Chưa phủ: gọi skill sau khi cài trên Claude Code, Codex và omp (`HOME` trống chưa đăng nhập), việc Codex 0.160.0 có đọc `~/.agents/skills` không, và Qwen Code.
+
 ## Hook ghi nhận sở thích
 
 | Runtime | Kết quả |

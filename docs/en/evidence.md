@@ -63,6 +63,22 @@ Four RPC runs used project-local `.omp/skills` copies: explicit `/skill:qk-dogfo
 
 Not covered: these are single runs on one model, not a complete workflow matrix for all ten skills of that time. The English instructions had not yet been rerun on Codex, Claude Code or Qwen, or in interactive omp; the 2026-11-13 smoke results above later covered Claude Code and Codex.
 
+## Install with `npx skills`
+
+**2026-11-14.** skills 1.8.1 on macOS, each run with `HOME` set to an empty temporary directory.
+
+- `npx skills add <local clone> -g -a claude-code codex qwen-code -y`, and the same from `dakiquang/qk` on GitHub: twelve skill folders in `~/.agents/skills`, with symlinks to them in `~/.claude/skills` and `~/.qwen/skills`. Every folder kept `agents/openai.yaml` and `disable-model-invocation: true`; `qk-commit` and `qk-prefs` kept their `scripts/` folders.
+- From the installed copy, `qk_prefs.py list` ran and exited 0, and `qk_preflight.py identity` ran (it reported that no GitHub account was logged in, as expected in an empty `HOME`).
+- Claude Code 2.1.325 `/context` listed the twelve skills as `qk-agent-coord` … `qk-test`, with no `qk:` prefix. Calling a skill was not checked: the temporary `HOME` had no login.
+- With only `-a claude-code`, the folders were copied straight into `~/.claude/skills`.
+- An existing manual symlink `~/.claude/skills/qk-plan` was replaced by the installed copy.
+- `dakiquang/qk#v0.2.0` installed that tag and recorded `ref: v0.2.0` in the lock file; `npx skills check` then reported the install up to date. `dakiquang/qk@main` failed with "No matching skills found for: main", because the part after `@` is read as a skill name.
+- An install from a local path is reported by `check` as not checkable; it is refreshed by running `add` again.
+- `npx skills remove -g -y <the twelve names>` removed every qk folder and link.
+- When `CLAUDE_CONFIG_DIR` was set in the environment, the Claude Code links went to `$CLAUDE_CONFIG_DIR/skills` even though `HOME` pointed elsewhere.
+
+Not covered: calling skills after this install on Claude Code, Codex and omp (no login in an empty `HOME`), Codex reading `~/.agents/skills` on 0.160.0, and Qwen Code.
+
 ## Preference hook
 
 | Runtime | Result |

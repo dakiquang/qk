@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- One-command installation with `npx skills add dakiquang/qk`, documented in
+  English and Vietnamese with pinning (`#<tag>`), update and removal; the clone
+  and link install stays as the manual option.
+
 ### Changed
 
 - The identity check and the preference store now ship inside their skills
