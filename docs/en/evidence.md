@@ -91,6 +91,10 @@ Not covered in the empty `HOME`: calling skills after this install (no login the
 `npx skills check` reported no qk update pending. Each skills directory held one copy of each qk skill.
 
 
+## The "enough" rule
+
+**2026-11-14.** Claude Code 2.1.325, `claude -p` with edits allowed, in a fresh scratch repository whose one unit test failed: `/qk-cook Fix the failing test. Done when python3 -m unittest passes.` Before the change (v0.3.0): 5 turns, 250,999 tokens in total. After adding the rule to `qk-cook`, `qk-test`, `qk-debug`, `qk-research` and `qk-plan`: 5 turns, 251,201 tokens. Both runs fixed the test, ran it, and ended with the four labels in order. One run each, on a task too small to show savings; it shows only that the rule did not break the skill or add cost.
+
 ## Preference hook
 
 | Runtime | Result |

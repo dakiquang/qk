@@ -20,7 +20,7 @@ disable-model-invocation: true
 
 1. Write down the question and what would change in the decision if the answer is A or B. If no decision depends on it, ask about the purpose before digging deeper.
 2. Prefer primary sources: source code, official docs for the version in use, changelogs, the project's issues. Blogs and forum answers are only leads.
-3. Docs and real behavior can differ. When cheap, test for real in a temporary directory with a **control**: also run the case without the change to prove the test can distinguish outcomes.
+3. Stop once the evidence settles the decision. Docs and real behavior can differ; when cheap, test for real in a temporary directory with a **control**: also run the case without the change to prove the test can distinguish outcomes.
 4. Record tool versions and environment for every experiment.
 5. Clean up the temporary directory when done.
 

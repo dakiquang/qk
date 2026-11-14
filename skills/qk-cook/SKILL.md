@@ -33,7 +33,8 @@ Input: a request with done criteria, or the path to an approved plan (optionally
 
 ## Verification
 
-- Take commands from the repo: config, CI workflows, manifest scripts, contributing docs. Do not invent commands.
+- Take commands from the repo (config, CI, manifests, contributing docs); do not invent them.
+- Enough, not more: verify what could change the decision, once, the cheapest sufficient way; reuse what this session already saw; list the rest under Not verified.
 - Exercise exactly the behavior you changed: focused tests, then the related suite; for runnable changes, run it for real once.
 - Failures that already exist on base are baseline; record them separately. Do not loosen tests, delete assertions, disable hooks or use `--no-verify` to get green.
 - Self-review the diff: only in-scope files, no secrets, no leftover debug code, no unintended changes.
