@@ -39,8 +39,16 @@ def review_result(*findings):
     return f"Review.\n```qk-result\n{json.dumps(payload)}\n```\n"
 
 
-def finding(file, line, severity="important"):
-    return {"severity": severity, "file": file, "line": line, "claim": "x", "fix": "y"}
+def finding(file, line, severity="important", claim="x", fix="y"):
+    return {"severity": severity, "file": file, "line": line, "claim": claim, "fix": fix}
+
+
+def graded_detail(case, workdir, test, name):
+    final = Path(test.tmp.name) / "final-detail.md"
+    final.write_text(LABELS)
+    out = subprocess.run([sys.executable, "-I", str(case["dir"] / "check.py"), str(workdir), str(final)],
+                         capture_output=True, text=True, check=True).stdout
+    return next(c["detail"] for c in json.loads(out) if c["name"] == name)
 
 
 class CaseSanityTest(unittest.TestCase):
@@ -126,18 +134,45 @@ class CaseSanityTest(unittest.TestCase):
     def test_untouched_pagination_fails_its_target_criteria(self):
         case, workdir = self.prepare("pagination-empty-page")
         self.assertEqual(self.grade(case, workdir), {"hidden-regression": False, "repo-tests": True,
-                                                     "test-catches-bug": False, "report": False})
+                                                     "test-catches-bug": False, "scope": False, "report": False})
+
+    def test_pagination_tests_must_fail_for_the_bug_and_pass_when_fixed(self):
+        case, workdir = self.prepare("pagination-empty-page")
+        reference = (qk_eval.CASES / "pagination-empty-page" / "hidden" / "reference_collect.txt").read_text()
+        (workdir / "collector" / "collect.py").write_text(reference.replace("seen", "visited"))
+        # A test on the source text fails with the original module, but also with a correct one: no credit.
+        (workdir / "tests" / "test_source.py").write_text(
+            "import unittest\nfrom pathlib import Path\n\nclass T(unittest.TestCase):\n"
+            "    def test_text(self):\n        self.assertIn('visited', Path('collector/collect.py').read_text())\n")
+        graded = self.grade(case, workdir, LABELS)
+        self.assertEqual((graded["hidden-regression"], graded["repo-tests"], graded["scope"]), (True, True, True))
+        self.assertFalse(graded["test-catches-bug"])
+        self.assertIn("also fail with a correct module", graded_detail(case, workdir, self, "test-catches-bug"))
+        # A behavioural regression test: fails with the original module, passes with a correct one.
+        (workdir / "tests" / "test_source.py").unlink()
+        (workdir / "tests" / "test_empty_page.py").write_text(
+            "import unittest\nfrom collector.collect import collect_all\n\nclass T(unittest.TestCase):\n"
+            "    def test_empty_middle_page(self):\n"
+            "        pages = {None: {'items': [1], 'next': 'a'}, 'a': {'items': [], 'next': 'b'},\n"
+            "                 'b': {'items': [2], 'next': None}}\n"
+            "        self.assertEqual(collect_all(pages.__getitem__), [1, 2])\n")
+        self.assertTrue(self.grade(case, workdir, LABELS)["test-catches-bug"])
+        (workdir / "notes.txt").write_text("extra\n")
+        self.assertFalse(self.grade(case, workdir, LABELS)["scope"])
 
     def test_bundle_review_grading(self):
         case, workdir = self.prepare("bundle-malformed")
         places = ["capacity", "nested-statement", "list-name"]
         empty = self.grade(case, workdir)
         self.assertEqual([empty[name] for name in ["result", *places]], [False, False, False, False])
-        covering = [finding(f"{workdir}/bundle/loader.py", 16), finding("bundle/loader.py", 35, "blocker"),
-                    finding("./bundle/loader.py", 58)]
+        covering = [finding(f"{workdir}/bundle/loader.py", 16, claim="capacity accepts a string, not an integer"),
+                    finding("bundle/loader.py", 35, "blocker", claim="a null nested statement is not rejected"),
+                    finding("./bundle/loader.py", 58, fix="require each version name to be a string")]
         self.assertEqual(set(self.grade(case, workdir, review_result(*covering)).values()), {True})
         missing = self.grade(case, workdir, review_result(covering[0], covering[1], finding("bundle/loader.py", 58, "nit")))
         self.assertEqual([missing[name] for name in places], [True, True, False])
+        vague = self.grade(case, workdir, review_result(*[finding("bundle/loader.py", line) for line in (16, 35, 58)]))
+        self.assertEqual([vague[name] for name in places], [False, False, False])
         outside = self.grade(case, workdir, review_result(*covering, finding("bundle/models.py", 20)))
         self.assertFalse(outside["no-outside-important"])
         self.assertTrue(all(outside[name] for name in places))
@@ -214,7 +249,7 @@ class HarnessTest(unittest.TestCase):
                                      "--case", "alpha")
         self.assertEqual(code, 0)
         row = next(line for line in out.splitlines() if line.startswith("alpha"))
-        self.assertEqual(row.split(None, 1)[1].split(), ["a,", "b=FAIL", "FAIL(1)", "1,234", "0s"])
+        self.assertEqual(row.split(None, 1)[1].split(), ["a,", "b=FAIL,", "clean", "FAIL(1)", "1,234", "0s"])
         self.assertIn(f"no baseline for {SPEC}", out)
 
     def test_skill_case_runs_in_a_fresh_repository(self):
@@ -247,7 +282,7 @@ class HarnessTest(unittest.TestCase):
         code, out, agent = self.run_eval(lambda cwd, prompt: ("<a>", None), "--case", "alpha")
         self.assertEqual(code, 1)
         self.assertEqual(len(agent.calls), 2)
-        self.assertIn("2/2 → 1/2, lost: b;", out)
+        self.assertIn("2/2 → 2/3, lost: b;", out)
         self.assertIn("verdict: regression (criterion lost: alpha/b)", out)
 
     def test_token_limit_is_ten_percent(self):
@@ -282,6 +317,33 @@ class HarnessTest(unittest.TestCase):
         self.assertFalse((root / "gamma" / "run-2").exists())
         self.assertIn("rerun: yes", next(line for line in out.splitlines() if "baseline alpha" in line))
 
+    def test_agent_cannot_change_its_grader_and_reading_it_fails_clean(self):
+        self.case("alpha")
+        check = self.cases / "alpha" / "check.py"
+
+        def tamper(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=()):
+            check.write_text('import json\nprint(json.dumps([{"name": "a", "passed": True, "detail": ""},'
+                             ' {"name": "b", "passed": True, "detail": ""}]))\n')
+            Path(events).write_text(json.dumps({"type": "tool_execution_start", "toolName": "write",
+                                                "args": {"path": str(check)}}) + "\n")
+            return "<a>", None
+
+        qk_run.call_agent = tamper
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = qk_eval.main(["--case", "alpha", "--runtime", SPEC])
+        self.assertEqual(code, 0)
+        graded = json.loads((self.results_root() / "alpha" / "run-1" / "check.json").read_text())
+        self.assertEqual({c["name"]: c["passed"] for c in graded}, {"a": True, "b": False, "clean": False})
+
+    def test_grader_failure_is_never_recorded_as_baseline(self):
+        self.case("alpha")
+        (self.cases / "alpha" / "check.py").write_text("raise SystemExit(3)\n")
+        self.baseline({SPEC: {"alpha": self.entry()}})
+        code, out, _ = self.run_eval(lambda cwd, prompt: ("<a><b>", None), "--case", "alpha", "--update-baseline")
+        self.assertEqual(code, 1, out)
+        self.assertIn("baseline not updated for cases with an agent or grader error: alpha", out)
+        self.assertEqual(json.loads(qk_eval.BASELINE.read_text()), {SPEC: {"alpha": self.entry()}})
+
     def test_update_baseline_merges_into_this_runtime(self):
         self.case("alpha")
         other_runtime, other_case = {"alpha": self.entry(tokens=5)}, self.entry(tokens=7)
@@ -293,7 +355,8 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(json.loads(qk_eval.BASELINE.read_text()), {
             "claude:opus": other_runtime,
             SPEC: {"gamma": other_case, "alpha": {"date": time.strftime("%Y-%m-%d"),
-                                                  "criteria": {"a": True, "b": False}, "tokens": 15, "seconds": 0}}})
+                                                  "criteria": {"a": True, "b": False, "clean": True}, "tokens": 15,
+                                                  "seconds": 0}}})
 
     def test_agent_error_is_reported_and_never_recorded(self):
         self.case("alpha")
@@ -310,7 +373,7 @@ class HarnessTest(unittest.TestCase):
         self.assertFalse(qk_eval.BASELINE.exists())
         result = json.loads((self.results_root() / "results.json").read_text())["cases"]["alpha"]
         self.assertIn("timed out", result["error"])
-        self.assertEqual([c["passed"] for c in result["criteria"]], [False, False])
+        self.assertEqual([c["passed"] for c in result["criteria"]], [False, False, True])
 
     def test_results_directory_layout(self):
         self.case("alpha")
@@ -320,7 +383,7 @@ class HarnessTest(unittest.TestCase):
         run = roots[0] / "alpha" / "run-1"
         self.assertTrue((run / "events.jsonl").is_file())
         self.assertEqual((run / "final.md").read_text(), "<a><b> final words")
-        self.assertEqual([c["passed"] for c in json.loads((run / "check.json").read_text())], [True, True])
+        self.assertEqual([c["passed"] for c in json.loads((run / "check.json").read_text())], [True, True, True])
         results = json.loads((roots[0] / "results.json").read_text())
         self.assertEqual((results["runtime"], results["regression"], results["cases"]["alpha"]["runs"]), (SPEC, False, 1))
 

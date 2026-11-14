@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Grade the bundle-malformed review case: `python3 -I check.py <workdir> <final-text-file>` prints a JSON list.
 
-A place counts as caught when a blocker or important finding names its file with a line inside its range."""
+A place counts as caught when a blocker or important finding names its file with a line inside its range and its
+claim or fix names the defect (the field and what is wrong with it), not just any text at those lines."""
 import json
 import re
 import sys
@@ -12,6 +13,10 @@ CASE = Path(__file__).resolve().parent
 PLACES = {"capacity": ("bundle/loader.py", 14, 18),
           "nested-statement": ("bundle/loader.py", 33, 38),
           "list-name": ("bundle/loader.py", 51, 58)}
+# Each place: words that must appear in the finding's claim or fix (the field, and one word for what is wrong).
+SUBSTANCE = {"capacity": (("capacity",), ("int", "integer", "type", "bool", "string", "number")),
+             "nested-statement": (("statement",), ("null", "none", "missing", "nested", "object", "dict")),
+             "list-name": (("name",), ("str", "string", "type", "non-string"))}
 SERIOUS = ("blocker", "important")
 RESULT_RE = re.compile(r"```qk-result\s*\n(.*?)\n```", re.S)
 
@@ -59,13 +64,16 @@ def main():
     criteria = [criterion("result", result is not None and result.get("status") == "done",
                           problem or ("" if result.get("status") == "done" else f"status {result.get('status')!r}"))]
     findings = [f for f in (result or {}).get("findings") or [] if isinstance(f, dict)]
-    serious = [(repo_path(f.get("file"), workdir), line_number(f.get("line")))
+    serious = [(repo_path(f.get("file"), workdir), line_number(f.get("line")),
+                f"{f.get('claim', '')} {f.get('fix', '')}".lower())
                for f in findings if str(f.get("severity", "")).lower() in SERIOUS]
     for name, (path, first, last) in PLACES.items():
-        hits = [line for file, line in serious if file == path and line is not None and first <= line <= last]
+        field, defect = SUBSTANCE[name]
+        hits = [line for file, line, words in serious if file == path and line is not None and first <= line <= last
+                and any(w in words for w in field) and any(w in words for w in defect)]
         criteria.append(criterion(name, hits, f"lines {hits}" if hits else f"no blocker/important finding in {path}:{first}-{last}"))
     inside = diff_files()
-    outside = sorted({f"{file}:{line}" for file, line in serious if file not in inside})
+    outside = sorted({f"{file}:{line}" for file, line, _ in serious if file not in inside})
     criteria.append(criterion("no-outside-important", not outside, f"outside the diff: {', '.join(outside)}" if outside else ""))
     print(json.dumps(criteria, indent=2))
 

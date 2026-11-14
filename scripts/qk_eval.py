@@ -110,12 +110,26 @@ def grade(case, workdir, final):
     return criteria
 
 
+def touched_case_files(events):
+    """Lines of the turn's events that name a path under the case directory: the agent read or ran the graders."""
+    text = events.read_text(encoding="utf-8", errors="replace") if events.is_file() else ""
+    roots = {str(CASES), str(CASES.resolve()), "evals/cases/"}
+    return [line[:200] for line in text.splitlines() if any(root in line for root in roots)]
+
+
 def run_case(case, spec, timeout, out_dir, scratch):
-    """One agent turn on a fresh copy of the case, graded; artifacts go to `out_dir`."""
+    """One agent turn on a fresh copy of the case, graded; artifacts go to `out_dir`.
+
+    The graders (check.py, hidden tests) are copied to a private directory before the turn and run from there,
+    so an agent with write access cannot change what grades it; a turn whose events name the case directory
+    fails the `clean` criterion, because it may have read the graders."""
     out_dir.mkdir(parents=True)
     events = out_dir / "events.jsonl"
     events.touch()
-    with tempfile.TemporaryDirectory(prefix="qk-eval-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="qk-eval-") as tmp, \
+            tempfile.TemporaryDirectory(prefix="qk-eval-grader-") as grader_tmp:
+        grader = Path(grader_tmp) / case["name"]
+        shutil.copytree(case["dir"], grader, ignore=shutil.ignore_patterns("__pycache__"))
         workdir = prepare(case, Path(tmp))
         if case["skill"] == REVIEW:
             plan, diff = out_dir / "plan.md", out_dir / "review.diff"
@@ -137,7 +151,10 @@ def run_case(case, spec, timeout, out_dir, scratch):
         seconds = time.monotonic() - start
         final = out_dir / "final.md"
         final.write_text(text or "", encoding="utf-8")
-        criteria = grade(case, workdir, final)
+        criteria = grade(dict(case, dir=grader), workdir, final)
+        touched = touched_case_files(events)
+        criteria.append({"name": "clean", "passed": not touched,
+                         "detail": f"events name the case directory: {touched[0]}" if touched else ""})
     (out_dir / "check.json").write_text(json.dumps(criteria, indent=2) + "\n", encoding="utf-8")
     tokens = usage["input"] + usage["output"] if usage else None
     return {"criteria": criteria, "usage": usage, "tokens": tokens, "seconds": seconds, "error": error}
@@ -161,7 +178,8 @@ def compare(result, base):
     base_tokens = base.get("tokens")
     tokens_over = (result["tokens"] is not None and base_tokens is not None
                    and result["tokens"] * 100 > base_tokens * TOKEN_LIMIT_PERCENT)
-    return {"lost": lost, "flipped": now != before, "tokens_pct": percent(result["tokens"], base_tokens),
+    known = set(base.get("criteria", {}))  # a criterion added after the baseline was recorded is not a flip
+    return {"lost": lost, "flipped": (now & known) != before, "tokens_pct": percent(result["tokens"], base_tokens),
             "seconds_pct": percent(result["seconds"], base.get("seconds")), "tokens_over": tokens_over,
             "regression": bool(lost) or tokens_over}
 
@@ -231,16 +249,21 @@ def load_baseline():
 
 
 def update_baseline(baseline, spec, results):
-    """Merge every result without an agent error into baseline[spec]; return the names left out."""
+    """Merge every valid result into baseline[spec]; return the names left out.
+
+    A result is not recorded when the agent call failed or when check.py itself failed (crash, timeout, output
+    outside the contract), so a broken grader never overwrites passing criteria."""
+    def invalid(result):
+        return result["error"] or any(c["name"] == "check.py" for c in result["criteria"])
     recorded = {name: {"date": time.strftime("%Y-%m-%d"),
                        "criteria": {c["name"]: c["passed"] for c in result["criteria"]},
                        "tokens": result["tokens"], "seconds": int(round(result["seconds"]))}
-                for name, result in results.items() if not result["error"]}
+                for name, result in results.items() if not invalid(result)}
     if recorded:
         baseline.setdefault(spec, {}).update(recorded)
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
         BASELINE.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return [name for name, result in results.items() if result["error"]]
+    return [name for name, result in results.items() if invalid(result)]
 
 
 def main(argv=None):
@@ -282,7 +305,7 @@ def main(argv=None):
     if args.update_baseline:
         skipped = update_baseline(baseline, args.runtime, results)
         if skipped:
-            print(f"baseline not updated for cases with an agent error: {', '.join(skipped)}")
+            print(f"baseline not updated for cases with an agent or grader error: {', '.join(skipped)}")
             return 1
         print(f"baseline updated: {BASELINE}")
         return 0

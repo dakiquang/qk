@@ -21,9 +21,11 @@ Case nằm ở `evals/cases/<tên>/`. Mỗi case chạy một lượt agent tron
 
 | Case | Chạy | Tiêu chí được chấm |
 |---|---|---|
-| `csv-export` | `qk-cook` với `task.md`, có quyền ghi | `hidden-tests` (test nghiệm thu ẩn cho hợp đồng CSV), `repo-tests`, `scope` (chỉ module mới và file test của nó thay đổi), `report` |
-| `pagination-empty-page` | `qk-debug` với `task.md`, có quyền ghi | `hidden-regression` (trang rỗng vẫn còn marker không còn kết thúc danh sách), `repo-tests`, `test-catches-bug` (test của repo fail khi đặt lại module gốc), `report` |
-| `bundle-malformed` | prompt review của runner (`qk_run.review_prompt`), chỉ đọc, trên một diff chưa commit | `result` (`qk-result` hợp lệ với status `done`), `capacity`, `nested-statement`, `list-name` (một finding blocker hoặc important cho mỗi chỗ trong ba chỗ kiểm tra bị bỏ sót), `no-outside-important` (không có finding blocker hoặc important trên file ngoài diff) |
+| `csv-export` | `qk-cook` với `task.md`, có quyền ghi | `hidden-tests` (test nghiệm thu ẩn cho hợp đồng CSV), `repo-tests`, `scope` (chỉ module mới và file test của nó thay đổi), `csv-module` (module ghi bằng `csv.writer` hoặc `csv.DictWriter`), `report` |
+| `pagination-empty-page` | `qk-debug` với `task.md`, có quyền ghi | `hidden-regression` (trang rỗng vẫn còn marker không còn kết thúc danh sách), `repo-tests`, `test-catches-bug` (test của repo fail khi đặt lại module gốc, và pass với một module đúng), `scope` (chỉ `collector/collect.py` và file test thay đổi), `report` |
+| `bundle-malformed` | prompt review của runner (`qk_run.review_prompt`), chỉ đọc, trên một diff chưa commit | `result` (`qk-result` hợp lệ với status `done`), `capacity`, `nested-statement`, `list-name` (một finding blocker hoặc important cho mỗi chỗ trong ba chỗ kiểm tra bị bỏ sót, đúng dòng và nêu được trường nào sai, sai thế nào), `no-outside-important` (không có finding blocker hoặc important trên file ngoài diff) |
+
+Mỗi case còn có tiêu chí `clean` do harness thêm: fail khi sự kiện của lượt chạy nhắc tới thư mục case (`evals/cases/`), vì agent có thể đã đọc bộ chấm. Bộ chấm (`check.py`, `hidden/`) được chép sang một thư mục riêng trước lượt chạy và chạy từ bản sao đó, nên agent có quyền ghi không sửa được thứ chấm mình.
 
 `report` pass khi câu trả lời cuối có các nhãn `Done`, `Evidence`, `Not verified` và `Needs your decision`, mỗi nhãn ở đầu dòng và theo sau là `:` (in đậm hay không đều được). `check.py` của mỗi case in tiêu chí dưới dạng JSON; `check.py` bị lỗi, quá thời gian hoặc in thứ khác được tính là một tiêu chí fail tên `check.py`.
 
@@ -32,7 +34,7 @@ Case nằm ở `evals/cases/<tên>/`. Mỗi case chạy một lượt agent tron
 ```text
 case                   criteria                                   result    tokens    time
 csv-export             hidden-tests, repo-tests, scope=FAIL, csv-module, report    FAIL(1)   212,400   3m10s
-vs baseline csv-export (2026-11-20): 4/4 → 3/4, lost: scope; tokens -6.0%; time +4.0%; rerun: yes
+vs baseline csv-export (2026-11-20): 5/5 → 4/5, lost: scope; tokens -6.0%; time +4.0%; rerun: yes
 verdict: regression (criterion lost: csv-export/scope)
 ```
 
@@ -76,6 +78,6 @@ Repo tạm bị xoá sau khi chấm. Codex cũng giữ home riêng của nó tro
 
 Mỗi case là một lượt agent đầy đủ, có thể tốn hàng trăm nghìn token. Chạy một `--case` hoặc `--skill` khi đang thử, và `--all` trước khi chấp nhận một thay đổi. Không có gì chạy trong CI.
 
-Đường dẫn skill trong prompt là đường dẫn tuyệt đối, nên agent có thể đọc phần còn lại của bản checkout qk, gồm cả `evals/cases/*/check.py` và `hidden/`. Nếu `events.jsonl` cho thấy agent đọc file trong `evals/`, coi kết quả đó là không sạch.
+Đường dẫn skill trong prompt là đường dẫn tuyệt đối, nên agent vẫn có thể đọc phần còn lại của bản checkout qk, gồm cả `evals/cases/*/check.py` và `hidden/`. Lượt như vậy fail tiêu chí `clean`; agent không sửa được bộ chấm, vì bộ chấm chạy từ bản sao chụp trước lượt. `--update-baseline` không bao giờ ghi một case có lời gọi agent hoặc `check.py` bị lỗi.
 
 Hành vi của harness được phủ bởi [`tests/test_qk_eval.py`](../../tests/test_qk_eval.py), dùng agent giả lập; file này cũng kiểm rằng repo của mỗi case pass test của chính nó và các bộ chấm fail trên bản chưa sửa.

@@ -21,9 +21,11 @@ Cases live in `evals/cases/<name>/`. Each one runs as a single agent turn in a f
 
 | Case | Runs | Graded criteria |
 |---|---|---|
-| `csv-export` | `qk-cook` on `task.md`, with write access | `hidden-tests` (hidden acceptance tests for the CSV contract), `repo-tests`, `scope` (only the new module and its test file change), `report` |
-| `pagination-empty-page` | `qk-debug` on `task.md`, with write access | `hidden-regression` (an empty page that still has a marker no longer ends the listing), `repo-tests`, `test-catches-bug` (the repository's tests fail once the original module is put back), `report` |
-| `bundle-malformed` | the runner's review prompt (`qk_run.review_prompt`), read-only, on an uncommitted diff | `result` (a valid `qk-result` with status `done`), `capacity`, `nested-statement`, `list-name` (a blocker or important finding on each of three missed validation checks), `no-outside-important` (no blocker or important finding on a file outside the diff) |
+| `csv-export` | `qk-cook` on `task.md`, with write access | `hidden-tests` (hidden acceptance tests for the CSV contract), `repo-tests`, `scope` (only the new module and its test file change), `csv-module` (the module writes with `csv.writer` or `csv.DictWriter`), `report` |
+| `pagination-empty-page` | `qk-debug` on `task.md`, with write access | `hidden-regression` (an empty page that still has a marker no longer ends the listing), `repo-tests`, `test-catches-bug` (the repository's tests fail once the original module is put back, and pass with a correct module), `scope` (only `collector/collect.py` and test files change), `report` |
+| `bundle-malformed` | the runner's review prompt (`qk_run.review_prompt`), read-only, on an uncommitted diff | `result` (a valid `qk-result` with status `done`), `capacity`, `nested-statement`, `list-name` (a blocker or important finding on each of three missed validation checks, at the right lines and naming the field and what is wrong with it), `no-outside-important` (no blocker or important finding on a file outside the diff) |
+
+Every case also gets `clean`, added by the harness: it fails when the turn's events name the case directory (`evals/cases/`), because the agent may have read the graders. The graders (`check.py`, `hidden/`) are copied to a private directory before the turn and run from that copy, so an agent with write access cannot change what grades it.
 
 `report` passes when the final reply contains the labels `Done`, `Evidence`, `Not verified` and `Needs your decision`, each at the start of a line and followed by `:` (bold or not). Each case's `check.py` prints its criteria as JSON; a `check.py` that crashes, times out or prints something else counts as one failed criterion named `check.py`.
 
@@ -32,7 +34,7 @@ Cases live in `evals/cases/<name>/`. Each one runs as a single agent turn in a f
 ```text
 case                   criteria                                   result    tokens    time
 csv-export             hidden-tests, repo-tests, scope=FAIL, csv-module, report    FAIL(1)   212,400   3m10s
-vs baseline csv-export (2026-11-20): 4/4 → 3/4, lost: scope; tokens -6.0%; time +4.0%; rerun: yes
+vs baseline csv-export (2026-11-20): 5/5 → 4/5, lost: scope; tokens -6.0%; time +4.0%; rerun: yes
 verdict: regression (criterion lost: csv-export/scope)
 ```
 
@@ -76,6 +78,6 @@ The temporary repository is deleted after grading. Codex also keeps its private 
 
 Each case is one full agent turn, which can use hundreds of thousands of tokens. Run a single `--case` or `--skill` while you iterate, and `--all` before you accept a change. Nothing runs in CI.
 
-The skill path in the prompt is absolute, so an agent can read the rest of the qk checkout, including `evals/cases/*/check.py` and `hidden/`. If `events.jsonl` shows reads under `evals/`, treat that result as contaminated.
+The skill path in the prompt is absolute, so an agent can still read the rest of the qk checkout, including `evals/cases/*/check.py` and `hidden/`. Such a turn fails `clean`; it cannot change the graders, because they run from a copy taken before the turn. `--update-baseline` never records a case whose agent call or `check.py` failed.
 
 Harness behaviour is covered by [`tests/test_qk_eval.py`](../../tests/test_qk_eval.py), which uses a scripted agent; it also checks that each case's repository passes its own tests and that the graders fail an untouched copy.
