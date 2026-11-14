@@ -145,20 +145,54 @@ def family(spec):
     raise SystemExit(f"qk-run: cannot tell the model family of {spec!r}; use a provider/model id")
 
 
-def agent_command(spec, write, cwd, extra_dirs):
+CODEX_KEEP_RE = re.compile(r"^\s*(model|model_reasoning_effort)\s*=")
+TOML_TABLE_RE = re.compile(r"^\s*\[")
+
+
+def codex_home(directory):
+    """Private HOME for Codex inside the run directory, created once per run and reused.
+
+    It keeps only the real config's top-level `model` and `model_reasoning_effort` and links the real
+    `auth.json`, so Codex loads no user skills or MCP servers but stays logged in."""
+    home = Path(directory) / "codex-home"
+    codex = home / ".codex"
+    real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    if not codex.is_dir():
+        codex.mkdir(parents=True)
+        kept = []
+        config = real / "config.toml"
+        if config.is_file():
+            for line in config.read_text(encoding="utf-8").splitlines():
+                if TOML_TABLE_RE.match(line):
+                    break
+                if CODEX_KEEP_RE.match(line):
+                    kept.append(line + "\n")
+        (codex / "config.toml").write_text("".join(kept), encoding="utf-8")
+    auth = codex / "auth.json"
+    if (real / "auth.json").is_file() and not auth.exists() and not auth.is_symlink():
+        auth.symlink_to(real / "auth.json")  # checked on every call: a login made after the home was created still counts
+    return home
+
+
+def agent_command(spec, write, cwd, extra_dirs, read_only_mcp=()):
+    """Command line, last-message file (Codex) and environment (None = inherit) for one agent turn.
+
+    Every runtime runs without user skills; read-only stages also run without MCP where the runtime allows it."""
     runtime, model = parse_spec(spec)
     if runtime == "claude":
-        cmd = ["claude", "-p", "--output-format", "stream-json", "--verbose",
+        cmd = ["claude", "-p", "--output-format", "stream-json", "--verbose", "--disable-slash-commands",
                "--permission-mode", "acceptEdits" if write else "plan"]
         if write:
             cmd += ["--allowedTools", "Bash,Edit,Write,Read,Grep,Glob"]
         else:
             cmd += ["--tools", "Read,Grep,Glob"]
+            if not read_only_mcp:
+                cmd += ["--strict-mcp-config"]
         for directory in extra_dirs:
             cmd += ["--add-dir", str(directory)]
         if model:
             cmd += ["--model", model]
-        return cmd, None
+        return cmd, None, None
     if runtime == "codex":
         out = Path(extra_dirs[0]) / f"codex-last-{secrets.token_hex(4)}.txt"
         cmd = ["codex", "exec", "--sandbox", "workspace-write" if write else "read-only",
@@ -167,8 +201,16 @@ def agent_command(spec, write, cwd, extra_dirs):
             cmd += ["--add-dir", str(directory)]
         if model:
             cmd += ["-m", model]
-        return cmd + ["-"], out
-    cmd = ["omp", "-p", "--mode", "json", "--no-session", "--no-title", "--cwd", str(cwd)]
+        real_home = Path.home()
+        cache = os.environ.get("XDG_CACHE_HOME") or str(real_home / ".cache")
+        data = os.environ.get("XDG_DATA_HOME") or str(real_home / ".local" / "share")
+        home = codex_home(extra_dirs[0])
+        env = dict(os.environ, HOME=str(home), CODEX_HOME=str(home / ".codex"))
+        env.setdefault("UV_CACHE_DIR", str(Path(cache) / "uv"))
+        env.setdefault("UV_PYTHON_INSTALL_DIR", str(Path(data) / "uv" / "python"))
+        return cmd + ["-"], out, env
+    cmd = ["omp", "-p", "--mode", "json", "--no-session", "--no-title", "--no-skills", "--no-extensions",
+           "--no-rules", "--cwd", str(cwd)]
     profile = os.environ.get("QK_RUN_OMP_PROFILE")
     if profile:
         cmd += ["--profile", profile]
@@ -180,7 +222,7 @@ def agent_command(spec, write, cwd, extra_dirs):
         cmd += ["--tools", "read,grep,glob"]
     for directory in extra_dirs:
         cmd += ["--add-dir", str(directory)]
-    return cmd, None
+    return cmd, None, None
 
 
 DISPLAY_ROOTS = []  # (prefix, replacement) pairs set by call_agent so paths display relative to the worktree
@@ -210,19 +252,70 @@ CLAUDE_TOOLS = {"Read": ("read", "file_path"), "Edit": ("edit", "file_path"),
                 "Write": ("write", "file_path"), "Bash": ("run", "command")}
 OMP_TOOLS = {"read": ("read", "path"), "edit": ("edit", "path"),
              "write": ("write", "path"), "bash": ("run", "command")}
+MCP_PREFIXES = ("xd://", "mcp://")
+DESTINATION_KEYS = ("path", "file_path", "uri")  # arguments that name where a tool call goes, not what it searches for
+
+
+def mcp_target(name, args):
+    """The MCP or runtime-device identifier a tool call reaches, or None for an ordinary tool call.
+
+    A call counts when the tool name contains `mcp__` or starts with `xd://`/`mcp://`, or when a destination
+    argument (`path`, `file_path`, `uri`) starts with `xd://`/`mcp://` (omp routes MCP through
+    `write xd://mcp__...`). Other arguments, such as a search pattern, never count."""
+    if "mcp__" in name or name.startswith(MCP_PREFIXES):
+        return name
+    for key in DESTINATION_KEYS if isinstance(args, dict) else ():
+        value = args.get(key)
+        if isinstance(value, str) and value.startswith(MCP_PREFIXES):
+            return value
+    return None
+
+
+def target_display(identifier):
+    """`mcp <identifier>` for MCP tools; `tool <name>` for other `xd://<name>` runtime devices."""
+    name = identifier[len("xd://"):] if identifier.startswith("xd://") else identifier
+    if identifier.startswith("xd://") and not name.startswith("mcp__"):
+        return action("tool", name) or identifier
+    return action("mcp", name) or identifier
+
+
+def normalise(text):
+    return re.sub(r"[^A-Za-z0-9]", "_", text)
+
+
+def mcp_allowed(identifier, names):
+    """True when the identifier is a tool of a server listed with --read-only-mcp (`mcp__<server>_...`)."""
+    if identifier.startswith("mcp://"):
+        return False
+    name = identifier[len("xd://"):] if identifier.startswith("xd://") else identifier
+    return any(normalise(name).startswith(f"mcp__{normalise(server)}_") for server in names if server.strip())
+
+
+def claude_calls(event):
+    """(tool name, input) of every tool use in a Claude assistant event."""
+    message = event.get("message")
+    content = message.get("content") if event.get("type") == "assistant" and isinstance(message, dict) else None
+    return [(part["name"], part.get("input")) for part in (content if isinstance(content, list) else [])
+            if isinstance(part, dict) and part.get("type") == "tool_use" and isinstance(part.get("name"), str)]
+
+
+def omp_calls(event):
+    """(tool name, args) of an omp tool start event."""
+    if event.get("type") == "tool_execution_start" and isinstance(event.get("toolName"), str):
+        return [(event["toolName"], event.get("args"))]
+    return []
 
 
 def claude_event(event):
     """Claude Code stream-json event -> (display line or None, final text or None)."""
     if event.get("type") == "result":
         return None, event["result"] if isinstance(event.get("result"), str) else None
-    message = event.get("message")
-    content = message.get("content") if event.get("type") == "assistant" and isinstance(message, dict) else None
-    for part in content if isinstance(content, list) else []:
-        if (isinstance(part, dict) and part.get("type") == "tool_use"
-                and isinstance(part.get("name"), str) and part["name"] in CLAUDE_TOOLS):
-            verb, key = CLAUDE_TOOLS[part["name"]]
-            args = part.get("input")
+    for name, args in claude_calls(event):
+        target = mcp_target(name, args)
+        if target:
+            return target_display(target), None
+        if name in CLAUDE_TOOLS:
+            verb, key = CLAUDE_TOOLS[name]
             return action(verb, args.get(key) if isinstance(args, dict) else None), None
     return None, None
 
@@ -243,11 +336,13 @@ def codex_event(event):
 
 def omp_event(event):
     """omp `--mode json` event -> (display line or None, final text or None)."""
-    if (event.get("type") == "tool_execution_start" and isinstance(event.get("toolName"), str)
-            and event["toolName"] in OMP_TOOLS):
-        verb, key = OMP_TOOLS[event["toolName"]]
-        args = event.get("args")
-        return action(verb, args.get(key) if isinstance(args, dict) else None), None
+    for name, args in omp_calls(event):
+        target = mcp_target(name, args)
+        if target:
+            return target_display(target), None
+        if name in OMP_TOOLS:
+            verb, key = OMP_TOOLS[name]
+            return action(verb, args.get(key) if isinstance(args, dict) else None), None
     message = event.get("message")
     if event.get("type") == "message_end" and isinstance(message, dict) and message.get("role") == "assistant":
         content = message.get("content")
@@ -259,6 +354,68 @@ def omp_event(event):
 
 
 EVENT_PARSERS = {"claude": claude_event, "codex": codex_event, "omp": omp_event}
+TOOL_CALLS = {"claude": claude_calls, "codex": lambda event: [], "omp": omp_calls}  # Codex isolation has no MCP
+
+
+def number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def claude_usage(event):
+    """Usage of a Claude `result` event; `input` adds cache reads and writes, which Claude counts apart."""
+    usage = event.get("usage") if event.get("type") == "result" else None
+    if not isinstance(usage, dict):
+        return None
+    cached = number(usage.get("cache_read_input_tokens"))
+    found = {"input": number(usage.get("input_tokens")) + cached + number(usage.get("cache_creation_input_tokens")),
+             "cached": cached, "output": number(usage.get("output_tokens"))}
+    if number(event.get("total_cost_usd")):
+        found["cost_usd"] = event["total_cost_usd"]
+    return found
+
+
+def codex_usage(event):
+    """Usage of a Codex `turn.completed` event; its `input_tokens` already include cached tokens."""
+    usage = event.get("usage") if event.get("type") == "turn.completed" else None
+    if not isinstance(usage, dict):
+        return None
+    return {"input": number(usage.get("input_tokens")), "cached": number(usage.get("cached_input_tokens")),
+            "output": number(usage.get("output_tokens"))}
+
+
+def omp_usage(event):
+    """Usage of one omp turn (`turn_end`); `input` adds cache reads and writes, which omp counts apart."""
+    message = event.get("message") if event.get("type") == "turn_end" else None
+    usage = message.get("usage") if isinstance(message, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    cached = number(usage.get("cacheRead"))
+    found = {"input": number(usage.get("input")) + cached + number(usage.get("cacheWrite")),
+             "cached": cached, "output": number(usage.get("output"))}
+    cost = usage.get("cost")
+    if isinstance(cost, dict) and number(cost.get("total")):
+        found["cost_usd"] = cost["total"]
+    return found
+
+
+USAGE_READERS = {"claude": claude_usage, "codex": codex_usage, "omp": omp_usage}
+
+
+def add_usage(total, usage):
+    """Sum of two usage dicts; either may be None. `cost_usd` is kept only when some part reported it."""
+    if usage is None:
+        return total
+    summed = dict(total or {"input": 0, "cached": 0, "output": 0})
+    for key in ("input", "cached", "output"):
+        summed[key] += usage[key]
+    if "cost_usd" in usage:
+        summed["cost_usd"] = summed.get("cost_usd", 0) + usage["cost_usd"]
+    return summed
+
+
+def tokens_line(usage):
+    cost = f" cost=${usage['cost_usd']:.4f}" if "cost_usd" in usage else ""
+    return f"tokens in={usage['input']} cached={usage['cached']} out={usage['output']}{cost}"
 
 
 def stop_agent(proc):
@@ -292,17 +449,19 @@ def pump(stream, put):
     put(None)
 
 
-def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress):
-    """Run one headless agent turn, streaming its tool actions to `progress`; return its final text.
+def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=()):
+    """Run one headless agent turn, streaming its tool actions to `progress`; return (final text, usage or None).
 
-    Raw JSON events are appended to `events`. Replaced in tests."""
-    cmd, out_file = agent_command(spec, write, cwd, extra_dirs)
-    parse = EVENT_PARSERS[parse_spec(spec)[0]]
+    Raw JSON events are appended to `events`. A read-only turn that calls MCP or another runtime device
+    (except servers in `read_only_mcp`) is stopped and blocks. Replaced in tests."""
+    cmd, out_file, env = agent_command(spec, write, cwd, extra_dirs, read_only_mcp)
+    runtime = parse_spec(spec)[0]
+    parse, calls, read_usage = EVENT_PARSERS[runtime], TOOL_CALLS[runtime], USAGE_READERS[runtime]
     DISPLAY_ROOTS[:] = [(str(Path(cwd).resolve()), ""), (str(Path(cwd)), ""), (str(Path.home()), "~/")]
     try:
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-                                start_new_session=True)
+                                start_new_session=True, env=env)
     except FileNotFoundError:
         raise Blocked(f"runtime binary not found: {cmd[0]}")
     lines, errors = queue.Queue(), []
@@ -312,7 +471,7 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
         thread.start()
     start = quiet_since = time.monotonic()
     deadline = start + timeout
-    last, final = "no action yet", None
+    last, final, usage = "no action yet", None, None
     try:
         with open(events, "a", encoding="utf-8") as sink:
             while True:
@@ -328,6 +487,8 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
                 except queue.Empty:
                     continue
                 if line is None:
+                    if usage:
+                        progress(tokens_line(usage))
                     break
                 try:
                     event = json.loads(line)
@@ -344,6 +505,17 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
                     progress(display)
                 if text is not None:
                     final = text
+                usage = add_usage(usage, read_usage(event))
+                if not write:
+                    for name, args in calls(event):
+                        target = mcp_target(name, args)
+                        if target and not mcp_allowed(target, read_only_mcp):
+                            stop_agent(proc)
+                            if usage:
+                                progress(tokens_line(usage))
+                            blocked = Blocked(f"read-only stage called {target_display(target)}")
+                            blocked.usage = usage  # run_agent records the tokens the stopped turn used
+                            raise blocked
         try:
             proc.wait(timeout=max(deadline - time.monotonic(), 0))
         except subprocess.TimeoutExpired:
@@ -360,7 +532,7 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     if proc.returncode != 0:
         stderr = "".join(line for line in errors if line)
         raise Blocked(f"{spec} exited {proc.returncode}: {(stderr or text).strip()[-800:]}")
-    return text
+    return text, usage
 
 
 def parse_result(text):
@@ -421,12 +593,15 @@ def run_agent(state, role, prompt, write=None):
     primary = checkout_state(Path(state["repo"]))
     log(state, f"{spec} ({'write' if write else 'read-only'})")
     stem = run_dir(state["id"]) / f"{state['stage']}-{int(time.time())}-{secrets.token_hex(2)}"
-    error, text = None, ""
+    error, text, usage = None, "", None
     try:
-        text = call_agent(spec, prompt, worktree, write, state["timeout"], [run_dir(state["id"])],
-                          events=Path(f"{stem}.events.jsonl"), progress=lambda message: log(state, message))
+        text, usage = call_agent(spec, prompt, worktree, write, state["timeout"], [run_dir(state["id"])],
+                                 events=Path(f"{stem}.events.jsonl"), progress=lambda message: log(state, message),
+                                 read_only_mcp=state.get("read_only_mcp", []))
     except Blocked as exc:
-        error = exc
+        error, usage = exc, getattr(exc, "usage", None)
+    if usage:
+        state.setdefault("usage", {}).setdefault(state["stage"], []).append({"spec": spec, **usage})
     Path(f"{stem}.out.md").write_text(text or "", encoding="utf-8")
     if checkout_state(Path(state["repo"])) != primary:
         raise Blocked("agent changed the user's primary checkout (branch, HEAD or files); stop and inspect it")
@@ -747,19 +922,52 @@ STAGES = {"preflight": preflight, "planning": planning, "implementing": implemen
           "verifying": verifying, "reviewing": reviewing, "fixing": fixing, "publishing": publishing}
 
 
+RESUMABLE_BY_HAND = ("verifying", "reviewing", "fixing")
+
+
+def block(state, stage, error):
+    """Stop the run in `blocked`. After verify, review or fix, also record the worktree as it was at the block,
+    so `resume` can tell hand fixes made after it from changes made while the stage ran."""
+    state.update(stage="blocked", blocked_at=stage, reason=str(error))
+    state.pop("blocked_tree", None)
+    if stage in RESUMABLE_BY_HAND:
+        try:
+            state["blocked_tree"] = tree_snapshot(Path(state["worktree"]))
+        except Blocked:
+            pass
+    save(state)
+    log(state, f"BLOCKED at {stage}: {error}")
+    print(f"Resume after fixing the cause: qk-run resume {state['id']}")
+    return 1
+
+
 def advance(state):
     while state["stage"] in STAGES:
         stage = state["stage"]
         try:
             state["stage"] = STAGES[stage](state)
         except Blocked as error:
-            state.update(stage="blocked", blocked_at=stage, reason=str(error))
-            save(state)
-            log(state, f"BLOCKED at {stage}: {error}")
-            print(f"Resume after fixing the cause: qk-run resume {state['id']}")
-            return 1
+            return block(state, stage, error)
         save(state)
     return 0
+
+
+def accept_manual_changes(state):
+    """On resume, accept hand edits made after a block at verify, review or fix, and continue at `verifying`.
+
+    Accepted only when the blocked stage itself left the tree as recorded (`impl_tree`) or was the write stage
+    `fixing`: changes made while a read-only stage or the verify commands ran stay blocked by that stage's check."""
+    blocked = state.pop("blocked_tree", None)
+    if state["stage"] not in RESUMABLE_BY_HAND or not blocked:
+        return
+    worktree = Path(state["worktree"])
+    current = tree_snapshot(worktree)
+    if current == blocked or (state["stage"] != "fixing" and blocked != state.get("impl_tree")):
+        return
+    check_worktree(state, worktree)
+    files = git(worktree, "diff", "--name-only", blocked, current).splitlines()
+    log(state, f"manual changes recorded: {', '.join(files)}")
+    state.update(impl_tree=current, stage="verifying")
 
 
 # ---------------------------------------------------------------- CLI
@@ -768,11 +976,19 @@ def advance(state):
 def cmd_start(args):
     for spec in (args.impl, args.review):
         parse_spec(spec)
+    read_only_mcp = args.read_only_mcp or []
+    if any(not name.strip() for name in read_only_mcp):
+        sys.exit("qk-run: --read-only-mcp needs a server name; got an empty value")
+    for flag, spec in (("--impl", args.impl), ("--review", args.review)):
+        if read_only_mcp and parse_spec(spec)[0] == "codex":
+            sys.exit(f"qk-run: --read-only-mcp is not supported for codex ({flag} {spec}): planning and review "
+                     "are read-only and Codex runs them without MCP; use claude or omp for that role")
     if family(args.impl) == family(args.review):
         sys.exit(f"qk-run: implementer and reviewer must be different model families ({family(args.impl)})")
     run_id = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
     state = {"id": run_id, "task": args.task, "slug": slugify(args.task), "repo": str(Path(args.repo).resolve()),
-             "impl": args.impl, "review": args.review, "timeout": args.timeout, "stage": "preflight"}
+             "impl": args.impl, "review": args.review, "timeout": args.timeout, "read_only_mcp": read_only_mcp,
+             "stage": "preflight"}
     run_dir(run_id).mkdir(parents=True, exist_ok=False)
     save(state)
     print(f"qk-run {run_id}")
@@ -811,6 +1027,10 @@ def cmd_resume(args):
         sys.exit(f"qk-run: run is {state['stage']}; only blocked runs resume")
     state["stage"] = state.pop("blocked_at")
     state.pop("reason", None)
+    try:
+        accept_manual_changes(state)
+    except Blocked as error:
+        return block(state, state["stage"], error)
     save(state)
     return advance(state)
 
@@ -848,6 +1068,8 @@ def main(argv=None):
     start.add_argument("--impl", default=DEFAULT_IMPL, help=f"runtime:model (default {DEFAULT_IMPL})")
     start.add_argument("--review", default=DEFAULT_REVIEW, help=f"runtime:model (default {DEFAULT_REVIEW} = Codex default model)")
     start.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="seconds per agent turn or verify command")
+    start.add_argument("--read-only-mcp", action="append", metavar="NAME",
+                       help="MCP server that read-only stages may call (repeatable; claude and omp only)")
     start.set_defaults(func=cmd_start)
     for name, func in (("approve", cmd_approve), ("resume", cmd_resume), ("status", cmd_status), ("abort", cmd_abort)):
         command = sub.add_parser(name)
