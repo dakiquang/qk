@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The identity check and the preference store now ship inside their skills
+  (`skills/qk-commit/scripts/qk_preflight.py`, `skills/qk-prefs/scripts/qk_prefs.py`),
+  so `qk-commit` and `qk-prefs` keep working when an installer copies a skill
+  folder instead of linking the whole clone.
+
+### Upgrade notes
+
+- If you registered the preference hook with `scripts/qk_prefs.py` in a qk
+  clone, point it at `skills/qk-prefs/scripts/qk_prefs.py` instead.
+
 ## [0.2.0] - 2026-11-14
 
 ### Changed

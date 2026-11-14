@@ -19,7 +19,7 @@ disable-model-invocation: true
 
 ## Locate the script
 
-The store is managed only through `scripts/qk_prefs.py` in the qk checkout. This skill folder is usually a symlink, so resolve it first: the script is `<realpath of this skill folder>/../../scripts/qk_prefs.py`. For example, `python3 "$(realpath <skill folder>)/../../scripts/qk_prefs.py" list`. If the script is not there, report that this qk installation is incomplete and stop; do not read or edit the store file directly.
+The store is managed only through `scripts/qk_prefs.py` inside this skill folder. For example, `python3 "<skill folder>/scripts/qk_prefs.py" list`. If the script is not there, report that this qk installation is incomplete and stop; do not read or edit the store file directly.
 
 Run the script in the same environment as the hook, so a `QK_PREFS_STATE_DIR` or `XDG_STATE_HOME` setting points both at the same store.
 

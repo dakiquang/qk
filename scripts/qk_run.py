@@ -19,9 +19,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from qk_preflight import check_identity
 
 QK_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(QK_ROOT / "skills" / "qk-commit" / "scripts"))
+from qk_preflight import check_identity  # noqa: E402
 DEFAULT_IMPL = "omp:anthropic/claude-opus-5-5"
 DEFAULT_REVIEW = "codex:"
 RUNTIMES = ("omp", "claude", "codex")

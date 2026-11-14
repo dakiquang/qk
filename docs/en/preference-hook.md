@@ -4,7 +4,7 @@
 
 You often tell an agent something meant to last: "from now on, commit messages in English", "never amend a pushed commit". The runtime forgets it, or the agent writes it straight into memory without asking. The opt-in preference hook sits between the two. When a prompt contains a lasting-preference phrase, the hook asks the agent to record a **proposal** in a local file and carry on with the task. Nothing reaches memory, rules, `CLAUDE.md` or `AGENTS.md` until you approve it.
 
-> **Status:** the hook and the proposal store are [`scripts/qk_prefs.py`](../../scripts/qk_prefs.py), tested by [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). You review proposals with [qk/prefs](skills/qk-prefs.md) ([example 5](#5-decide-on-a-proposal)). It works with Claude Code and Codex; see [Runtimes](runtimes.md#preference-hook) for where to register it and [Test evidence](evidence.md#preference-hook) for what was checked on each.
+> **Status:** the hook and the proposal store are [`skills/qk-prefs/scripts/qk_prefs.py`](../../skills/qk-prefs/scripts/qk_prefs.py), tested by [`tests/test_qk_prefs.py`](../../tests/test_qk_prefs.py). You review proposals with [qk/prefs](skills/qk-prefs.md) ([example 5](#5-decide-on-a-proposal)). It works with Claude Code and Codex; see [Runtimes](runtimes.md#preference-hook) for where to register it and [Test evidence](evidence.md#preference-hook) for what was checked on each.
 
 The hook only adds a reminder to the prompt. It cannot make the agent record anything, and it never decides what counts as a preference: the agent judges, and you approve.
 
@@ -36,14 +36,14 @@ Because the trigger is a phrase list, it still produces false positives (`Always
 Pipe a hook payload in by hand. A match prints the reminder as Claude Code hook JSON; no match prints nothing.
 
 ```bash
-echo '{"prompt":"Từ nay commit message viết bằng tiếng Anh"}' | python3 ~/src/qk/scripts/qk_prefs.py hook --runtime claude
+echo '{"prompt":"Từ nay commit message viết bằng tiếng Anh"}' | python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py hook --runtime claude
 ```
 
 ```bash
-echo '{"prompt":"làm luôn đi"}' | python3 ~/src/qk/scripts/qk_prefs.py hook --runtime claude
+echo '{"prompt":"làm luôn đi"}' | python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py hook --runtime claude
 ```
 
-The paths assume the clone location from [Getting started](getting-started.md).
+The script ships inside the `qk-prefs` skill folder. The paths assume Claude Code's skills directory; use the folder where `qk-prefs` is installed for your runtime.
 
 ## 3. Enable it in one project first
 
@@ -57,7 +57,7 @@ qk never edits runtime configuration. Add the hook yourself, and start with a si
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/src/qk/scripts/qk_prefs.py hook --runtime claude",
+            "command": "python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py hook --runtime claude",
             "timeout": 5
           }
         ]
@@ -78,7 +78,7 @@ Each prompt starts one short Python process. The latency check in the test file 
 Say in the session: `Từ nay commit message viết bằng tiếng Anh`. The agent gets the reminder and, if it judges the request lasting, runs something like:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py propose --stdin <<'QK_PREF'
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py propose --stdin <<'QK_PREF'
 {"scope": "global", "title": "Commit message language", "content": "Write commit messages in English.", "quote": "Từ nay commit message viết bằng tiếng Anh"}
 QK_PREF
 ```
@@ -90,7 +90,7 @@ The JSON goes through a quoted heredoc, so apostrophes, `$` or backticks in your
 List what is waiting:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py list
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py list
 ```
 
 Each line is one JSON proposal, for example:
@@ -108,13 +108,13 @@ Call `/qk-prefs`. It shows the pending table, suggests a target for each proposa
 To do the same by hand, copy a proposal's `content` into the memory, rules or `AGENTS.md` file where it belongs, and then mark it:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py resolve 2cd33227 applied --target "~/.claude/rules/development-rules.md"
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py resolve 2cd33227 applied --target "~/.claude/rules/development-rules.md"
 ```
 
 Or drop it:
 
 ```bash
-python3 ~/src/qk/scripts/qk_prefs.py resolve 2cd33227 dismissed
+python3 ~/.claude/skills/qk-prefs/scripts/qk_prefs.py resolve 2cd33227 dismissed
 ```
 
 A proposal can be resolved only once; resolving it again fails with `already applied` or `already dismissed`. `list --all` shows resolved proposals too.
