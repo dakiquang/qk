@@ -125,20 +125,38 @@ Run 5 là run đầu tiên có output trực tiếp: 33 dòng thao tác khi lậ
 
 Một lượt review chéo riêng cho PR của run 4 tìm thêm một lỗi mức important (tin nhắn omp chỉ có tool call có thể ghi đè câu trả lời cuối) và bốn nit; cả năm đã được sửa trước khi merge, bốn trong số đó có test hồi quy fail với code cũ.
 
+**2026-11-14, run sáu đến chín.** omp với Opus 5.5 triển khai; Codex (`gpt-6-sol`) review, trừ khi có ghi chú.
+
+| Run | Việc | Diễn biến |
+|---|---|---|
+| 6 | Siết lệnh `check` của cùng CLI | Dừng ở bước lập plan: planner đọc tài liệu AWS qua MCP và chỉ ra một thay đổi so khớp label trái với hành vi của AWS, điều mà cả người viết lẫn một reviewer trước đó đều đã chấp nhận. Run bị huỷ và yêu cầu được sửa |
+| 7 | Chế độ bundle cho AWS MCP của cùng CLI, khoảng 1.400 dòng | Một vòng sửa, rồi thêm bốn lượt review sửa tay, mỗi lượt tìm thêm một trường hợp của cùng một loại lỗi (đầu vào sai cấu trúc dẫn tới crash). Từ đây có bài đo `waf-bundle-review` và prompt review bên dưới |
+| 8 | Runner cô lập agent khỏi skill và MCP toàn cục, chốt chặn bước chỉ đọc, ghi token, `resume` nhận sửa tay | Review không có lỗi; một lượt audit chéo riêng sau đó tìm 2 lỗi important (mẫu tìm kiếm làm chốt chặn chặn nhầm; `--read-only-mcp` rỗng cho `mcp://` lọt qua), đã sửa kèm test. Phát hành 0.5.0 |
+| 9 | Bộ đo và ba bài mẫu | Agent sửa dừng giữa lượt mà không có khối kết quả; lần đầu dùng thật `resume` sau sửa tay (ba lượt). Một lượt audit chéo được yêu cầu soát theo loại lỗi tìm ra năm lỗi important trong một lượt |
+
 ## Đo prompt review
 
-**14/11/2026, Claude Opus 5.5.** Bài mẫu cố định và bộ chấm bằng code nằm trong [`evals/`](../../evals/). Baseline dùng prompt review cũ. `bundle-malformed` đạt cả sáu tiêu chí trên hai runtime. Với `waf-bundle-review`, diff 1.200 dòng dựng lại từ PR WAF thật, cả hai runtime đều bắt 0/8 lỗi ở mức blocker hoặc important. Một lần chạy baseline omp bị chốt chặn MCP dừng khi reviewer gọi AWS MCP trong bước chỉ đọc; lần chạy lại hợp lệ đã được ghi vào `baseline.json`.
+**2026-11-14 và 15, Claude Opus 5.5.** Các bài cố định và bộ chấm bằng code nằm trong [`evals/`](../../evals/). `waf-bundle-review` là một diff 1.200 dòng dựng lại từ một pull request thật, với tám lỗi thật được đặt lại; một lỗi được tính khi có finding blocker hoặc important đúng file, nêu được trường nào và sai thế nào. Với prompt review cũ, cả hai runtime bắt được **0 trên 8**.
 
-Với prompt trong [PR nháp #26](https://github.com/dakiquang/qk/pull/26), yêu cầu soát theo loại lỗi và định nghĩa mức độ cho đầu vào ngoài sai cấu trúc:
+Prompt mới ([#26](https://github.com/dakiquang/qk/pull/26)) yêu cầu reviewer soát theo loại lỗi và xếp crash do đầu vào từ ngoài ít nhất là important:
 
-| Runtime và bài | Baseline | Kết quả mới | Token |
-|---|---:|---:|---:|
-| omp, `waf-bundle-review` | 0/8 | 5/8, giữ nguyên ở lần chạy lại bắt buộc | 812.971 → 754.188 (−7,2%) |
-| omp, `bundle-malformed` | 6/6 | 6/6 | 60.361 → 82.257 (+36,3%) |
-| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99.628 → 81.643 (−18,1%) |
-| Claude Code, `waf-bundle-review` | 0/8 | 3/8 ở lần chạy hợp lệ đầu; lần chạy lại chưa xong | 614.717 → đang chờ |
+| Runtime và bài | Prompt cũ | Prompt mới (từng lần) | Token |
+|---|---:|---:|---|
+| omp, `waf-bundle-review` | 0/8 | 5, 5, 4 | 0,81M → 0,75–1,05M |
+| Claude Code, `waf-bundle-review` | 0/8 | 3, 6, 5 | 0,61M → 0,38–0,47M |
+| omp, `bundle-malformed` | 6/6 | 6/6 | xem bên dưới |
+| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99.628 → 78.700–81.643 |
 
-Mức tăng token của bài nhỏ trên omp vượt ngưỡng thụt lùi 10% đã chốt. Lần chạy lại WAF bắt buộc trên Claude Code bị dừng do giới hạn phiên năm giờ, nên chưa có kết quả cuối. Những lần chạy đơn lẻ này chưa chứng minh cải tiến chung hay đủ điều kiện phát hành. Kết quả thô trên máy: `~/.local/state/qk-eval/20261114-222849-9139/` (omp) và `~/.local/state/qk-eval/20261114-223619-0024/` (Claude Code).
+Lần chạy omp đầu tiên của `bundle-malformed` tốn hơn baseline 36% token. Sáu lần chạy thêm giải thích điều này:
+
+| Prompt | Các lần: token (số lượt agent) |
+|---|---|
+| cũ | 60.361 (4) · 53.316 (4) · 53.608 (4) |
+| mới | 82.257 (**5**) · 55.939 (4) · 55.423 (4) |
+
+Cùng số lượt, prompt mới tốn hơn khoảng 4% (finding dài hơn). Con số 36% đến từ một lần chạy đi thêm lượt thứ năm để đọc lại các dòng nó trích, khoảng 22–26 nghìn token; riêng prompt cũ đã dao động khoảng 12%. Giờ token chỉ bị tính là thụt lùi khi vượt baseline **cả** hơn 10% **lẫn** hơn 25.000 token, xấp xỉ một lượt agent (chốt ngày 15/11). Baseline của hai bài review đã được ghi lại với prompt mới.
+
+Kết quả bài khó dao động giữa các lần chạy (omp 4–5, Claude Code 3–6): mức tăng từ 0/8 lên khoảng 5/8 là rõ, nhưng muốn so các chênh lệch nhỏ hơn trên bài này thì cần chạy nhiều lần. Khi ghi baseline omp đầu tiên, chốt chặn bước chỉ đọc đã dừng reviewer lúc nó gọi công cụ `run_script` của AWS MCP; lần đó không được ghi, và prompt giờ dặn reviewer không gọi MCP.
 
 ## Số đo thiết lập gọn nhẹ
 

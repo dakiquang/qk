@@ -125,20 +125,38 @@ Run 5 was the first with live output: 33 action lines while planning, 29 while i
 
 A separate cross-model review of run 4's pull request found one more important issue (an omp message with only tool calls could overwrite the final reply) and four nits; all five were fixed before merging, four with regression tests that fail on the previous code.
 
+**2026-11-14, runs six to nine.** omp with Opus 5.5 implemented; Codex (`gpt-6-sol`) reviewed unless noted.
+
+| Run | Task | What happened |
+|---|---|---|
+| 6 | Hardening the `check` command of the same CLI | Blocked at planning: the planner read the AWS documentation through MCP and showed that a requested label-matching change contradicted AWS behaviour that both the author and a previous reviewer had accepted. The run was aborted and the request corrected |
+| 7 | AWS MCP bundle mode for the same CLI, about 1,400 lines | One fix round, then four more review rounds by hand, each finding one more case of the same defect class (malformed input reaching a crash). This led to the eval case `waf-bundle-review` and to the review prompt below |
+| 8 | The runner isolates agents from global skills and MCP, guards read-only stages, logs tokens, and accepts hand fixes on `resume` | Review clean; a separate cross-model audit then found two important issues (a search pattern tripped the guard; an empty `--read-only-mcp` let `mcp://` through), fixed with tests. Released as 0.5.0 |
+| 9 | The eval harness and three cases | The fix agent ended mid-turn without a result block; the first real use of `resume` after hand fixes followed (three rounds). A cross-model audit asked to review by defect class found five important issues in one round |
+
 ## Review prompt evaluation
 
-**2026-11-14, Claude Opus 5.5.** The fixed cases and code graders are in [`evals/`](../../evals/). The baseline was recorded with the previous review prompt. `bundle-malformed` passed all six criteria on both runtimes. On `waf-bundle-review`, a 1,200-line diff reconstructed from a real WAF pull request, both runtimes caught 0 of eight defects at blocker or important severity. A baseline omp attempt was stopped when the read-only MCP guard detected an AWS MCP call; the valid rerun is recorded in `baseline.json`.
+**2026-11-14 and 15, Claude Opus 5.5.** The fixed cases and code graders are in [`evals/`](../../evals/). `waf-bundle-review` is a 1,200-line diff reconstructed from a real pull request with eight real defects put back; a defect counts when a blocker or important finding names the right file, the field and what is wrong. With the previous review prompt both runtimes caught **0 of 8**.
 
-With the prompt proposed in [draft PR #26](https://github.com/dakiquang/qk/pull/26), which asks reviewers to search by defect class and defines severity for malformed external input:
+The new prompt ([#26](https://github.com/dakiquang/qk/pull/26)) asks reviewers to search by defect class and to rate a crash on accepted outside input at least important:
 
-| Runtime and case | Baseline | New result | Tokens |
-|---|---:|---:|---:|
-| omp, `waf-bundle-review` | 0/8 | 5/8, same on the required rerun | 812,971 → 754,188 (−7.2%) |
-| omp, `bundle-malformed` | 6/6 | 6/6 | 60,361 → 82,257 (+36.3%) |
-| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99,628 → 81,643 (−18.1%) |
-| Claude Code, `waf-bundle-review` | 0/8 | 3/8 on the first valid run; rerun incomplete | 614,717 → pending |
+| Runtime and case | Previous prompt | New prompt (each run) | Tokens |
+|---|---:|---:|---|
+| omp, `waf-bundle-review` | 0/8 | 5, 5, 4 | 0.81M → 0.75–1.05M |
+| Claude Code, `waf-bundle-review` | 0/8 | 3, 6, 5 | 0.61M → 0.38–0.47M |
+| omp, `bundle-malformed` | 6/6 | 6/6 | see below |
+| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99,628 → 78,700–81,643 |
 
-The omp small-case token increase exceeds the accepted 10% regression limit. Claude Code's required WAF rerun stopped at the runtime's five-hour session limit, so its final result is pending. These single-run results do not establish a general improvement or a release-ready change. Raw local results: `~/.local/state/qk-eval/20261114-222849-9139/` (omp) and `~/.local/state/qk-eval/20261114-223619-0024/` (Claude Code).
+The first omp run of `bundle-malformed` used 36% more tokens than the baseline. Six more runs explained it:
+
+| Prompt | Runs: tokens (agent turns) |
+|---|---|
+| previous | 60,361 (4) · 53,316 (4) · 53,608 (4) |
+| new | 82,257 (**5**) · 55,939 (4) · 55,423 (4) |
+
+With the same number of turns the new prompt costs about 4% more (longer findings). The 36% came from one run taking a fifth turn to re-read the lines it cited, about 22–26k tokens; the previous prompt alone varied by about 12%. A token regression now needs more than 10% **and** more than 25,000 tokens above the baseline, about one agent turn (decided on 15 November). The baselines for both review cases were re-recorded with the new prompt.
+
+Results on the hard case vary between runs (omp 4–5, Claude Code 3–6), so the change from 0/8 to about 5/8 is clear, but smaller differences on this case need several runs. While the first omp baseline was recorded, the read-only guard stopped the reviewer when it called the AWS MCP `run_script` tool; that run was not recorded, and the prompt now tells reviewers not to call MCP.
 
 ## Lean setup measurements
 
