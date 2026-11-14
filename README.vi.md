@@ -10,13 +10,15 @@ qk mở rộng runtime, không thay thế nó. Mỗi skill chỉ chạy khi bạ
 
 ## Vì sao có qk
 
-Agent lập trình làm tốt việc tạo ra thay đổi, nhưng kém ổn định ở các bước xung quanh: thống nhất thế nào là xong, chứng minh điều đó, và không coi quyền sửa code là quyền phát hành. qk viết các bước đó thành những quy trình ngắn, gọi đích danh.
+> **Đủ hiểu để quyết.** Code chạy giờ đã dễ; thứ còn khó là người dùng thấy rõ để quyết định. qk chỉ tối ưu cho việc đó.
 
-- **Mỗi skill nêu rõ kết quả, quyền hạn và khi nào là xong.** Sửa code không bao giờ kéo theo commit, push, merge, tag, deploy hay publish.
-- **Báo cáo không phải bằng chứng.** Skill kiểm hành vi hoặc nguồn, và nói rõ phần nào chưa kiểm.
-- **Không có pipeline.** Skill không gọi nhau; mỗi skill nêu lệnh tiếp theo và bạn quyết định có chạy hay không.
-- **Mọi báo cáo kết thúc giống nhau:** Đã làm, Bằng chứng, Chưa kiểm chứng, Cần bạn quyết định.
-- **Cố ý giữ nhỏ.** Bộ kit dừng ở mười hai skill và khoảng 50 KB instruction. Muốn thêm skill thì phải thay hoặc gộp một skill.
+Phần lớn bộ kit giúp AI tự làm được nhiều hơn. qk trả lại cho bạn những gì cần để quyết, qua ba nguyên tắc:
+
+- **Tách ba vai: làm, kiểm, quyết.** Bên làm không là bên kiểm cuối cùng của việc mình làm, và quyền commit, merge hay phát hành thuộc về bạn.
+- **Bằng chứng, không lời khẳng định.** Báo cáo tách điều đã thấy khỏi điều mới chỉ nghe nói, và nói rõ phần chưa kiểm. Mọi báo cáo kết thúc bằng Đã làm, Bằng chứng, Chưa kiểm chứng, Cần bạn quyết định.
+- **Vừa đủ.** Chỉ kiểm điều có thể làm đổi quyết định, mỗi điều một lần; không có pipeline bắt buộc; mười hai skill, khoảng 50 KB, không nạp gì cho tới khi bạn gọi skill.
+
+Đọc [triết lý](docs/vi/philosophy.md) để biết mỗi nguyên tắc nghĩa là gì và không có nghĩa là gì.
 
 ## Skill
 

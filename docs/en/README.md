@@ -6,6 +6,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 
 ## Start here
 
+- [Philosophy](philosophy.md): the core idea and the three principles behind every skill.
 - [Getting started](getting-started.md): install, call a skill, update, pin a release, uninstall.
 - [Workflows](workflows.md): which skills to chain for an unclear idea, a clear change, a bug, a session switch or a release.
 - [Case study: CSV export](case-study-csv-export.md): a worked feature from brainstorm and planning through an isolated worker, PR review, merge and shipping.
@@ -40,13 +41,6 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 
 Pull-request review and scoring are handled by the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), a separate project.
 
-## Principles every skill follows
+## Principles
 
-1. **Know what "done" means before starting**: result, what must not change, scope, acceptance evidence. Ask only for a decision the sources cannot answer.
-2. **Delegating work is not delegating authority.** Editing code does not include commit, push, merge, tag, deploy or publish.
-3. **A "done" report is not evidence.** Verify behaviour, revision or source.
-4. **Decisions live outside the session**, in a plan or handoff file, not only in chat.
-5. **Pick the process by what is missing.** Unclear direction → brainstorm; missing facts → research; clear work → cook. No mandatory pipeline.
-6. **Continue within approved scope**; stop for a new decision, a blocker, or new authority.
-7. **Extend the runtime, never take it over.** The runtime keeps its tools, plan mode, subagents, model settings and permissions; repository rules beat qk.
-8. **Close every report consistently.** End with Done, Evidence, Not verified, Needs your decision, in that order.
+**Understand enough to decide.** Every skill follows three principles: three roles (make, check, decide), evidence rather than claims, and enough checking but no more. The [philosophy](philosophy.md) page explains each one.
