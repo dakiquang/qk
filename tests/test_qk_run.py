@@ -2,9 +2,11 @@ import contextlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -36,7 +38,7 @@ class Agent:
         self.behaviour = behaviour
         self.calls = []
 
-    def __call__(self, spec, prompt, cwd, write, timeout, extra_dirs):
+    def __call__(self, spec, prompt, cwd, write, timeout, extra_dirs, **_):
         if "Independent read-only review" in prompt:
             stage = "review"
         elif "qk-plan" in prompt:
@@ -153,6 +155,17 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn("--draft", creates[0])
         self.assertEqual(creates[0][creates[0].index("--title") + 1], "Add greeting")
 
+    def test_turns_in_the_same_second_keep_separate_records(self):
+        from unittest import mock
+        finding = {"severity": "blocker", "file": "greeting.txt", "line": 1, "claim": "x", "fix": "y"}
+        agent = Agent(review=lambda cwd, state_dir: result(findings=[finding]))
+        with mock.patch.object(qk_run.time, "time", return_value=1_800_000_000.0):
+            state = self.start(agent)
+            self.cli("approve", state["id"])
+        outs = list(qk_run.run_dir(state["id"]).glob("*.out.md"))
+        self.assertEqual([c[0] for c in agent.calls].count("review"), 2)
+        self.assertEqual(len(outs), len(agent.calls), sorted(p.name for p in outs))
+
     def test_conventional_history_types_commit_and_pr_title(self):
         self.push_history("feat: a", "fix(x): b", "docs!: c")
         state = self.start(Agent())
@@ -188,6 +201,37 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(qk_run.conventional_title(title, most), expected, title)
         self.assertEqual(qk_run.conventional_title("Add greeting", []), "Add greeting")
         self.assertLessEqual(len(qk_run.conventional_title("Add " + "x" * 68, most)), 72)
+
+    def test_titles_cut_at_word_boundary_and_drop_foreign_prefix(self):
+        half = ["feat: x"] * 10 + ["plain"] * 10
+        most = ["feat: x"] * 11 + ["plain"] * 9
+        regression = "waf-upgrade-check: `versions` and `diff` commands (project plan step 3)"
+        self.assertEqual(qk_run.conventional_title(regression, most),
+                         "feat: `versions` and `diff` commands (project plan step 3)")
+        self.assertEqual(qk_run.conventional_title(regression, half), regression)
+        self.assertLessEqual(len(regression), 72)
+        full = "feat: add " + "word " * 20
+        typed = qk_run.conventional_title("Add " + "word " * 20, most)
+        self.assertLessEqual(len(typed), 72)
+        self.assertTrue(typed.endswith("word"), typed)
+        self.assertTrue(full.startswith(typed), typed)
+        long_title = "Stream agent progress and stop timed-out agents cleanly in the runner loop"
+        self.assertGreater(len(long_title), 72)
+        clipped = qk_run.clip_title(long_title)
+        self.assertLessEqual(len(clipped), 72)
+        self.assertEqual(long_title[len(clipped)], " ")
+        self.assertTrue(long_title.startswith(clipped))
+
+    def test_long_foreign_prefix_is_dropped_before_clipping(self):
+        most = ["feat: a", "fix: b", "docs: c"]
+        title = "some-very-long-project-name-prefix: Add streaming of agent progress to the runner loop"
+        self.assertGreater(len(title), 72)
+        self.push_history(*most)
+        plan = f"# {title}\n\n```qk-verify\ntest -f greeting.txt\n```\n"
+        state = self.start(Agent(plan=lambda cwd, state_dir: planned(plan)))
+        self.cli("approve", state["id"])
+        expected = "feat: add streaming of agent progress to the runner loop"
+        self.assertEqual(self.published_titles(), (expected, expected))
 
     def test_verification_artifacts_are_not_committed(self):
         def plan(cwd, state_dir):
@@ -570,6 +614,140 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.latest()["stage"], "awaiting_approval")
         self.assertEqual([c[0] for c in agent.calls], ["plan", "plan"])
         self.assertEqual([c[2] for c in agent.calls], [False, False])
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "agent-streams"
+
+
+class AgentStreamTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.originals = (qk_run.agent_command, qk_run.HEARTBEAT_SECONDS, qk_run.KILL_GRACE_SECONDS)
+        self.progress = []
+
+    def tearDown(self):
+        qk_run.agent_command, qk_run.HEARTBEAT_SECONDS, qk_run.KILL_GRACE_SECONDS = self.originals
+        self.tmp.cleanup()
+
+    def fake_agent(self, script, *args):
+        qk_run.agent_command = lambda spec, write, cwd, extra_dirs: ([sys.executable, "-c", script, *args], None)
+
+    def call(self, timeout=30):
+        return qk_run.call_agent("omp:anthropic/x", "prompt", self.dir, True, timeout, [self.dir],
+                                 events=self.dir / "events.jsonl", progress=self.progress.append)
+
+    def test_event_parsers_match_captured_streams(self):
+        expected = {"claude": ["read /work/a.txt", "run ls"],
+                    "codex": ["run /bin/zsh -lc 'cat a.txt'", "run /bin/zsh -lc 'cat a.txt' -> exit 0"],
+                    "omp": ["read a.txt", "run ls"]}
+        for runtime, displays in expected.items():
+            shown, final = [], None
+            for line in (FIXTURES / f"{runtime}.jsonl").read_text(encoding="utf-8").splitlines():
+                display, text = qk_run.EVENT_PARSERS[runtime](json.loads(line))
+                if display:
+                    shown.append(display)
+                if text is not None:
+                    final = text
+            self.assertEqual(shown, displays, runtime)
+            self.assertEqual(final, "DONE", runtime)
+
+    def test_omp_tool_only_message_keeps_earlier_final_text(self):
+        omp = qk_run.EVENT_PARSERS["omp"]
+        self.assertEqual(omp({"type": "message_end", "message": {"role": "assistant", "content": [
+            {"type": "toolCall", "name": "read", "arguments": {"path": "a"}}]}}), (None, None))
+        self.assertEqual(omp({"type": "message_end", "message": {"role": "assistant"}}), (None, None))
+
+    def test_display_root_is_replaced_only_as_a_whole_segment(self):
+        qk_run.DISPLAY_ROOTS[:] = [("/w/tree", "")]
+        self.addCleanup(qk_run.DISPLAY_ROOTS.clear)
+        run = qk_run.EVENT_PARSERS["omp"]
+        self.assertEqual(run({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/w/tree-old/x"}})[0], "read /w/tree-old/x")
+        self.assertEqual(run({"type": "tool_execution_start", "toolName": "bash",
+                              "args": {"command": "cd /w/tree && ls /w/tree/src"}})[0], "run cd . && ls src")
+
+    def test_display_paths_are_relative_to_the_worktree(self):
+        qk_run.DISPLAY_ROOTS[:] = [("/w/tree", ""), ("/u/me", "~/")]
+        self.addCleanup(qk_run.DISPLAY_ROOTS.clear)
+        omp = qk_run.EVENT_PARSERS["omp"]
+        self.assertEqual(omp({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/w/tree/src/a.py"}})[0], "read src/a.py")
+        self.assertEqual(omp({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/w/tree"}})[0], "read .")
+        self.assertEqual(omp({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/u/me/x/y.md"}})[0], "read ~/x/y.md")
+
+    def test_event_parsers_skip_unhashable_tool_names(self):
+        events = {"claude": {"type": "assistant", "message": {"content": [
+                      {"type": "tool_use", "name": ["Read"], "input": {"file_path": "x"}}]}},
+                  "omp": {"type": "tool_execution_start", "toolName": {"read": 1}, "args": {"path": "x"}}}
+        for runtime, event in events.items():
+            self.assertEqual(qk_run.EVENT_PARSERS[runtime](event), (None, None), runtime)
+
+    def test_heartbeat_reports_quiet_agent(self):
+        qk_run.HEARTBEAT_SECONDS = 0.2
+        lines = (FIXTURES / "omp.jsonl").read_text(encoding="utf-8").splitlines()
+        read_event, end_event = lines[0], lines[3]
+        self.fake_agent("import sys, time\n"
+                        "time.sleep(0.5)\n"
+                        "print('not json', flush=True)\n"
+                        f"print({read_event!r}, flush=True)\n"
+                        "time.sleep(0.5)\n"
+                        f"print({end_event!r}, flush=True)\n")
+        self.assertEqual(self.call(), "DONE")
+        self.assertIn("read a.txt", self.progress)
+        for last in ("no action yet", "read a.txt"):
+            pattern = re.compile(rf"still running \(\d+s, last: {last}\)")
+            self.assertTrue(any(pattern.fullmatch(line) for line in self.progress), self.progress)
+        self.assertEqual((self.dir / "events.jsonl").read_text(encoding="utf-8").splitlines(),
+                         [read_event, end_event])
+
+    def test_line_after_heartbeat_deadline_prints_heartbeat_and_continues(self):
+        qk_run.HEARTBEAT_SECONDS = 0.2
+        lines = (FIXTURES / "omp.jsonl").read_text(encoding="utf-8").splitlines()
+        read_event, end_event = lines[0], lines[3]
+        self.fake_agent("import sys, time\n"
+                        f"print({read_event!r}, flush=True)\n"
+                        "time.sleep(0.3)\n"
+                        "print('not json', flush=True)\n"
+                        f"print({end_event!r}, flush=True)\n")
+
+        def slow_progress(message):
+            self.progress.append(message)
+            if message == "read a.txt":
+                time.sleep(0.4)
+
+        result = qk_run.call_agent("omp:anthropic/x", "prompt", self.dir, True, 30, [self.dir],
+                                   events=self.dir / "events.jsonl", progress=slow_progress)
+        self.assertEqual(result, "DONE")
+        pattern = re.compile(r"still running \(\d+s, last: read a\.txt\)")
+        self.assertTrue(any(pattern.fullmatch(line) for line in self.progress), self.progress)
+        self.assertEqual((self.dir / "events.jsonl").read_text(encoding="utf-8").splitlines(),
+                         [read_event, end_event])
+
+    def test_timeout_stops_agent_process_group(self):
+        qk_run.KILL_GRACE_SECONDS = 0.5
+        pid_file = self.dir / "grandchild.pid"
+        self.fake_agent("import signal, subprocess, sys, time\n"
+                        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                        "child = subprocess.Popen(['sleep', '60'])\n"
+                        "open(sys.argv[1], 'w').write(str(child.pid))\n"
+                        "time.sleep(60)\n", str(pid_file))
+        started = time.monotonic()
+        with self.assertRaises(qk_run.Blocked) as caught:
+            self.call(timeout=1)
+        self.assertEqual(str(caught.exception), "omp:anthropic/x timed out after 1s; agent stopped")
+        pid = int(pid_file.read_text())
+        gone = False
+        while time.monotonic() - started < 4.5 and not gone:
+            try:
+                os.kill(pid, 0)
+                time.sleep(0.05)
+            except ProcessLookupError:
+                gone = True
+        self.assertTrue(gone, "grandchild survived the timeout")
+        self.assertLess(time.monotonic() - started, 5)
 
 
 if __name__ == "__main__":

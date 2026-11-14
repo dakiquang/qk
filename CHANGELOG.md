@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `qk-run` shows each agent tool action live (`read`, `edit`, `write`, `run`),
+  prints `still running (...)` after every 60 s without events, saves the raw
+  events of each turn to `<stage>-<ts>.events.jsonl` in the run directory, and
+  `status` prints the run directory and the last 10 lines of `run.log`.
+
+### Changed
+
+- A `qk-run` timeout now stops the agent's whole process group (SIGTERM, then
+  SIGKILL after 10 s) instead of leaving it running.
+- Commit and PR titles are cut at a word boundary at 72 characters, a
+  non-conventional `<word>: ` prefix is dropped when a conventional type is
+  added, and the planner is asked for a title of at most 60 characters.
+
 ## [0.4.0] - 2026-11-14
 
 ### Changed

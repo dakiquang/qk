@@ -30,6 +30,8 @@ Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:ant
 
 State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (default `~/.local/state/qk-run/`). The worktree stays there after the run.
 
+While an agent runs, the runner prints each of its tool actions as one line (`read <path>`, `edit <path>`, `write <path>`, `run <command>`, with ` -> exit <code>` when the runtime reports it) and `still running (<n>s, last: <action>)` after every 60 s without events. The raw events of each turn go to `<stage>-<ts>-<id>.events.jsonl` next to `<stage>-<ts>-<id>.out.md`, and the runner's own log is `run.log`, both in the run directory; `status` prints the run directory and the last 10 log lines. When `--timeout` elapses, the runner sends SIGTERM to the agent's process group, SIGKILL after 10 s, and the run blocks.
+
 ## Authority
 
 - Agents only edit files in the worktree. The runner alone commits, pushes and opens the PR.
@@ -42,7 +44,7 @@ State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (d
 
 - A worktree is not a sandbox. Implementing agents run with their runtime's write mode (`claude --permission-mode acceptEdits` with Bash allowed, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), so they can still reach files and network outside the repository.
 - Success is defined by the plan's `qk-verify` commands and one cross-model review; weak commands mean weak evidence.
-- The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. In a repository that follows Conventional Commits, the type comes from the plan title's first word (`fix`, `docs`, `test`, `refactor` and their variants) and otherwise defaults to `feat`; a plan title that is already conventional is kept as written; merge commits are not counted. Other conventions (ticket prefixes, scopes, other casing rules) are not detected, so edit the plan title before `approve` or adjust the title when merging.
+- The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. In a repository that follows Conventional Commits, the type comes from the plan title's first word (`fix`, `docs`, `test`, `refactor` and their variants) and otherwise defaults to `feat`; a plan title that is already conventional is kept as written; a non-conventional `<word>: ` prefix (a project name, but also a ticket prefix such as `ABC-123: ` or a capitalised `Fix: `) is dropped before the type is added; merge commits are not counted. Titles longer than 72 characters are cut at a word boundary. Other conventions (scopes, other casing rules) are not detected, so edit the plan title before `approve` or adjust the title when merging.
 - One task per run; no queue, daemon or parallel runs.
 
 ## Evidence
