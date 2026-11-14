@@ -1,0 +1,1 @@
+Real AWS WAF responses captured 2026-11-14 through AWS MCP run_script (us-east-1, REGIONAL, vendor AWS). Public managed rule group metadata only; version lists trimmed to a few entries. LastUpdateTimestamp is an ISO string as AWS MCP returns it. Describing Version_2.4_PLUS_RC_COUNT (the Windows default) fails with WAFNonexistentItemException.

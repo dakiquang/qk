@@ -1,0 +1,116 @@
+{
+  "VersionName": "Version_1.26",
+  "Capacity": 200,
+  "Rules": [
+    {
+      "Name": "JavaDeserializationRCE_BODY",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "JavaDeserializationRCE_URIPATH",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "JavaDeserializationRCE_QUERYSTRING",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "JavaDeserializationRCE_HEADER",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "Host_localhost_HEADER",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "PROPFIND_METHOD",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "ExploitablePaths_URIPATH",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "Log4JRCE_QUERYSTRING",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "Log4JRCE_BODY",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "Log4JRCE_URIPATH",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "Log4JRCE_HEADER",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "ReactJSRCE_BODY",
+      "Action": {
+        "Block": {}
+      }
+    }
+  ],
+  "AvailableLabels": [
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:JavaDeserializationRCE_URIPath"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:ReactJSRCE_Body"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:JavaDeserializationRCE_QueryString"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:Log4JRCE_URIPath"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:Log4JRCE_Header"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:JavaDeserializationRCE_Header"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:ExploitablePaths_URIPath"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:Log4JRCE_QueryString"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:JavaDeserializationRCE_Body"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:Host_Localhost_Header"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:Log4JRCE_Body"
+    },
+    {
+      "Name": "awswaf:managed:aws:known-bad-inputs:Propfind_Method"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "VersionName": "Version_1.1",
+  "SnsTopicArn": "arn:aws:sns:us-east-1:123456789012:synthetic-topic",
+  "Capacity": 750,
+  "Rules": [
+    {"Name": "NoUserAgent_HEADER", "Action": {"Block": {}}},
+    {"Name": "SizeRestrictions_BODY", "Action": {"Block": {}}},
+    {"Name": "EC2MetaDataSSRF_BODY", "Action": {"Block": {}}},
+    {"Name": "CrossSiteScripting_COOKIE", "Action": {"Block": {}}}
+  ],
+  "LabelNamespace": "awswaf:managed:aws:core-rule-set:",
+  "AvailableLabels": [
+    {"Name": "awswaf:managed:aws:core-rule-set:NoUserAgent_Header"},
+    {"Name": "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"},
+    {"Name": "awswaf:managed:aws:core-rule-set:CrossSiteScripting_Cookie"}
+  ],
+  "ConsumedLabels": [
+    {"Name": "awswaf:managed:aws:bot-control:bot:verified"},
+    {"Name": "awswaf:managed:aws:bot-control:signal:automated_browser"}
+  ]
+}

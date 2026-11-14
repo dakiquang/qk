@@ -1,0 +1,20 @@
+{
+  "VersionName": "Version_1.0",
+  "SnsTopicArn": "arn:aws:sns:us-east-1:123456789012:synthetic-topic",
+  "Capacity": 700,
+  "Rules": [
+    {"Name": "NoUserAgent_HEADER", "Action": {"Block": {}}},
+    {"Name": "SizeRestrictions_BODY", "Action": {"Count": {}}},
+    {"Name": "EC2MetaDataSSRF_BODY", "Action": {"Block": {}}},
+    {"Name": "LegacyRule_QUERYARGUMENTS", "Action": {"Block": {}}}
+  ],
+  "LabelNamespace": "awswaf:managed:aws:core-rule-set:",
+  "AvailableLabels": [
+    {"Name": "awswaf:managed:aws:core-rule-set:NoUserAgent_Header"},
+    {"Name": "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"},
+    {"Name": "awswaf:managed:aws:core-rule-set:LegacyRule_QueryArguments"}
+  ],
+  "ConsumedLabels": [
+    {"Name": "awswaf:managed:aws:bot-control:bot:verified"}
+  ]
+}

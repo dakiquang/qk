@@ -1,0 +1,52 @@
+{
+  "WebACL": {
+    "Name": "example-web-acl",
+    "Id": "a1b2c3d4-5678-90ab-cdef-EXAMPLE11111",
+    "ARN": "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/example-web-acl/a1b2c3d4-5678-90ab-cdef-EXAMPLE11111",
+    "DefaultAction": {"Allow": {}},
+    "Capacity": 800,
+    "Rules": [
+      {
+        "Name": "AWS-CRS",
+        "Priority": 0,
+        "Statement": {
+          "ManagedRuleGroupStatement": {
+            "VendorName": "AWS",
+            "Name": "AWSManagedRulesCommonRuleSet",
+            "RuleActionOverrides": [
+              {"Name": "SizeRestrictions_BODY", "ActionToUse": {"Count": {}}}
+            ]
+          }
+        },
+        "OverrideAction": {"None": {}},
+        "VisibilityConfig": {
+          "SampledRequestsEnabled": true,
+          "CloudWatchMetricsEnabled": true,
+          "MetricName": "AWS-CRS"
+        }
+      },
+      {
+        "Name": "CountNoUserAgent",
+        "Priority": 1,
+        "Statement": {
+          "LabelMatchStatement": {
+            "Scope": "LABEL",
+            "Key": "awswaf:managed:aws:core-rule-set:NoUserAgent_Header"
+          }
+        },
+        "Action": {"Count": {}},
+        "VisibilityConfig": {
+          "SampledRequestsEnabled": true,
+          "CloudWatchMetricsEnabled": true,
+          "MetricName": "CountNoUserAgent"
+        }
+      }
+    ],
+    "VisibilityConfig": {
+      "SampledRequestsEnabled": true,
+      "CloudWatchMetricsEnabled": true,
+      "MetricName": "example-web-acl"
+    }
+  },
+  "LockToken": "1468e2f4-5a6b-4c7d-8e9f-EXAMPLE22222"
+}

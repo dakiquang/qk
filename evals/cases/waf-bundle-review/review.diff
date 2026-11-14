@@ -1,0 +1,1566 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index d8b6c83..a9df176 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -11,4 +11,12 @@ All notable changes to this project are documented here. The format follows
+ - `versions <rule-group>` command: lists the available versions of an AWS managed rule group and marks the current default.
+ - `diff <rule-group> <from> <to>` command: compares two versions (rules added and removed, rule action changes, capacity, available and consumed labels).
+ - `check` command: checks every AWS managed rule group in a web ACL (from a file or from the API) against a target version (`default`, `latest` by `LastUpdateTimestamp`, or a version name) and reports overrides of missing rules, labels no longer emitted, unavailable pinned versions, capacity increases, pinned versions that differ from the default, a default version that is not listed or cannot be described when a comparison needs it (`default-not-describable`, warning) and rule changes. Exits with `1` when a finding is an error.
+-- `--scope`, `--region`, `--profile` and `--format` options for all commands.
++- `--scope`, `--region`, `--profile` and `--format` options for `versions`, `diff` and `check`; `collect-script` takes `--scope` and `--region`.
++- Bundle format `waf-upgrade-check/bundle/v1`: a web ACL with the version list and the needed version descriptions of each AWS managed rule group in it, collected through the AWS MCP Server `run_script` tool.
++- `check --bundle FILE`: checks a bundle offline, without AWS credentials. Exits with `2` when the bundle is invalid, has no entry for a rule group in the web ACL, or lacks a version the target needs.
++- `collect-script` command: prints a read-only `run_script` snippet (Get, List and Describe calls only) that returns a bundle for a web ACL given by `--web-acl NAME --id ID` or `--web-acl-file PATH`.
++- Agent skill `skills/waf-upgrade-check`: guides an agent on the AWS MCP Server through confirming the account, collecting a bundle, checking it and reporting findings, without changing AWS.
++
++### Changed
++
++- The README is organized around use with the AWS MCP Server, and adds a GitHub Actions example, a read-only IAM policy and the known limits.
+diff --git a/README.md b/README.md
+index 7c9c77c..de6b33d 100644
+--- a/README.md
++++ b/README.md
+@@ -1,19 +1,66 @@
+ # waf-upgrade-check
+ 
+-Check what breaks before you upgrade an AWS WAF managed rule group version.
++Find what breaks before you upgrade an AWS WAF managed rule group version — an extension for agents on the AWS MCP Server, and a CLI.
+ 
+ > **Work in progress.** Nothing is released yet. Personal project, not affiliated with any company, no support commitment.
+ 
+ When you move a web ACL to a newer static version of an AWS Managed Rules rule group, some breakage is silent:
+ 
+ - **Overrides by rule name stop working.** AWS WAF silently ignores a rule action override whose rule name does not exist in the managed rule group ([`ManagedRuleGroupStatement`](https://docs.aws.amazon.com/waf/latest/APIReference/API_ManagedRuleGroupStatement.html)).
+-- **Your own rules may match labels the new version no longer adds.**
++- **Your own rules may match labels the new version no longer adds** ([labels](https://docs.aws.amazon.com/waf/latest/developerguide/waf-labels.html)).
+ - **Capacity (WCU) can grow.**
+ - **A pinned version can be scheduled to expire**, after which AWS WAF uses the default version and blocks web ACL updates until you change it ([version life cycle](https://docs.aws.amazon.com/waf/latest/developerguide/waf-managed-rule-groups-versioning-lifecycle.html)).
+ 
+ `waf-upgrade-check` reads the rule group versions and your web ACL, and reports these before you upgrade. It only calls read APIs.
+ 
+-## Usage
++## Use with AWS MCP
++
++Add the agent skill to your coding agent with the [skills CLI](https://github.com/vercel-labs/skills):
++
++```console
++npx skills add dakiquang/waf-upgrade-check
++```
++
++The agent needs the [AWS MCP Server](https://docs.aws.amazon.com/agent-toolkit/latest/userguide/understanding-mcp-server-tools.html) (its `run_script` tool) and the CLI below. When you ask whether an upgrade is safe, the agent:
++
++1. Calls `GetCallerIdentity` through `run_script` and asks you to confirm the account and the web ACL (name, ID, scope, region) and the target.
++2. Prints a read-only snippet with `waf-upgrade-check collect-script`.
++3. Runs the snippet unchanged with `run_script` and checks that only Get, List and Describe calls ran.
++4. Saves the returned bundle as JSON outside the repository; it contains your web ACL configuration.
++5. Runs `waf-upgrade-check check --bundle FILE` offline.
++6. Reports error findings first, as decisions for you, then warnings and info. It never changes the web ACL.
++
++Example session (illustrative):
++
++```text
++You:   Is it safe to move example-web-acl to the default CommonRuleSet version?
++Agent: AWS account 123456789012 (arn:aws:iam::123456789012:user/example). Check web ACL
++       example-web-acl, ID a1b2c3d4-..., REGIONAL in eu-west-1, target default?
++You:   Yes.
++Agent: Read-only calls: GetCallerIdentity, GetWebACL, ListAvailableManagedRuleGroupVersions,
++       DescribeManagedRuleGroup.
++Agent: 2 errors. AWS-CRS overrides LegacyRule_QUERYARGUMENTS, which Version_1.1 removes; rule
++       BlockLegacyLabel matches a label Version_1.1 no longer adds. Options: drop the override,
++       update BlockLegacyLabel, or stay pinned on Version_1.0. Also: +50 WCU (700 -> 750).
++```
++
++## Install the CLI
++
++```console
++pipx install waf-upgrade-check  # not published yet
++```
++
++From source:
++
++```console
++uv tool install git+https://github.com/dakiquang/waf-upgrade-check
++```
++
++Or clone the repository and run `uv run waf-upgrade-check`.
++
++## Commands
++
++### versions
+ 
+ List the available versions of a managed rule group; the current default is marked:
+ 
+@@ -25,13 +72,21 @@ Version_1.0
+ Default version: Version_1.1
+ ```
+ 
++### diff
++
+ Compare two versions: rules added and removed, rule action changes, capacity (WCU), and available and consumed labels:
+ 
+ ```console
+ $ waf-upgrade-check diff AWSManagedRulesCommonRuleSet Version_1.0 Version_1.1 --region eu-west-1
+ ```
+ 
+-Check every AWS managed rule group in a web ACL against a target version. Read the web ACL from a file (the output of `aws wafv2 get-web-acl`) with `--web-acl-file PATH`, or fetch it with `--web-acl NAME --id ID`:
++### check
++
++Check every AWS managed rule group in a web ACL against a target version. Choose one source:
++
++- `--bundle FILE`: a bundle returned by the `collect-script` snippet. Checks offline; no AWS credentials needed. `--scope`, `--region` and `--profile` are ignored.
++- `--web-acl-file PATH`: the output of `aws wafv2 get-web-acl` ([`GetWebACL`](https://docs.aws.amazon.com/waf/latest/APIReference/API_GetWebACL.html)); rule group versions are read from the API.
++- `--web-acl NAME --id ID`: fetch the web ACL and the rule group versions from the API.
+ 
+ ```console
+ $ waf-upgrade-check check --web-acl-file web-acl.json --region eu-west-1
+@@ -43,7 +98,7 @@ INFO  AWSManagedRulesCommonRuleSet  rules-changed  Version_1.0 -> Version_1.1: 1
+ Summary: 2 error(s), 1 warning(s), 2 info
+ ```
+ 
+-`--target` selects the version to check against: `default` (the current default version, the default), `latest` (the version with the newest `LastUpdateTimestamp`), or a version name. A version name that a rule group in the web ACL does not have is a usage error. Only top-level rule groups from vendor `AWS` are checked; Marketplace rule groups are ignored.
++`--target` selects the version to check against: `default` (the current default version, the default), `latest` (the version with the newest `LastUpdateTimestamp` from [`ListAvailableManagedRuleGroupVersions`](https://docs.aws.amazon.com/waf/latest/APIReference/API_ListAvailableManagedRuleGroupVersions.html)), or a version name. A version name that a rule group in the web ACL does not have is a usage error. Only top-level rule groups from vendor `AWS` are checked; Marketplace rule groups are ignored.
+ 
+ Findings:
+ 
+@@ -51,17 +106,96 @@ Findings:
+ - `label-no-longer-emitted` (error): another rule matches a label or label namespace that the version in use adds and the target version does not.
+ - `version-unavailable` (error): the pinned version is no longer listed as available.
+ - `capacity-increase` (warning): the target version needs more WCU than the version in use.
++- `default-not-describable` (warning): the default version is not listed or cannot be described ([`DescribeManagedRuleGroup`](https://docs.aws.amazon.com/waf/latest/APIReference/API_DescribeManagedRuleGroup.html)), so comparisons that need it are skipped.
+ - `behind-default` (info): the pinned version is not the current default.
+ - `rules-changed` (info): rules added, removed, or with a changed action between the version in use and the target.
+ 
+-Options for all commands:
++### collect-script
++
++Print a read-only Python snippet for the AWS MCP Server `run_script` tool. Run it unchanged; its `return_value` is a bundle (format `waf-upgrade-check/bundle/v1`) with the web ACL, the version list of each AWS managed rule group in it, and the descriptions of the versions in use and of the target. Save it as JSON outside your repository and pass it to `check --bundle`.
++
++```console
++$ waf-upgrade-check collect-script --web-acl example-web-acl --id ID --region eu-west-1 --target default
++$ waf-upgrade-check collect-script --web-acl-file web-acl.json --region eu-west-1
++```
++
++- `--web-acl NAME --id ID` or `--web-acl-file PATH` (required): with a file the web ACL is embedded in the snippet and not read from AWS.
++- `--target`: as for `check`. Use the same target for `check --bundle`; the snippet describes only the versions that target needs.
++- `--scope` and `--region`: `--region` is required for `REGIONAL`; `CLOUDFRONT` always uses `us-east-1`.
++
++The snippet calls only [`GetCallerIdentity`](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html), `GetWebACL` (with `--web-acl`), `ListAvailableManagedRuleGroupVersions` and `DescribeManagedRuleGroup`.
++
++## Options
++
++For `versions`, `diff` and `check`:
+ 
+ - `--scope {REGIONAL,CLOUDFRONT}`: rule group scope, default `REGIONAL`. `CLOUDFRONT` always uses `us-east-1`; any other `--region` with it is an error.
+ - `--region REGION`: AWS region for `REGIONAL` scope. Defaults to your AWS configuration.
+ - `--profile PROFILE`: AWS named profile. Defaults to the standard AWS credential chain.
+ - `--format {text,json}`: output format, default `text`.
+ 
+-Exit codes: `0` on success; `1` when `check` reports at least one error finding; `2` on a usage error, a credential or configuration error, or an AWS API error. Errors are printed to stderr as `waf-upgrade-check: error: <message>`.
++`collect-script` takes `--scope` and `--region` only.
++
++## Exit codes
++
++- `0`: success, and `check` found no error finding.
++- `1`: `check` reported at least one error finding.
++- `2`: a usage error, a credential or configuration error, an AWS API error, an invalid bundle file, or a bundle that lacks a version the target needs.
++
++Errors are printed to stderr as `waf-upgrade-check: error: <message>`.
++
++## GitHub Actions
++
++Check a web ACL export kept in your repository on every pull request, with OIDC credentials ([configure-aws-credentials](https://github.com/aws-actions/configure-aws-credentials), [IAM OIDC identity providers](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html)):
++
++```yaml
++name: waf-upgrade-check
++on: pull_request
++permissions:
++  contents: read
++  id-token: write
++jobs:
++  check:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v7
++      - uses: aws-actions/configure-aws-credentials@v6
++        with:
++          role-to-assume: arn:aws:iam::123456789012:role/waf-upgrade-check
++          aws-region: eu-west-1
++      - uses: astral-sh/setup-uv@v10.3.3
++      - run: uvx --from git+https://github.com/dakiquang/waf-upgrade-check waf-upgrade-check check --web-acl-file waf/web-acl.json --region eu-west-1
++```
++
++## Read-only IAM policy
++
++The CLI and the snippet need only these actions ([AWS WAF V2 actions](https://docs.aws.amazon.com/service-authorization/latest/reference/list_wafv2.html)). `GetCallerIdentity` needs no permission; it is listed for clarity.
++
++```json
++{
++  "Version": "2012-10-17",
++  "Statement": [
++    {
++      "Effect": "Allow",
++      "Action": [
++        "wafv2:GetWebACL",
++        "wafv2:ListAvailableManagedRuleGroupVersions",
++        "wafv2:DescribeManagedRuleGroup",
++        "sts:GetCallerIdentity"
++      ],
++      "Resource": "*"
++    }
++  ]
++}
++```
++
++The AWS MCP Server may need permissions of its own to sign you in and to run calls; see [identity-based policy examples for AWS MCP Server](https://docs.aws.amazon.com/agent-toolkit/latest/userguide/security_iam_id-based-policy-examples.html).
++
++## Known limits
++
++- **Rule actions are the only rule detail compared.** `DescribeManagedRuleGroup` returns rule summaries with a name and an action only ([`RuleSummary`](https://docs.aws.amazon.com/waf/latest/APIReference/API_RuleSummary.html)). A version that changes what a rule detects without renaming it shows no finding. Read the [AWS Managed Rules changelog](https://docs.aws.amazon.com/waf/latest/developerguide/aws-managed-rule-groups-changelog.html) for those changes; for the core rule set and other [baseline rule groups](https://docs.aws.amazon.com/waf/latest/developerguide/aws-managed-rule-groups-baseline.html) many entries read "Improved detection signatures".
++- **Label rules inside your own rule groups are not checked.** Rules in a rule group referenced with [`RuleGroupReferenceStatement`](https://docs.aws.amazon.com/waf/latest/APIReference/API_RuleGroupReferenceStatement.html) can match labels too; only rules in the web ACL itself are checked.
++- **Firewall Manager rule groups are not checked.** Rule groups that a [Firewall Manager AWS WAF policy](https://docs.aws.amazon.com/waf/latest/developerguide/waf-policies.html) adds to a web ACL (`PreProcessFirewallManagerRuleGroups` and `PostProcessFirewallManagerRuleGroups` in [`WebACL`](https://docs.aws.amazon.com/waf/latest/APIReference/API_WebACL.html)) are not part of this check, and their rules are not checked as label consumers.
+ 
+ ## License
+ 
+diff --git a/skills/waf-upgrade-check/SKILL.md b/skills/waf-upgrade-check/SKILL.md
+new file mode 100644
+index 0000000..dfa6644
+--- /dev/null
++++ b/skills/waf-upgrade-check/SKILL.md
+@@ -0,0 +1,82 @@
++---
++name: waf-upgrade-check
++description: >-
++  Find what breaks before moving an AWS WAF web ACL to a newer version of an AWS managed rule
++  group, using the AWS MCP Server (run_script) and the waf-upgrade-check CLI. Use when the user
++  asks whether it is safe to upgrade a managed rule group (for example
++  AWSManagedRulesCommonRuleSet), what breaks if a web ACL moves to the default or latest version,
++  or whether rule overrides and label rules still work after an upgrade.
++---
++
++# waf-upgrade-check with the AWS MCP Server
++
++Read-only. You collect data through AWS MCP `run_script` with a snippet that the CLI prints, then
++the CLI checks it offline. You report findings and suggest changes; you never change AWS.
++
++## Prerequisites
++
++- The AWS MCP Server is connected and its `run_script` tool is available.
++- `waf-upgrade-check --version` works. If not, install it as described in the README:
++  https://github.com/dakiquang/waf-upgrade-check#install-the-cli
++
++## Steps
++
++1. **Confirm the account and the web ACL.** Run this with `run_script`:
++
++   ```python
++   identity = await call_boto3(service_name="sts", operation_name="GetCallerIdentity", params={})
++   result = {"account": identity.get("Account"), "arn": identity.get("Arn")}
++   result
++   ```
++
++   Show the account and ARN. Ask the user to confirm the account and which web ACL to check:
++   name, ID, scope (`REGIONAL` or `CLOUDFRONT`) and region, and the target (`default`, `latest`
++   or a version name; `default` if they do not say). Read nothing else before they confirm. If
++   the user has an export of the web ACL (`aws wafv2 get-web-acl` output), prefer it.
++
++2. **Print the snippet.**
++
++   ```console
++   waf-upgrade-check collect-script --web-acl NAME --id ID --scope SCOPE --region REGION --target TARGET
++   waf-upgrade-check collect-script --web-acl-file PATH --scope SCOPE --region REGION --target TARGET
++   ```
++
++   `--region` is required for `REGIONAL`. `CLOUDFRONT` always uses `us-east-1`.
++
++3. **Run the snippet unchanged** with `run_script`. Then check `api_calls`: it must contain only
++   `GetCallerIdentity`, `GetWebACL`, `ListAvailableManagedRuleGroupVersions` and
++   `DescribeManagedRuleGroup`. A warning that pagination returned only the first page is
++   expected; the snippet follows `NextMarker` itself. If the validator rejects the snippet or an
++   API call fails, stop and report the error to the user. Do not rewrite the snippet.
++
++4. **Save `return_value`** as JSON to a file outside the repository, for example:
++
++   ```console
++   dir=$(mktemp -d) && echo "$dir/bundle.json"
++   ```
++
++   The bundle contains the web ACL configuration. Do not commit it.
++
++5. **Check the bundle offline.**
++
++   ```console
++   waf-upgrade-check check --bundle BUNDLE_FILE --target TARGET --format json
++   ```
++
++   Use the same `--target` as in step 2. Exit codes: `0` no error findings, `1` at least one
++   error finding, `2` a usage or bundle problem. If the message says the bundle has no
++   description of a version, run `collect-script` again with the same `--target` and repeat
++   steps 3 to 5.
++
++6. **Report.** Error findings first, each as a decision for the user: the rule group, what
++   breaks, and the options (drop or rename the override, update the rule that matches the label,
++   or stay pinned on the current version). Then warnings (capacity increase, default version that
++   cannot be described), then info (behind default, rules changed).
++
++## Rules
++
++- Never call write APIs: no `Create*`, `Update*`, `Delete*`, `Put*`, `Associate*`,
++  `Disassociate*`, `Tag*` or `Untag*`.
++- Never change the web ACL or apply an upgrade. Only suggest changes; the user applies them.
++- Label rules inside `RuleGroupReferenceStatement` rule groups and Firewall Manager policies are
++  not checked. Say so if the web ACL uses them.
+diff --git a/src/waf_upgrade_check/bundle.py b/src/waf_upgrade_check/bundle.py
+new file mode 100644
+index 0000000..b2e0a8a
+--- /dev/null
++++ b/src/waf_upgrade_check/bundle.py
+@@ -0,0 +1,142 @@
++"""Load a bundle: a web ACL and its rule group data collected through AWS MCP ``run_script``."""
++
++from __future__ import annotations
++
++import json
++from collections.abc import Mapping
++from dataclasses import dataclass
++from typing import Any
++
++from .check import RuleGroupCatalog, managed_references
++from .model import RuleGroupVersion
++
++FORMAT = "waf-upgrade-check/bundle/v1"
++SCOPES = ("REGIONAL", "CLOUDFRONT")
++
++
++class BundleError(ValueError):
++    """A bundle file cannot be read or does not match the bundle format."""
++
++
++@dataclass(frozen=True)
++class Bundle:
++    web_acl: dict[str, Any]
++    catalogs: dict[str, RuleGroupCatalog]
++
++
++def _object(path: str, parent: Mapping[str, Any], key: str, dotted: str) -> dict[str, Any]:
++    if key not in parent:
++        raise BundleError(f"bundle file {path} is missing {dotted}")
++    value = parent[key]
++    if not isinstance(value, dict):
++        raise BundleError(f"bundle file {path} has {dotted} that is not an object")
++    return value
++
++
++def _check_rules(path: str, acl: Mapping[str, Any]) -> None:
++    """Check the rule structure that ``managed_references`` and ``check`` traverse."""
++    rules = acl.get("Rules", [])
++    for index, rule in enumerate(rules):
++        dotted = f"web_acl.WebACL.Rules[{index}]"
++        if not isinstance(rule, dict):
++            raise BundleError(f"bundle file {path} has {dotted} that is not an object")
++        if "Name" not in rule:
++            raise BundleError(f"bundle file {path} is missing {dotted}.Name")
++        statement = rule.get("Statement", {})
++        if not isinstance(statement, dict):
++            raise BundleError(f"bundle file {path} has {dotted}.Statement that is not an object")
++        managed = statement.get("ManagedRuleGroupStatement")
++        dotted += ".Statement.ManagedRuleGroupStatement"
++        if managed is None:
++            continue
++        if not isinstance(managed, dict):
++            raise BundleError(f"bundle file {path} has {dotted} that is not an object")
++        if managed.get("VendorName") != "AWS":
++            continue
++        if not isinstance(managed.get("Name"), str):
++            raise BundleError(f"bundle file {path} has {dotted}.Name that is not a string")
++        for key in ("RuleActionOverrides", "ExcludedRules"):
++            entries = managed.get(key, [])
++            if not isinstance(entries, list):
++                raise BundleError(f"bundle file {path} has {dotted}.{key} that is not a list")
++            for position, entry in enumerate(entries):
++                if not isinstance(entry, dict) or "Name" not in entry:
++                    raise BundleError(
++                        f"bundle file {path} has {dotted}.{key}[{position}] without Name"
++                    )
++
++
++def _catalog(path: str, group: str, entry: Any) -> RuleGroupCatalog:
++    prefix = f"rule_groups.{group}"
++    if not isinstance(entry, dict):
++        raise BundleError(f"bundle file {path} has {prefix} that is not an object")
++    listing = _object(path, entry, "list_versions", f"{prefix}.list_versions")
++    if "Versions" not in listing:
++        raise BundleError(f"bundle file {path} is missing {prefix}.list_versions.Versions")
++    listed = listing["Versions"]
++    if not isinstance(listed, list):
++        raise BundleError(
++            f"bundle file {path} has {prefix}.list_versions.Versions that is not a list"
++        )
++    default = listing.get("CurrentDefaultVersion")
++    if default is not None and not isinstance(default, str):
++        raise BundleError(
++            f"bundle file {path} has {prefix}.list_versions.CurrentDefaultVersion "
++            "that is not a string"
++        )
++    available = []
++    for index, version in enumerate(listed):
++        dotted = f"{prefix}.list_versions.Versions[{index}]"
++        if not isinstance(version, dict):
++            raise BundleError(f"bundle file {path} has {dotted} that is not an object")
++        if "Name" not in version:
++            raise BundleError(f"bundle file {path} is missing {dotted}.Name")
++        available.append((version["Name"], version.get("LastUpdateTimestamp")))
++
++    described = {}
++    for name, response in _object(path, entry, "versions", f"{prefix}.versions").items():
++        dotted = f"{prefix}.versions.{name}"
++        try:
++            version = RuleGroupVersion.from_response(response)
++        except KeyError as exc:
++            raise BundleError(f"bundle file {path} has {dotted} without {exc}") from exc
++        except (TypeError, ValueError, AttributeError) as exc:
++            raise BundleError(f"bundle file {path} has an invalid {dotted}: {exc}") from exc
++        if version.name != name:
++            raise BundleError(f"bundle file {path} has {dotted} with VersionName {version.name}")
++        described[name] = version
++    return RuleGroupCatalog(default, tuple(available), described)
++
++
++def load_bundle(path: str) -> Bundle:
++    """Read and validate a bundle file; raise ``BundleError`` naming the first problem."""
++    try:
++        with open(path, encoding="utf-8") as handle:
++            data = json.load(handle)
++    except (OSError, ValueError) as exc:
++        raise BundleError(f"cannot read bundle file {path}: {exc}") from exc
++    if not isinstance(data, dict):
++        raise BundleError(f"bundle file {path} is not a JSON object")
++    if "format" not in data:
++        raise BundleError(f"bundle file {path} is missing format")
++    if data["format"] != FORMAT:
++        raise BundleError(f"bundle file {path} has format {data['format']}; expected {FORMAT}")
++    if "scope" not in data:
++        raise BundleError(f"bundle file {path} is missing scope")
++    if data["scope"] not in SCOPES:
++        raise BundleError(
++            f"bundle file {path} has scope {data['scope']}; expected {' or '.join(SCOPES)}"
++        )
++    web_acl = _object(path, data, "web_acl", "web_acl")
++    _check_rules(path, _object(path, web_acl, "WebACL", "web_acl.WebACL"))
++    rule_groups = _object(path, data, "rule_groups", "rule_groups")
++    catalogs = {group: _catalog(path, group, entry) for group, entry in rule_groups.items()}
++    if "caller" in data and not isinstance(data["caller"], dict):
++        raise BundleError(f"bundle file {path} has caller that is not an object")
++    for ref in managed_references(web_acl):
++        if ref.group not in catalogs:
++            raise BundleError(
++                f"bundle file {path} has no rule_groups entry for {ref.group}; "
++                "run collect-script again"
++            )
++    return Bundle(web_acl, catalogs)
+diff --git a/src/waf_upgrade_check/cli.py b/src/waf_upgrade_check/cli.py
+index 3ffc783..fe2995a 100644
+--- a/src/waf_upgrade_check/cli.py
++++ b/src/waf_upgrade_check/cli.py
+@@ -6,21 +6,24 @@ import argparse
+ import dataclasses
+ import json
+ import sys
+-from collections.abc import Iterable
++from collections.abc import Iterable, Sequence
+ from typing import Any, TextIO
+ 
+ from botocore.exceptions import BotoCoreError, ClientError
+ 
+ from . import __version__, aws
++from .bundle import BundleError, load_bundle
+ from .check import (
+     LEVELS,
+     Finding,
++    ManagedRef,
+     RuleGroupCatalog,
+     TargetError,
+     check_web_acl,
+     managed_references,
+     resolve_versions,
+ )
++from .collect import build_script
+ from .diff import VersionDiff, diff_versions
+ from .model import RuleGroupVersion
+ 
+@@ -31,15 +34,20 @@ class UsageError(Exception):
+     """A combination of options that argparse cannot reject on its own."""
+ 
+ 
+-def _common_options() -> argparse.ArgumentParser:
+-    common = argparse.ArgumentParser(add_help=False)
+-    common.add_argument(
++def _scope_options() -> argparse.ArgumentParser:
++    scope = argparse.ArgumentParser(add_help=False)
++    scope.add_argument(
+         "--scope",
+         choices=["REGIONAL", "CLOUDFRONT"],
+         default="REGIONAL",
+         help="rule group scope (default: REGIONAL; CLOUDFRONT always uses us-east-1)",
+     )
+-    common.add_argument("--region", default=None, help="AWS region for REGIONAL scope")
++    scope.add_argument("--region", default=None, help="AWS region for REGIONAL scope")
++    return scope
++
++
++def _common_options(scope: argparse.ArgumentParser) -> argparse.ArgumentParser:
++    common = argparse.ArgumentParser(add_help=False, parents=[scope])
+     common.add_argument("--profile", default=None, help="AWS named profile")
+     common.add_argument(
+         "--format", choices=["text", "json"], default="text", help="output format (default: text)"
+@@ -47,13 +55,36 @@ def _common_options() -> argparse.ArgumentParser:
+     return common
+ 
+ 
++def _web_acl_source(parser: argparse.ArgumentParser) -> argparse._MutuallyExclusiveGroup:
++    source = parser.add_mutually_exclusive_group(required=True)
++    source.add_argument(
++        "--web-acl-file", metavar="PATH", help="web ACL JSON as returned by get-web-acl"
++    )
++    source.add_argument("--web-acl", metavar="NAME", help="name of the web ACL to fetch")
++    parser.add_argument("--id", metavar="ID", help="web ACL ID (required with --web-acl)")
++    return source
++
++
++def _target_option(parser: argparse.ArgumentParser) -> None:
++    parser.add_argument(
++        "--target",
++        default="default",
++        metavar="default|latest|VERSION",
++        help=(
++            "version to check against: the current default, the newest by "
++            "LastUpdateTimestamp, or a version name (default: default)"
++        ),
++    )
++
++
+ def build_parser() -> argparse.ArgumentParser:
+     parser = argparse.ArgumentParser(
+         prog=PROG,
+         description="Check what breaks before you upgrade an AWS WAF managed rule group version.",
+     )
+     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+-    common = _common_options()
++    scope = _scope_options()
++    common = _common_options(scope)
+     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
+ 
+     versions = subparsers.add_parser(
+@@ -85,31 +116,44 @@ def build_parser() -> argparse.ArgumentParser:
+             "Exit code 1 when at least one finding is an error."
+         ),
+     )
+-    source = check_cmd.add_mutually_exclusive_group(required=True)
++    source = _web_acl_source(check_cmd)
+     source.add_argument(
+-        "--web-acl-file", metavar="PATH", help="web ACL JSON as returned by get-web-acl"
++        "--bundle",
++        metavar="FILE",
++        help="bundle JSON from collect-script; checks offline and ignores --scope, --region "
++        "and --profile",
+     )
+-    source.add_argument("--web-acl", metavar="NAME", help="name of the web ACL to fetch")
+-    check_cmd.add_argument("--id", metavar="ID", help="web ACL ID (required with --web-acl)")
+-    check_cmd.add_argument(
+-        "--target",
+-        default="default",
+-        metavar="default|latest|VERSION",
+-        help=(
+-            "version to check against: the current default, the newest by "
+-            "LastUpdateTimestamp, or a version name (default: default)"
++    _target_option(check_cmd)
++    check_cmd.set_defaults(handler=_cmd_check)
++
++    collect = subparsers.add_parser(
++        "collect-script",
++        parents=[scope],
++        help="print a read-only AWS MCP run_script snippet that collects a bundle for check",
++        description=(
++            "Print a read-only Python snippet for the AWS MCP Server run_script tool. It returns "
++            "a bundle with the web ACL and the rule group versions that check --bundle needs "
++            "for the same --target."
+         ),
+     )
+-    check_cmd.set_defaults(handler=_cmd_check)
++    _web_acl_source(collect)
++    _target_option(collect)
++    collect.set_defaults(handler=_cmd_collect_script)
+     return parser
+ 
+ 
+-def _client(args: argparse.Namespace):
+-    if args.scope == "CLOUDFRONT" and args.region not in (None, aws.CLOUDFRONT_REGION):
++def _region(args: argparse.Namespace) -> str | None:
++    if args.scope != "CLOUDFRONT":
++        return args.region
++    if args.region not in (None, aws.CLOUDFRONT_REGION):
+         raise UsageError(
+             f"--scope CLOUDFRONT requires region {aws.CLOUDFRONT_REGION}, got {args.region}"
+         )
+-    return aws.make_client(args.scope, args.region, args.profile)
++    return aws.CLOUDFRONT_REGION
++
++
++def _client(args: argparse.Namespace):
++    return aws.make_client(args.scope, _region(args), args.profile)
+ 
+ 
+ def _cmd_versions(args: argparse.Namespace, out: TextIO) -> None:
+@@ -149,35 +193,48 @@ def _read_web_acl(path: str) -> dict[str, Any]:
+     return data
+ 
+ 
+-def _cmd_check(args: argparse.Namespace, out: TextIO) -> int:
++def _check_id(args: argparse.Namespace) -> None:
+     if args.web_acl is not None and args.id is None:
+         raise UsageError("--web-acl requires --id")
+     if args.web_acl_file is not None and args.id is not None:
+         raise UsageError("--id cannot be used with --web-acl-file")
+-    web_acl = _read_web_acl(args.web_acl_file) if args.web_acl_file is not None else None
+-    client = _client(args)
+-    if web_acl is None:
+-        web_acl = aws.get_web_acl(client, args.web_acl, args.id, args.scope)
+ 
+-    refs = managed_references(web_acl)
+-    listed: dict[str, tuple[str | None, list[tuple[str, Any]]]] = {}
+-    for ref in refs:
+-        if ref.group not in listed:
+-            listed[ref.group] = aws.list_version_timestamps(client, ref.group, args.scope)
+ 
++def _needed_versions(
++    refs: list[ManagedRef],
++    listed: dict[str, tuple[str | None, Sequence[tuple[str, Any]]]],
++    target: str,
++) -> dict[tuple[str, str], None]:
++    """Return the ``(group, version)`` pairs to describe, in order: in use and target."""
+     needed: dict[tuple[str, str], None] = {}
+     for ref in refs:
+         default, available = listed[ref.group]
+         try:
+-            versions = resolve_versions(ref.group, ref.pinned, default, available, args.target)
++            versions = resolve_versions(ref.group, ref.pinned, default, available, target)
+         except TargetError as exc:
+             raise UsageError(str(exc)) from exc
+         for version in versions:
+             if version is not None:
+                 needed[(ref.group, version)] = None
++    return needed
++
++
++def _api_inputs(
++    args: argparse.Namespace,
++) -> tuple[dict[str, Any], dict[str, RuleGroupCatalog]]:
++    web_acl = _read_web_acl(args.web_acl_file) if args.web_acl_file is not None else None
++    client = _client(args)
++    if web_acl is None:
++        web_acl = aws.get_web_acl(client, args.web_acl, args.id, args.scope)
++
++    refs = managed_references(web_acl)
++    listed: dict[str, tuple[str | None, Sequence[tuple[str, Any]]]] = {}
++    for ref in refs:
++        if ref.group not in listed:
++            listed[ref.group] = aws.list_version_timestamps(client, ref.group, args.scope)
+ 
+     described: dict[str, dict[str, RuleGroupVersion]] = {group: {} for group in listed}
+-    for group, version in needed:
++    for group, version in _needed_versions(refs, listed, args.target):
+         default, available = listed[group]
+         if version == default and all(name != default for name, _ in available):
+             continue
+@@ -192,6 +249,33 @@ def _cmd_check(args: argparse.Namespace, out: TextIO) -> int:
+         group: RuleGroupCatalog(default, tuple(available), described[group])
+         for group, (default, available) in listed.items()
+     }
++    return web_acl, catalogs
++
++
++def _bundle_inputs(
++    args: argparse.Namespace,
++) -> tuple[dict[str, Any], dict[str, RuleGroupCatalog]]:
++    try:
++        bundle = load_bundle(args.bundle)
++    except BundleError as exc:
++        raise UsageError(str(exc)) from exc
++    listed = {group: (c.default, c.available) for group, c in bundle.catalogs.items()}
++    for group, version in _needed_versions(managed_references(bundle.web_acl), listed, args.target):
++        catalog = bundle.catalogs[group]
++        # A default absent from the bundle could not be described: check reports it.
++        if version != catalog.default and version not in catalog.versions:
++            raise UsageError(
++                f"bundle file {args.bundle} has no description of {group} version {version}; "
++                f"describe it or run collect-script again with --target {args.target}"
++            )
++    return bundle.web_acl, bundle.catalogs
++
++
++def _cmd_check(args: argparse.Namespace, out: TextIO) -> int:
++    if args.bundle is not None and args.id is not None:
++        raise UsageError("--id cannot be used with --bundle")
++    _check_id(args)
++    web_acl, catalogs = _bundle_inputs(args) if args.bundle is not None else _api_inputs(args)
+     findings = check_web_acl(web_acl, catalogs, args.target)
+     if args.format == "json":
+         payload = [dataclasses.asdict(finding) for finding in findings]
+@@ -201,6 +285,23 @@ def _cmd_check(args: argparse.Namespace, out: TextIO) -> int:
+     return 1 if any(finding.level == "error" for finding in findings) else 0
+ 
+ 
++def _cmd_collect_script(args: argparse.Namespace, out: TextIO) -> int:
++    _check_id(args)
++    region = _region(args)
++    if region is None:
++        raise UsageError("collect-script --scope REGIONAL requires --region")
++    if args.web_acl_file is not None:
++        web_acl = _read_web_acl(args.web_acl_file)
++        out.write(build_script(args.scope, region, args.target, web_acl=web_acl))
++    else:
++        out.write(
++            build_script(
++                args.scope, region, args.target, web_acl_name=args.web_acl, web_acl_id=args.id
++            )
++        )
++    return 0
++
++
+ def _format_versions_text(default: str | None, names: list[str]) -> str:
+     lines = [f"{name} (default)" if name == default else name for name in names]
+     lines.append(f"Default version: {default or 'none'}")
+diff --git a/src/waf_upgrade_check/collect.py b/src/waf_upgrade_check/collect.py
+new file mode 100644
+index 0000000..2f8ab7f
+--- /dev/null
++++ b/src/waf_upgrade_check/collect.py
+@@ -0,0 +1,132 @@
++"""Generate a read-only AWS MCP ``run_script`` snippet that returns a bundle for ``check``."""
++
++from __future__ import annotations
++
++import pprint
++from collections.abc import Mapping
++from typing import Any
++
++from .bundle import FORMAT
++
++# The AWS MCP run_script validator rejects dunders, comprehensions and function definitions;
++# the body keeps to plain loops and calls. It reads the in-use version of every AWS managed
++# rule group in ``web_acl`` and the version that ``check --target TARGET`` resolves.
++_BODY = """\
++identity = await call_boto3(service_name="sts", operation_name="GetCallerIdentity",
++                            region_name=REGION, params={})
++uses = {}
++for rule in web_acl["WebACL"].get("Rules", []):
++    statement = rule.get("Statement", {}).get("ManagedRuleGroupStatement")
++    if not statement or statement.get("VendorName") != "AWS":
++        continue
++    group = statement.get("Name")
++    if group not in uses:
++        uses[group] = []
++    uses[group].append(statement.get("Version"))
++rule_groups = {}
++for group in uses:
++    params = {"VendorName": "AWS", "Name": group, "Scope": SCOPE}
++    default = None
++    entries = []
++    while True:
++        page = await call_boto3(service_name="wafv2",
++                                operation_name="ListAvailableManagedRuleGroupVersions",
++                                region_name=REGION, params=params)
++        if page.get("CurrentDefaultVersion"):
++            default = page.get("CurrentDefaultVersion")
++        page_entries = page.get("Versions", [])
++        for entry in page_entries:
++            entries.append(entry)
++        marker = page.get("NextMarker")
++        if not marker or not page_entries:
++            break
++        params = {"VendorName": "AWS", "Name": group, "Scope": SCOPE, "NextMarker": marker}
++    names = []
++    latest = None
++    latest_stamp = None
++    for entry in entries:
++        names.append(entry.get("Name"))
++        stamp = entry.get("LastUpdateTimestamp")
++        if isinstance(stamp, str):
++            try:
++                stamp = datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
++            except ValueError:
++                stamp = None
++        elif not isinstance(stamp, (int, float)):
++            stamp = None
++        if stamp is not None and (latest_stamp is None or stamp > latest_stamp):
++            latest = entry.get("Name")
++            latest_stamp = stamp
++    if TARGET == "default":
++        target_name = default
++    elif TARGET == "latest":
++        target_name = latest
++    elif TARGET in names:
++        target_name = TARGET
++    else:
++        target_name = None
++    wanted = []
++    for pinned in uses[group]:
++        if pinned is None:
++            in_use = default
++        elif pinned in names:
++            in_use = pinned
++        else:
++            in_use = None
++        if in_use is not None and in_use not in wanted:
++            wanted.append(in_use)
++        if target_name is not None and target_name not in wanted:
++            wanted.append(target_name)
++    described = {}
++    for version_name in wanted:
++        if version_name == default and default not in names:
++            continue
++        try:
++            described[version_name] = await call_boto3(service_name="wafv2",
++                operation_name="DescribeManagedRuleGroup", region_name=REGION,
++                params={"VendorName": "AWS", "Name": group, "Scope": SCOPE,
++                        "VersionName": version_name})
++        except Exception as error:
++            if version_name != default or "WAFNonexistentItemException" not in str(error):
++                raise
++    rule_groups[group] = {"list_versions": {"CurrentDefaultVersion": default,
++                                            "Versions": entries},
++                          "versions": described}
++result = {"format": FORMAT, "scope": SCOPE, "web_acl": web_acl,
++          "rule_groups": rule_groups, "caller": {"account": identity.get("Account")}}
++result
++"""
++
++
++def build_script(
++    scope: str,
++    region: str,
++    target: str,
++    *,
++    web_acl: Mapping[str, Any] | None = None,
++    web_acl_name: str | None = None,
++    web_acl_id: str | None = None,
++) -> str:
++    """Return the snippet; pass either ``web_acl`` or both ``web_acl_name`` and ``web_acl_id``."""
++    if (web_acl is None) == (web_acl_name is None or web_acl_id is None):
++        raise ValueError("pass either web_acl or both web_acl_name and web_acl_id")
++    lines = [
++        "# waf-upgrade-check collect-script: read-only (Get, List and Describe calls only).",
++        "# Paste it unchanged into the AWS MCP Server run_script tool and save return_value",
++        "# as JSON for: waf-upgrade-check check --bundle FILE",
++        "import datetime",
++        f"FORMAT = {FORMAT!r}",
++        f"SCOPE = {scope!r}",
++        f"REGION = {region!r}",
++        f"TARGET = {target!r}",
++    ]
++    if web_acl is not None:
++        lines.append(f"web_acl = {pprint.pformat(web_acl, sort_dicts=False)}")
++    else:
++        lines += [
++            'web_acl = await call_boto3(service_name="wafv2", operation_name="GetWebACL",',
++            "                           region_name=REGION,",
++            f'                           params={{"Name": {web_acl_name!r}, "Scope": SCOPE,',
++            f'                                   "Id": {web_acl_id!r}}})',
++        ]
++    return "\n".join(lines) + "\n" + _BODY
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 94a6a1b..6d1375d 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,10 +1,20 @@
++import ast
++import asyncio
++import copy
+ import json
+ from pathlib import Path
+ 
+ import boto3
+ import pytest
++from botocore.exceptions import ClientError
++
++from waf_upgrade_check import aws
+ 
+ FIXTURES = Path(__file__).parent / "fixtures"
++CRS = "AWSManagedRulesCommonRuleSet"
++KBI = "AWSManagedRulesKnownBadInputsRuleSet"
++WINDOWS = "AWSManagedRulesWindowsRuleSet"
++ACCOUNT = "123456789012"
+ 
+ 
+ @pytest.fixture(autouse=True)
+@@ -42,3 +52,118 @@ def wafv2_client():
+         aws_access_key_id="testing",
+         aws_secret_access_key="testing",
+     )
++
++
++@pytest.fixture
++def no_client(monkeypatch):
++    def unexpected(scope, region, profile):
++        raise AssertionError("client must not be created")
++
++    monkeypatch.setattr(aws, "make_client", unexpected)
++
++
++def _managed_rule(name, priority, group, version=None, overrides=()):
++    statement = {"VendorName": "AWS", "Name": group}
++    if version is not None:
++        statement["Version"] = version
++    if overrides:
++        statement["RuleActionOverrides"] = [
++            {"Name": override, "ActionToUse": {"Count": {}}} for override in overrides
++        ]
++    return {
++        "Name": name,
++        "Priority": priority,
++        "Statement": {"ManagedRuleGroupStatement": statement},
++    }
++
++
++@pytest.fixture
++def windows_kbi_web_acl():
++    """Windows (unpinned, default not describable) and KBI pinned at Version_1.0."""
++    return {
++        "WebACL": {
++            "Rules": [
++                _managed_rule("AWS-Windows", 0, WINDOWS),
++                _managed_rule(
++                    "AWS-KBI",
++                    1,
++                    KBI,
++                    version="Version_1.0",
++                    overrides=["BadAuthToken_COOKIE_AUTHORIZATION"],
++                ),
++            ]
++        }
++    }
++
++
++class FakeAws:
++    """Stand-in for the AWS MCP run_script ``call_boto3``, served from the fixtures."""
++
++    max_calls = 50
++
++    def __init__(self, load_fixture):
++        self.calls = []
++        self.errors = {}
++        self.web_acl = load_fixture("web_acl_upgrade.json")
++        self.lists = {
++            (CRS, None): load_fixture("list_versions_page1.json"),
++            (CRS, "page-2-marker"): load_fixture("list_versions_page2.json"),
++            (KBI, None): load_fixture("aws/known_bad_inputs_list.json"),
++            (KBI, "Version_1.0"): {"Versions": []},
++            (WINDOWS, None): load_fixture("aws/windows_list_rc_default.json"),
++            (WINDOWS, "Version_1.0"): {"Versions": [], "NextMarker": "Version_1.0"},
++        }
++        self.describes = {
++            (CRS, "Version_1.0"): load_fixture("describe_v1_0.json"),
++            (CRS, "Version_1.1"): load_fixture("describe_v1_1.json"),
++            (KBI, "Version_1.0"): load_fixture("aws/known_bad_inputs_v1_0.json"),
++            (KBI, "Version_1.26"): load_fixture("aws/known_bad_inputs_v1_26.json"),
++        }
++
++    async def call_boto3(self, *, service_name, operation_name, region_name=None, params=None):
++        params = params or {}
++        self.calls.append((service_name, operation_name, region_name, copy.deepcopy(params)))
++        if len(self.calls) > self.max_calls:
++            raise AssertionError(f"more than {self.max_calls} calls")
++        response = None
++        if (service_name, operation_name) == ("sts", "GetCallerIdentity"):
++            response = {
++                "Account": ACCOUNT,
++                "Arn": f"arn:aws:iam::{ACCOUNT}:user/example",
++                "UserId": "AIDAEXAMPLE",
++            }
++        elif (service_name, operation_name) == ("wafv2", "GetWebACL"):
++            response = self.web_acl
++        elif (service_name, operation_name) == ("wafv2", "ListAvailableManagedRuleGroupVersions"):
++            response = self.lists.get((params.get("Name"), params.get("NextMarker")))
++        elif (service_name, operation_name) == ("wafv2", "DescribeManagedRuleGroup"):
++            key = (params.get("Name"), params.get("VersionName"))
++            if key in self.errors:
++                raise self.errors[key]
++            response = self.describes.get(key)
++        if response is None:
++            raise AssertionError(f"unexpected call {service_name} {operation_name} {params}")
++        return copy.deepcopy(response)
++
++    @staticmethod
++    def client_error(code, operation="DescribeManagedRuleGroup"):
++        """The exception run_script raises for a failed AWS call."""
++        return ClientError({"Error": {"Code": code, "Message": "synthetic"}}, operation)
++
++
++@pytest.fixture
++def fake_aws(load_fixture):
++    return FakeAws(load_fixture)
++
++
++@pytest.fixture
++def run_snippet():
++    """Run a collect-script snippet the way run_script does: top-level await, ``result``."""
++
++    def run(snippet, call_boto3):
++        code = compile(snippet, "<collect-script>", "exec", flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
++        namespace = {"call_boto3": call_boto3}
++        asyncio.run(eval(code, namespace))
++        return namespace["result"]
++
++    return run
+diff --git a/tests/test_bundle.py b/tests/test_bundle.py
+new file mode 100644
+index 0000000..050a075
+--- /dev/null
++++ b/tests/test_bundle.py
+@@ -0,0 +1,184 @@
++import copy
++import datetime
++import json
++
++import pytest
++
++from waf_upgrade_check.bundle import FORMAT, BundleError, load_bundle
++from waf_upgrade_check.check import RuleGroupCatalog
++from waf_upgrade_check.cli import main
++from waf_upgrade_check.model import RuleGroupVersion
++
++GROUP = "AWSManagedRulesCommonRuleSet"
++
++
++def _iso(stamp):
++    return datetime.datetime.fromtimestamp(stamp, datetime.timezone.utc).isoformat()
++
++
++@pytest.fixture
++def bundle(load_fixture):
++    """A bundle as collect-script returns it: AWS MCP gives timestamps as ISO strings."""
++    versions = [
++        {"Name": entry["Name"], "LastUpdateTimestamp": _iso(entry["LastUpdateTimestamp"])}
++        for page in ("list_versions_page1.json", "list_versions_page2.json")
++        for entry in load_fixture(page)["Versions"]
++    ]
++    return {
++        "format": FORMAT,
++        "scope": "REGIONAL",
++        "web_acl": load_fixture("web_acl_upgrade.json"),
++        "rule_groups": {
++            GROUP: {
++                "list_versions": {"CurrentDefaultVersion": "Version_1.1", "Versions": versions},
++                "versions": {
++                    "Version_1.0": load_fixture("describe_v1_0.json"),
++                    "Version_1.1": load_fixture("describe_v1_1.json"),
++                },
++            }
++        },
++        "caller": {"account": "123456789012"},
++    }
++
++
++def _write(tmp_path, data):
++    path = tmp_path / "bundle.json"
++    path.write_text(json.dumps(data))
++    return str(path)
++
++
++def test_load_bundle_builds_catalogs(bundle, load_fixture, tmp_path):
++    expected = RuleGroupCatalog(
++        "Version_1.1",
++        (
++            ("Version_1.10", "2026-01-01T00:00:00+00:00"),
++            ("Version_1.1", "2025-10-01T00:00:00+00:00"),
++            ("Version_1.0", "2025-07-01T00:00:00+00:00"),
++        ),
++        {
++            "Version_1.0": RuleGroupVersion.from_response(load_fixture("describe_v1_0.json")),
++            "Version_1.1": RuleGroupVersion.from_response(load_fixture("describe_v1_1.json")),
++        },
++    )
++
++    loaded = load_bundle(_write(tmp_path, bundle))
++
++    assert loaded.web_acl == load_fixture("web_acl_upgrade.json")
++    assert loaded.catalogs == {GROUP: expected}
++
++
++def _versions(data):
++    return data["rule_groups"][GROUP]["versions"]
++
++
++def _managed(data):
++    return data["web_acl"]["WebACL"]["Rules"][0]["Statement"]["ManagedRuleGroupStatement"]
++
++
++MUTATIONS = [
++    ("wrong format", lambda d: d.update(format="other/v9"), "has format other/v9; expected"),
++    ("format missing", lambda d: d.pop("format"), "is missing format"),
++    ("bad scope", lambda d: d.update(scope="GLOBAL"), "has scope GLOBAL; expected"),
++    ("no WebACL", lambda d: d["web_acl"].pop("WebACL"), "is missing web_acl.WebACL"),
++    (
++        "rule not an object",
++        lambda d: d["web_acl"]["WebACL"]["Rules"].insert(0, "AWS-CRS"),
++        "has web_acl.WebACL.Rules[0] that is not an object",
++    ),
++    (
++        "override without Name",
++        lambda d: _managed(d)["RuleActionOverrides"][0].pop("Name"),
++        "has web_acl.WebACL.Rules[0].Statement.ManagedRuleGroupStatement.RuleActionOverrides[0]"
++        " without Name",
++    ),
++    ("no rule_groups", lambda d: d.pop("rule_groups"), "is missing rule_groups"),
++    (
++        "no Versions",
++        lambda d: d["rule_groups"][GROUP]["list_versions"].pop("Versions"),
++        f"is missing rule_groups.{GROUP}.list_versions.Versions",
++    ),
++    (
++        "no versions",
++        lambda d: d["rule_groups"][GROUP].pop("versions"),
++        f"is missing rule_groups.{GROUP}.versions",
++    ),
++    (
++        "describe without Capacity",
++        lambda d: _versions(d)["Version_1.1"].pop("Capacity"),
++        f"has rule_groups.{GROUP}.versions.Version_1.1 without 'Capacity'",
++    ),
++    (
++        "VersionName mismatch",
++        lambda d: _versions(d)["Version_1.1"].update(VersionName="Version_1.10"),
++        f"has rule_groups.{GROUP}.versions.Version_1.1 with VersionName Version_1.10",
++    ),
++    (
++        "referenced group missing",
++        lambda d: d.update(rule_groups={}),
++        f"has no rule_groups entry for {GROUP}; run collect-script again",
++    ),
++    ("caller not an object", lambda d: d.update(caller="123"), "has caller that is not an object"),
++]
++
++
++@pytest.mark.parametrize(
++    ("mutate", "fragment"), [m[1:] for m in MUTATIONS], ids=[m[0] for m in MUTATIONS]
++)
++def test_load_bundle_rejects_invalid_bundles(bundle, tmp_path, mutate, fragment):
++    data = copy.deepcopy(bundle)
++    mutate(data)
++    path = _write(tmp_path, data)
++
++    with pytest.raises(BundleError) as error:
++        load_bundle(path)
++
++    assert str(error.value).startswith(f"bundle file {path} ")
++    assert fragment in str(error.value)
++
++
++def test_load_bundle_unreadable_file(tmp_path):
++    path = tmp_path / "bundle.json"
++    path.write_text("not json")
++
++    with pytest.raises(BundleError, match=f"^cannot read bundle file {path}: "):
++        load_bundle(str(path))
++
++
++def test_check_bundle_missing_in_use_version_exits_2(no_client, bundle, tmp_path, capsys):
++    del _versions(bundle)["Version_1.0"]
++    path = _write(tmp_path, bundle)
++
++    assert main(["check", "--bundle", path]) == 2
++
++    assert capsys.readouterr().err == (
++        f"waf-upgrade-check: error: bundle file {path} has no description of {GROUP} version "
++        "Version_1.0; describe it or run collect-script again with --target default\n"
++    )
++
++
++def test_check_bundle_invalid_exits_2(no_client, bundle, tmp_path, capsys):
++    bundle["format"] = "other/v9"
++    path = _write(tmp_path, bundle)
++
++    assert main(["check", "--bundle", path]) == 2
++
++    assert capsys.readouterr().err == (
++        f"waf-upgrade-check: error: bundle file {path} has format other/v9; expected {FORMAT}\n"
++    )
++
++
++def test_check_bundle_missing_listed_default_warns(
++    no_client, bundle, load_fixture, tmp_path, capsys
++):
++    bundle["web_acl"] = load_fixture("web_acl_clean.json")
++    del _versions(bundle)["Version_1.1"]
++    # --bundle ignores --scope, --region and --profile, even a combination API mode rejects.
++    options = ["--scope", "CLOUDFRONT", "--region", "eu-west-1", "--profile", "unused"]
++
++    assert main(["check", "--bundle", _write(tmp_path, bundle), *options]) == 0
++
++    assert capsys.readouterr().out.splitlines() == [
++        f"WARNING  {GROUP}  default-not-describable  default version Version_1.1 "
++        "cannot be described; comparisons that need it are skipped",
++        "Summary: 0 error(s), 1 warning(s), 0 info",
++    ]
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index b2d2ed8..6785b56 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -155,6 +155,8 @@ def test_cloudfront_with_other_region_exits_2(monkeypatch, capsys):
+         ["versions", GROUP, "--scope", "GLOBAL"],
+         ["check"],
+         ["check", "--web-acl-file", "acl.json", "--web-acl", "example-web-acl"],
++        ["check", "--bundle", "bundle.json", "--web-acl-file", "acl.json"],
++        ["check", "--bundle", "bundle.json", "--web-acl", "example-web-acl"],
+     ],
+ )
+ def test_usage_errors_exit_2(argv):
+@@ -242,40 +244,7 @@ def _add_real_list(stub, load_fixture, group, fixture):
+     )
+ 
+ 
+-def _managed_rule(name, priority, group, version=None, overrides=()):
+-    statement = {"VendorName": "AWS", "Name": group}
+-    if version is not None:
+-        statement["Version"] = version
+-    if overrides:
+-        statement["RuleActionOverrides"] = [
+-            {"Name": override, "ActionToUse": {"Count": {}}} for override in overrides
+-        ]
+-    return {
+-        "Name": name,
+-        "Priority": priority,
+-        "Statement": {"ManagedRuleGroupStatement": statement},
+-    }
+-
+-
+-def test_check_undescribable_default_warns_and_checks_other_groups(
+-    stub, load_fixture, tmp_path, capsys
+-):
+-    web_acl = {
+-        "WebACL": {
+-            "Rules": [
+-                _managed_rule("AWS-Windows", 0, WINDOWS),
+-                _managed_rule(
+-                    "AWS-KBI",
+-                    1,
+-                    KBI,
+-                    version="Version_1.0",
+-                    overrides=["BadAuthToken_COOKIE_AUTHORIZATION"],
+-                ),
+-            ]
+-        }
+-    }
+-    path = tmp_path / "web-acl.json"
+-    path.write_text(json.dumps(web_acl))
++def _add_windows_kbi_responses(stub, load_fixture):
+     _add_real_list(stub, load_fixture, WINDOWS, "windows_list_rc_default.json")
+     _add_real_list(stub, load_fixture, KBI, "known_bad_inputs_list.json")
+     for version, fixture in (
+@@ -288,6 +257,14 @@ def test_check_undescribable_default_warns_and_checks_other_groups(
+             {"VendorName": "AWS", "Name": KBI, "Scope": "REGIONAL", "VersionName": version},
+         )
+ 
++
++def test_check_undescribable_default_warns_and_checks_other_groups(
++    stub, load_fixture, windows_kbi_web_acl, tmp_path, capsys
++):
++    path = tmp_path / "web-acl.json"
++    path.write_text(json.dumps(windows_kbi_web_acl))
++    _add_windows_kbi_responses(stub, load_fixture)
++
+     assert main(["check", "--web-acl-file", str(path)]) == 1
+ 
+     assert capsys.readouterr().out.splitlines() == [
+@@ -325,7 +302,7 @@ def test_check_default_describe_other_error_exits_2(stub, load_fixture, capsys):
+     assert "WAFAccessDeniedException" in capsys.readouterr().err
+ 
+ 
+-def test_check_api_json(stub, load_fixture, capsys):
++def _add_api_responses(stub, load_fixture):
+     stub.add_response(
+         "get_web_acl",
+         load_fixture("web_acl_upgrade.json"),
+@@ -335,8 +312,14 @@ def test_check_api_json(stub, load_fixture, capsys):
+     _add_describe(stub, load_fixture, "describe_v1_0.json", "Version_1.0")
+     _add_describe(stub, load_fixture, "describe_v1_1.json", "Version_1.1")
+ 
+-    argv = ["check", "--web-acl", "example-web-acl", "--id", WEB_ACL_ID, "--format", "json"]
+-    assert main(argv) == 1
++
++API_ARGV = ["check", "--web-acl", "example-web-acl", "--id", WEB_ACL_ID, "--format", "json"]
++
++
++def test_check_api_json(stub, load_fixture, capsys):
++    _add_api_responses(stub, load_fixture)
++
++    assert main(API_ARGV) == 1
+ 
+     findings = json.loads(capsys.readouterr().out)
+     assert [finding["code"] for finding in findings] == [
+@@ -374,14 +357,6 @@ def test_check_get_web_acl_error_exits_2(stub, capsys):
+     assert "Traceback" not in err
+ 
+ 
+-@pytest.fixture
+-def no_client(monkeypatch):
+-    def unexpected(scope, region, profile):
+-        raise AssertionError("client must not be created")
+-
+-    monkeypatch.setattr(aws, "make_client", unexpected)
+-
+-
+ @pytest.mark.parametrize("content", [None, "not json", '{"Rules": []}'])
+ def test_check_unreadable_file_exits_2(no_client, tmp_path, capsys, content):
+     path = tmp_path / "web-acl.json"
+@@ -416,9 +391,58 @@ def test_check_unavailable_explicit_target_exits_2(stub, load_fixture, capsys):
+             ["check", "--web-acl-file", "acl.json", "--id", WEB_ACL_ID],
+             "--id cannot be used with --web-acl-file",
+         ),
++        (
++            ["check", "--bundle", "bundle.json", "--id", WEB_ACL_ID],
++            "--id cannot be used with --bundle",
++        ),
+     ],
+ )
+ def test_check_option_errors_exit_2(no_client, capsys, argv, message):
+     assert main(argv) == 2
+ 
+     assert capsys.readouterr().err == f"waf-upgrade-check: error: {message}\n"
++
++
++def _check_bundle_from_snippet(argv, fake_aws, run_snippet, tmp_path, capsys):
++    """Print the snippet for ``argv``, run it on ``fake_aws`` and check the bundle offline."""
++    assert main(["collect-script", *argv]) == 0
++    bundle = run_snippet(capsys.readouterr().out, fake_aws.call_boto3)
++    path = tmp_path / "bundle.json"
++    path.write_text(json.dumps(bundle))
++    return path
++
++
++def test_check_bundle_matches_api_mode(
++    stub, load_fixture, fake_aws, run_snippet, monkeypatch, tmp_path, capsys
++):
++    _add_api_responses(stub, load_fixture)
++    assert main(API_ARGV) == 1
++    api_output = capsys.readouterr().out
++    monkeypatch.setattr(aws, "make_client", _no_client)
++
++    argv = ["--web-acl", "example-web-acl", "--id", WEB_ACL_ID, "--region", "us-east-1"]
++    path = _check_bundle_from_snippet(argv, fake_aws, run_snippet, tmp_path, capsys)
++
++    assert main(["check", "--bundle", str(path), "--format", "json"]) == 1
++    assert capsys.readouterr().out == api_output
++
++
++def test_check_bundle_matches_api_mode_with_undescribable_default(
++    stub, load_fixture, windows_kbi_web_acl, fake_aws, run_snippet, monkeypatch, tmp_path, capsys
++):
++    web_acl_path = tmp_path / "web-acl.json"
++    web_acl_path.write_text(json.dumps(windows_kbi_web_acl))
++    _add_windows_kbi_responses(stub, load_fixture)
++    assert main(["check", "--web-acl-file", str(web_acl_path)]) == 1
++    api_output = capsys.readouterr().out
++    monkeypatch.setattr(aws, "make_client", _no_client)
++
++    argv = ["--web-acl-file", str(web_acl_path), "--region", "us-east-1"]
++    path = _check_bundle_from_snippet(argv, fake_aws, run_snippet, tmp_path, capsys)
++
++    assert main(["check", "--bundle", str(path)]) == 1
++    assert capsys.readouterr().out == api_output
++
++
++def _no_client(scope, region, profile):
++    raise AssertionError("client must not be created")
+diff --git a/tests/test_collect.py b/tests/test_collect.py
+new file mode 100644
+index 0000000..11e6661
+--- /dev/null
++++ b/tests/test_collect.py
+@@ -0,0 +1,187 @@
++import ast
++import json
++import re
++from pathlib import Path
++
++import pytest
++from botocore.exceptions import ClientError
++
++from waf_upgrade_check.bundle import load_bundle
++from waf_upgrade_check.cli import main
++
++FIXTURES = Path(__file__).parent / "fixtures"
++CRS = "AWSManagedRulesCommonRuleSet"
++KBI = "AWSManagedRulesKnownBadInputsRuleSet"
++WINDOWS = "AWSManagedRulesWindowsRuleSet"
++WEB_ACL_ID = "a1b2c3d4-5678-90ab-cdef-EXAMPLE11111"
++UPGRADE = str(FIXTURES / "web_acl_upgrade.json")
++CLEAN = str(FIXTURES / "web_acl_clean.json")
++READ_OPERATIONS = {
++    "GetCallerIdentity",
++    "ListAvailableManagedRuleGroupVersions",
++    "DescribeManagedRuleGroup",
++}
++
++
++def _snippet(capsys, *argv):
++    assert main(["collect-script", *argv]) == 0
++    return capsys.readouterr().out
++
++
++def _described(fake_aws, group):
++    return {
++        params["VersionName"]
++        for _, operation, _, params in fake_aws.calls
++        if operation == "DescribeManagedRuleGroup" and params["Name"] == group
++    }
++
++
++@pytest.mark.parametrize(
++    ("argv", "operations"),
++    [
++        (
++            ["--web-acl", "example-web-acl", "--id", WEB_ACL_ID],
++            READ_OPERATIONS | {"GetWebACL"},
++        ),
++        (["--web-acl-file", UPGRADE], READ_OPERATIONS),
++    ],
++)
++def test_snippet_only_reads(no_client, capsys, argv, operations):
++    snippet = _snippet(capsys, *argv, "--region", "us-east-1")
++    tree = compile(
++        snippet, "<collect-script>", "exec", ast.PyCF_ONLY_AST | ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
++    )
++
++    names = [node.id for node in ast.walk(tree) if isinstance(node, ast.Name)]
++    names += [node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)]
++    assert not [name for name in names if "__" in name]
++    calls = [
++        {keyword.arg: keyword.value for keyword in node.keywords}
++        for node in ast.walk(tree)
++        if isinstance(node, ast.Call)
++        and isinstance(node.func, ast.Name)
++        and node.func.id == "call_boto3"
++    ]
++    for call in calls:
++        assert call["service_name"].value in {"wafv2", "sts"}
++        assert re.fullmatch(r"(Get|List|Describe)[A-Za-z]+", call["operation_name"].value)
++    assert {call["operation_name"].value for call in calls} == operations
++
++
++def test_file_mode_bundle(no_client, windows_kbi_web_acl, fake_aws, run_snippet, tmp_path, capsys):
++    windows_kbi_web_acl["WebACL"]["Description"] = 'it\'s a "quoted"\nweb ACL'
++    path = tmp_path / "web-acl.json"
++    path.write_text(json.dumps(windows_kbi_web_acl))
++
++    bundle = run_snippet(
++        _snippet(capsys, "--web-acl-file", str(path), "--region", "us-east-1"),
++        fake_aws.call_boto3,
++    )
++
++    assert bundle["web_acl"] == windows_kbi_web_acl
++    operations = [operation for _, operation, _, _ in fake_aws.calls]
++    assert "GetWebACL" not in operations
++    assert _described(fake_aws, WINDOWS) == set()
++    windows_lists = [
++        params.get("NextMarker")
++        for _, operation, _, params in fake_aws.calls
++        if operation == "ListAvailableManagedRuleGroupVersions" and params["Name"] == WINDOWS
++    ]
++    assert windows_lists == [None, "Version_1.0"]
++    assert len(bundle["rule_groups"][KBI]["list_versions"]["Versions"]) == 7
++    assert bundle["caller"] == {"account": "123456789012"}
++    bundle_path = tmp_path / "bundle.json"
++    bundle_path.write_text(json.dumps(bundle))
++    assert set(load_bundle(str(bundle_path)).catalogs) == {WINDOWS, KBI}
++
++
++@pytest.mark.parametrize(
++    ("target", "described"),
++    [
++        ("default", {"Version_1.0", "Version_1.1"}),
++        ("latest", {"Version_1.0", "Version_1.10"}),
++        ("Version_1.1", {"Version_1.0", "Version_1.1"}),
++        ("Version_9.9", {"Version_1.0"}),
++    ],
++)
++def test_snippet_describes_in_use_and_target(
++    no_client, fake_aws, run_snippet, load_fixture, capsys, target, described
++):
++    newest = load_fixture("describe_v1_1.json")
++    newest["VersionName"] = "Version_1.10"
++    fake_aws.describes[(CRS, "Version_1.10")] = newest
++    argv = ["--web-acl-file", UPGRADE, "--region", "us-east-1", "--target", target]
++
++    run_snippet(_snippet(capsys, *argv), fake_aws.call_boto3)
++
++    assert _described(fake_aws, CRS) == described
++
++
++def test_nonexistent_default_left_out_and_reported(
++    no_client, fake_aws, run_snippet, tmp_path, capsys
++):
++    fake_aws.errors[(CRS, "Version_1.1")] = fake_aws.client_error("WAFNonexistentItemException")
++    snippet = _snippet(capsys, "--web-acl-file", CLEAN, "--region", "us-east-1")
++
++    bundle = run_snippet(snippet, fake_aws.call_boto3)
++
++    assert bundle["rule_groups"][CRS]["versions"] == {}
++    path = tmp_path / "bundle.json"
++    path.write_text(json.dumps(bundle))
++    assert main(["check", "--bundle", str(path)]) == 0
++    assert capsys.readouterr().out.splitlines() == [
++        f"WARNING  {CRS}  default-not-describable  default version Version_1.1 "
++        "cannot be described; comparisons that need it are skipped",
++        "Summary: 0 error(s), 1 warning(s), 0 info",
++    ]
++
++
++def test_other_describe_error_fails_the_snippet(no_client, fake_aws, run_snippet, capsys):
++    fake_aws.errors[(CRS, "Version_1.0")] = fake_aws.client_error("WAFAccessDeniedException")
++    snippet = _snippet(capsys, "--web-acl-file", UPGRADE, "--region", "us-east-1")
++
++    with pytest.raises(ClientError, match="WAFAccessDeniedException"):
++        run_snippet(snippet, fake_aws.call_boto3)
++
++
++def test_cloudfront_reads_us_east_1(no_client, fake_aws, run_snippet, capsys):
++    snippet = _snippet(capsys, "--web-acl-file", UPGRADE, "--scope", "CLOUDFRONT")
++
++    run_snippet(snippet, fake_aws.call_boto3)
++
++    assert {region for _, _, region, _ in fake_aws.calls} == {"us-east-1"}
++    assert {params["Scope"] for service, _, _, params in fake_aws.calls if service == "wafv2"} == {
++        "CLOUDFRONT"
++    }
++
++
++@pytest.mark.parametrize(
++    ("argv", "message"),
++    [
++        (["--web-acl-file", UPGRADE], "collect-script --scope REGIONAL requires --region"),
++        (
++            ["--web-acl-file", UPGRADE, "--scope", "CLOUDFRONT", "--region", "eu-west-1"],
++            "--scope CLOUDFRONT requires region us-east-1, got eu-west-1",
++        ),
++        (["--web-acl", "example-web-acl", "--region", "us-east-1"], "--web-acl requires --id"),
++        (
++            ["--web-acl-file", UPGRADE, "--id", WEB_ACL_ID, "--region", "us-east-1"],
++            "--id cannot be used with --web-acl-file",
++        ),
++    ],
++)
++def test_collect_script_option_errors_exit_2(no_client, capsys, argv, message):
++    assert main(["collect-script", *argv]) == 2
++
++    assert capsys.readouterr().err == f"waf-upgrade-check: error: {message}\n"
++
++
++def test_collect_script_unreadable_file_exits_2(no_client, tmp_path, capsys):
++    path = tmp_path / "missing.json"
++
++    assert main(["collect-script", "--web-acl-file", str(path), "--region", "us-east-1"]) == 2
++
++    assert capsys.readouterr().err == (
++        f"waf-upgrade-check: error: cannot read web ACL file {path}: "
++        f"[Errno 2] No such file or directory: '{path}'\n"
++    )

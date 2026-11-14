@@ -1,0 +1,6 @@
+Source: github.com/dakiquang/waf-upgrade-check (MIT License, same author as qk).
+repo/   = the repository at commit f19abd0, without .github/ and uv.lock.
+review.diff = pull request #4 as merged (3920de3), with the later validation fixes, the snippet's empty-page
+              pagination fix, the check --bundle safety net and the skill's caller-account comparison removed again,
+              and the tests that exposed them dropped. Its own 125 tests pass and ruff is clean.
+plan.md = the plan qk-run approved for that pull request (run 7).
