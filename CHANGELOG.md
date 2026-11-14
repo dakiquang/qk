@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+
 ### Changed
 
 - `qk-cook`, `qk-test`, `qk-debug`, `qk-research` and `qk-plan` audit now check

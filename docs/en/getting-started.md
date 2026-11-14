@@ -24,7 +24,7 @@ npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
 To pin a release, add its tag after `#` (releases from `v0.3.0` include the layout this method needs):
 
 ```bash
-npx skills add 'dakiquang/qk#v0.3.0' -g -a claude-code codex qwen-code -y
+npx skills add 'dakiquang/qk#v0.4.0' -g -a claude-code codex qwen-code -y
 ```
 
 `dakiquang/qk@<name>` does not select a version: `npx skills` reads the part after `@` as a skill name.
@@ -124,7 +124,7 @@ git -C ~/src/qk fetch --tags
 ```
 
 ```bash
-git -C ~/src/qk checkout v0.3.0
+git -C ~/src/qk checkout v0.4.0
 ```
 
 To return to the latest on `main`:
