@@ -125,6 +125,21 @@ Run 5 was the first with live output: 33 action lines while planning, 29 while i
 
 A separate cross-model review of run 4's pull request found one more important issue (an omp message with only tool calls could overwrite the final reply) and four nits; all five were fixed before merging, four with regression tests that fail on the previous code.
 
+## Review prompt evaluation
+
+**2026-11-14, Claude Opus 5.5.** The fixed cases and code graders are in [`evals/`](../../evals/). The baseline was recorded with the previous review prompt. `bundle-malformed` passed all six criteria on both runtimes. On `waf-bundle-review`, a 1,200-line diff reconstructed from a real WAF pull request, both runtimes caught 0 of eight defects at blocker or important severity. A baseline omp attempt was stopped when the read-only MCP guard detected an AWS MCP call; the valid rerun is recorded in `baseline.json`.
+
+With the prompt proposed in [draft PR #26](https://github.com/dakiquang/qk/pull/26), which asks reviewers to search by defect class and defines severity for malformed external input:
+
+| Runtime and case | Baseline | New result | Tokens |
+|---|---:|---:|---:|
+| omp, `waf-bundle-review` | 0/8 | 5/8, same on the required rerun | 812,971 → 754,188 (−7.2%) |
+| omp, `bundle-malformed` | 6/6 | 6/6 | 60,361 → 82,257 (+36.3%) |
+| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99,628 → 81,643 (−18.1%) |
+| Claude Code, `waf-bundle-review` | 0/8 | 3/8 on the first valid run; rerun incomplete | 614,717 → pending |
+
+The omp small-case token increase exceeds the accepted 10% regression limit. Claude Code's required WAF rerun stopped at the runtime's five-hour session limit, so its final result is pending. These single-run results do not establish a general improvement or a release-ready change. Raw local results: `~/.local/state/qk-eval/20261114-222849-9139/` (omp) and `~/.local/state/qk-eval/20261114-223619-0024/` (Claude Code).
+
 ## Lean setup measurements
 
 The commands in [Lean setup](lean-setup.md) were checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 on 2026-11-13. Qwen Code was not checked.

@@ -2,7 +2,7 @@
 """qk-eval: run fixed eval cases on one runtime, grade them by code and compare them with the baseline.
 
 Each case is one real agent turn in a throwaway git repository, graded by the case's check.py. A criterion
-that passed in the baseline and fails now, or tokens more than 10% above the baseline, is a regression.
+that passed in the baseline and fails now, or tokens more than 10% and more than 25,000 above the baseline, is a regression.
 """
 import argparse
 import json
@@ -23,6 +23,9 @@ BASELINE = qk_run.QK_ROOT / "evals" / "baseline.json"
 REVIEW = "runner-review"
 CHECK_TIMEOUT = 300
 TOKEN_LIMIT_PERCENT = 110
+# One extra agent turn costs about 22-26k tokens on the small cases, more than 10% of them, so a token regression
+# must also exceed this absolute floor; otherwise a single verification turn reads as a regression.
+TOKEN_FLOOR = 25_000
 GIT_IDENTITY = ("-c", "user.name=qk-eval", "-c", "user.email=qk-eval@example.invalid", "-c", "commit.gpgsign=false")
 
 
@@ -177,7 +180,8 @@ def compare(result, base):
     lost = sorted(before - now)
     base_tokens = base.get("tokens")
     tokens_over = (result["tokens"] is not None and base_tokens is not None
-                   and result["tokens"] * 100 > base_tokens * TOKEN_LIMIT_PERCENT)
+                   and result["tokens"] * 100 > base_tokens * TOKEN_LIMIT_PERCENT
+                   and result["tokens"] - base_tokens > TOKEN_FLOOR)
     known = set(base.get("criteria", {}))  # a criterion added after the baseline was recorded is not a flip
     return {"lost": lost, "flipped": (now & known) != before, "tokens_pct": percent(result["tokens"], base_tokens),
             "seconds_pct": percent(result["seconds"], base.get("seconds")), "tokens_over": tokens_over,
@@ -232,7 +236,7 @@ def report(spec, results, entries):
                      f"time {signed(diff['seconds_pct'])}; rerun: {'yes' if result['runs'] > 1 else 'no'}")
         reasons += [f"criterion lost: {name}/{criterion}" for criterion in diff["lost"]]
         if diff["tokens_over"]:
-            reasons.append(f"tokens {signed(diff['tokens_pct'])} > 10%: {name}")
+            reasons.append(f"tokens {signed(diff['tokens_pct'])} > 10% and > {TOKEN_FLOOR:,}: {name}")
     regression = any(not reason.startswith("agent error") for reason in reasons)
     verdict = "regression" if regression else "error" if reasons else "ok"
     lines.append(f"verdict: {verdict}" + (f" ({'; '.join(reasons)})" if reasons else ""))

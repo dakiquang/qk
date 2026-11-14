@@ -38,6 +38,24 @@
       "date": "2026-11-14",
       "seconds": 35,
       "tokens": 371524
+    },
+    "waf-bundle-review": {
+      "criteria": {
+        "caller-account-check": false,
+        "capacity-type": true,
+        "clean": true,
+        "label-name-type": false,
+        "listed-version-name": true,
+        "nested-statement": true,
+        "no-outside-important": true,
+        "pagination-empty-page": false,
+        "priority-type": true,
+        "result": true,
+        "rules-not-list": true
+      },
+      "date": "2026-11-15",
+      "seconds": 146,
+      "tokens": 467378
     }
   },
   "omp:anthropic/claude-opus-5-5": {
@@ -50,9 +68,9 @@
         "no-outside-important": true,
         "result": true
       },
-      "date": "2026-11-14",
-      "seconds": 50,
-      "tokens": 60361
+      "date": "2026-11-15",
+      "seconds": 51,
+      "tokens": 70471
     },
     "csv-export": {
       "criteria": {
@@ -79,6 +97,24 @@
       "date": "2026-11-14",
       "seconds": 41,
       "tokens": 116182
+    },
+    "waf-bundle-review": {
+      "criteria": {
+        "caller-account-check": false,
+        "capacity-type": true,
+        "clean": true,
+        "label-name-type": true,
+        "listed-version-name": true,
+        "nested-statement": false,
+        "no-outside-important": true,
+        "pagination-empty-page": false,
+        "priority-type": false,
+        "result": true,
+        "rules-not-list": true
+      },
+      "date": "2026-11-15",
+      "seconds": 203,
+      "tokens": 1046529
     }
   }
 }

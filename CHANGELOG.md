@@ -13,8 +13,8 @@ All notable changes to this project are documented here. The format follows
   important on omp and Claude Code with Claude Opus 5.5).
 - `scripts/qk_eval.py` runs fixed eval cases on one runtime, grades each by
   code (`check.py`), prints criteria, tokens and time, and compares them with
-  `evals/baseline.json`: a lost criterion, tokens more than 10% above the
-  baseline or an agent error exits 1; a flipped case is rerun once;
+  `evals/baseline.json`: a lost criterion, tokens more than 10% and more than
+  25,000 above the baseline (about one agent turn), or an agent error exits 1; a flipped case is rerun once;
   `--update-baseline` records accepted results. See `docs/en/evals.md`.
 - Three eval cases in `evals/cases/`: `csv-export` (`qk-cook`),
   `pagination-empty-page` (`qk-debug`) and `bundle-malformed` (the runner's
@@ -23,7 +23,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - The runner's review prompt is built by `qk_run.review_prompt` so evals use
-  the same text; the text is unchanged.
+  the same text. Reviewers now classify findings, search the full diff for
+  further instances of a defect class, and rate crashes on accepted external
+  input at least important.
 
 ## [0.5.0] - 2026-11-14
 

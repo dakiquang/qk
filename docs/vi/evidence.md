@@ -125,6 +125,21 @@ Run 5 là run đầu tiên có output trực tiếp: 33 dòng thao tác khi lậ
 
 Một lượt review chéo riêng cho PR của run 4 tìm thêm một lỗi mức important (tin nhắn omp chỉ có tool call có thể ghi đè câu trả lời cuối) và bốn nit; cả năm đã được sửa trước khi merge, bốn trong số đó có test hồi quy fail với code cũ.
 
+## Đo prompt review
+
+**14/11/2026, Claude Opus 5.5.** Bài mẫu cố định và bộ chấm bằng code nằm trong [`evals/`](../../evals/). Baseline dùng prompt review cũ. `bundle-malformed` đạt cả sáu tiêu chí trên hai runtime. Với `waf-bundle-review`, diff 1.200 dòng dựng lại từ PR WAF thật, cả hai runtime đều bắt 0/8 lỗi ở mức blocker hoặc important. Một lần chạy baseline omp bị chốt chặn MCP dừng khi reviewer gọi AWS MCP trong bước chỉ đọc; lần chạy lại hợp lệ đã được ghi vào `baseline.json`.
+
+Với prompt trong [PR nháp #26](https://github.com/dakiquang/qk/pull/26), yêu cầu soát theo loại lỗi và định nghĩa mức độ cho đầu vào ngoài sai cấu trúc:
+
+| Runtime và bài | Baseline | Kết quả mới | Token |
+|---|---:|---:|---:|
+| omp, `waf-bundle-review` | 0/8 | 5/8, giữ nguyên ở lần chạy lại bắt buộc | 812.971 → 754.188 (−7,2%) |
+| omp, `bundle-malformed` | 6/6 | 6/6 | 60.361 → 82.257 (+36,3%) |
+| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99.628 → 81.643 (−18,1%) |
+| Claude Code, `waf-bundle-review` | 0/8 | 3/8 ở lần chạy hợp lệ đầu; lần chạy lại chưa xong | 614.717 → đang chờ |
+
+Mức tăng token của bài nhỏ trên omp vượt ngưỡng thụt lùi 10% đã chốt. Lần chạy lại WAF bắt buộc trên Claude Code bị dừng do giới hạn phiên năm giờ, nên chưa có kết quả cuối. Những lần chạy đơn lẻ này chưa chứng minh cải tiến chung hay đủ điều kiện phát hành. Kết quả thô trên máy: `~/.local/state/qk-eval/20261114-222849-9139/` (omp) và `~/.local/state/qk-eval/20261114-223619-0024/` (Claude Code).
+
 ## Số đo thiết lập gọn nhẹ
 
 Các lệnh trong [Thiết lập gọn nhẹ](lean-setup.md) được kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 ngày 13/11/2026. Qwen Code chưa kiểm.

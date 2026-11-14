@@ -321,17 +321,19 @@ class HarnessTest(unittest.TestCase):
         self.assertIn("2/2 → 2/3, lost: b;", out)
         self.assertIn("verdict: regression (criterion lost: alpha/b)", out)
 
-    def test_token_limit_is_ten_percent(self):
+    def test_token_limit_is_ten_percent_and_one_turn(self):
         self.case("alpha")
-        self.baseline({SPEC: {"alpha": self.entry(tokens=1000)}})
-        for output, expected in ((110, 1), (100, 0), (90, 0), (None, 0)):
-            with self.subTest(output=output):
-                usage = None if output is None else {"input": 1000, "cached": 900, "output": output}
+        # Large case: 10% decides (+11% = 33,000 > 25,000). Small case: one extra turn is not a regression.
+        for base, extra, expected in ((300_000, 33_000, 1), (300_000, 30_000, 0), (300_000, 0, 0),
+                                      (60_000, 22_000, 0), (60_000, 26_000, 1), (300_000, None, 0)):
+            with self.subTest(base=base, extra=extra):
+                self.baseline({SPEC: {"alpha": self.entry(tokens=base)}})
+                usage = None if extra is None else {"input": base + extra, "cached": 0, "output": 0}
                 code, out, agent = self.run_eval(lambda cwd, prompt: ("<a><b>", usage), "--case", "alpha")
                 self.assertEqual(code, expected, out)
                 self.assertEqual(len(agent.calls), 1)
                 if expected:
-                    self.assertIn("verdict: regression (tokens +11.0% > 10%: alpha)", out)
+                    self.assertIn("> 10% and > 25,000: alpha)", out)
 
     def test_flipped_case_is_rerun_once_and_the_rerun_counts(self):
         self.case("alpha")
