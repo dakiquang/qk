@@ -1,0 +1,41 @@
+[project]
+name = "waf-upgrade-check"
+version = "0.1.0.dev0"
+description = "Check what breaks before you upgrade an AWS WAF managed rule group version."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Quang Dang" }]
+requires-python = ">=3.10"
+dependencies = ["boto3>=1.34"]
+keywords = ["aws", "waf", "wafv2", "managed rules", "cli"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+
+[project.urls]
+Repository = "https://github.com/dakiquang/waf-upgrade-check"
+Changelog = "https://github.com/dakiquang/waf-upgrade-check/blob/main/CHANGELOG.md"
+
+[project.scripts]
+waf-upgrade-check = "waf_upgrade_check.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

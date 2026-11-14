@@ -1,0 +1,7 @@
+{
+  "VersionName": "Version_0.9",
+  "Capacity": 100,
+  "Rules": [
+    {"Name": "RuleWithoutAction"}
+  ]
+}

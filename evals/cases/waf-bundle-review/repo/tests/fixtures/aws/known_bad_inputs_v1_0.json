@@ -1,0 +1,30 @@
+{
+  "VersionName": "Version_1.0",
+  "Capacity": 200,
+  "Rules": [
+    {
+      "Name": "Host_localhost_HEADER",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "PROPFIND_METHOD",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "ExploitablePaths_URIPATH",
+      "Action": {
+        "Block": {}
+      }
+    },
+    {
+      "Name": "BadAuthToken_COOKIE_AUTHORIZATION",
+      "Action": {
+        "Block": {}
+      }
+    }
+  ]
+}

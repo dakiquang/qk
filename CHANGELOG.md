@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Eval case `waf-bundle-review`: the runner's review prompt on a real, 1,200-line pull request with eight real
+  defects put back. Unlike the first three cases, current reviewers do not pass it (0 of 8 caught at blocker or
+  important on omp and Claude Code with Claude Opus 5.5).
 - `scripts/qk_eval.py` runs fixed eval cases on one runtime, grades each by
   code (`check.py`), prints criteria, tokens and time, and compares them with
   `evals/baseline.json`: a lost criterion, tokens more than 10% above the

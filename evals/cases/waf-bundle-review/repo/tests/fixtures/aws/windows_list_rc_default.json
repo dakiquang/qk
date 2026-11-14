@@ -1,0 +1,18 @@
+{
+  "CurrentDefaultVersion": "Version_2.4_PLUS_RC_COUNT",
+  "NextMarker": "Version_1.0",
+  "Versions": [
+    {
+      "Name": "Version_2.5",
+      "LastUpdateTimestamp": "2026-05-29T18:09:25.997000+00:00"
+    },
+    {
+      "Name": "Version_2.4",
+      "LastUpdateTimestamp": "2026-04-28T00:25:38.627000+00:00"
+    },
+    {
+      "Name": "Version_1.0",
+      "LastUpdateTimestamp": "2021-10-05T13:05:23.764000+00:00"
+    }
+  ]
+}

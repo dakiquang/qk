@@ -77,7 +77,8 @@ class CaseSanityTest(unittest.TestCase):
     def test_case_files_are_valid(self):
         cases = {case["name"]: case for case in qk_eval.all_cases()}
         self.assertEqual({name: case["skill"] for name, case in cases.items()},
-                         {"csv-export": "qk-cook", "pagination-empty-page": "qk-debug", "bundle-malformed": "runner-review"})
+                         {"csv-export": "qk-cook", "pagination-empty-page": "qk-debug", "bundle-malformed": "runner-review",
+                          "waf-bundle-review": "runner-review"})
         for name, case in cases.items():
             directory = REAL_CASES / name
             self.assertTrue((directory / "check.py").is_file(), name)
@@ -159,6 +160,41 @@ class CaseSanityTest(unittest.TestCase):
         self.assertTrue(self.grade(case, workdir, LABELS)["test-catches-bug"])
         (workdir / "notes.txt").write_text("extra\n")
         self.assertFalse(self.grade(case, workdir, LABELS)["scope"])
+
+    def test_waf_review_grading(self):
+        """The real-diff review case: eight places, each needs the right file, line and words."""
+        case, workdir = self.prepare("waf-bundle-review")
+        self.assertIn(" M src/waf_upgrade_check/cli.py", git_out(workdir, "status", "--porcelain"))
+        places = ["pagination-empty-page", "rules-not-list", "priority-type", "nested-statement", "capacity-type",
+                  "label-name-type", "listed-version-name", "caller-account-check"]
+        empty = self.grade(case, workdir)
+        self.assertEqual([empty[name] for name in ["result", *places]], [False] * 9)
+
+        def line_of(path, text):
+            lines = (workdir / path).read_text().splitlines()
+            return next(i for i, line in enumerate(lines, 1) if text in line)
+
+        bundle, collect = "src/waf_upgrade_check/bundle.py", "src/waf_upgrade_check/collect.py"
+        rules_line = line_of(bundle, 'rules = acl.get("Rules", [])')
+        catalog_line = line_of(bundle, "version = RuleGroupVersion.from_response(response)")
+        listed_line = line_of(bundle, 'available.append((version["Name"]')
+        covering = [
+            finding(collect, line_of(collect, "if not marker or not page_entries:"),
+                    claim="an empty page with a NextMarker stops pagination early"),
+            finding(bundle, rules_line, claim="Rules null is not rejected; iterating None raises TypeError"),
+            finding(bundle, rules_line, claim="Priority as a string is accepted and later compared with an int"),
+            finding(bundle, rules_line, claim="a null nested statement is not rejected"),
+            finding(bundle, catalog_line, claim="Capacity is not checked to be an integer"),
+            finding(bundle, catalog_line, claim="AvailableLabels names are not checked to be strings"),
+            finding(bundle, listed_line, claim="a listed version Name of null is accepted; join fails"),
+            finding("skills/waf-upgrade-check/SKILL.md", 46,
+                    claim="the collected caller account is never compared with the confirmed account"),
+        ]
+        self.assertEqual(set(self.grade(case, workdir, review_result(*covering)).values()), {True})
+        vague = self.grade(case, workdir, review_result(*[finding(f["file"], f["line"]) for f in covering]))
+        self.assertEqual([vague[name] for name in places], [False] * 8)
+        outside = self.grade(case, workdir, review_result(*covering, finding("src/waf_upgrade_check/aws.py", 10)))
+        self.assertFalse(outside["no-outside-important"])
 
     def test_bundle_review_grading(self):
         case, workdir = self.prepare("bundle-malformed")

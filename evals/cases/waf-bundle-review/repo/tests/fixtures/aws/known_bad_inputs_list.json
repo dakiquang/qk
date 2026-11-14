@@ -1,0 +1,34 @@
+{
+  "CurrentDefaultVersion": "Version_1.26",
+  "NextMarker": "Version_1.0",
+  "Versions": [
+    {
+      "Name": "Version_1.26",
+      "LastUpdateTimestamp": "2026-07-10T15:26:45.970000+00:00"
+    },
+    {
+      "Name": "Version_1.25",
+      "LastUpdateTimestamp": "2025-12-09T01:10:02.609000+00:00"
+    },
+    {
+      "Name": "Version_1.24",
+      "LastUpdateTimestamp": "2025-12-03T20:06:06.012000+00:00"
+    },
+    {
+      "Name": "Version_1.22",
+      "LastUpdateTimestamp": "2024-05-08T14:19:19.386000+00:00"
+    },
+    {
+      "Name": "Version_1.7",
+      "LastUpdateTimestamp": "2021-12-18T00:30:45.673000+00:00"
+    },
+    {
+      "Name": "Version_1.8",
+      "LastUpdateTimestamp": "2021-12-17T23:11:00.272000+00:00"
+    },
+    {
+      "Name": "Version_1.0",
+      "LastUpdateTimestamp": "2021-10-05T13:47:59.041000+00:00"
+    }
+  ]
+}
