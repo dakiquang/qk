@@ -24,7 +24,7 @@ npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
 Để cố định ở một bản phát hành, thêm tag sau dấu `#` (từ `v0.3.0` trở đi bản phát hành mới có layout mà cách này cần):
 
 ```bash
-npx skills add 'dakiquang/qk#v0.4.0' -g -a claude-code codex qwen-code -y
+npx skills add 'dakiquang/qk#v0.5.0' -g -a claude-code codex qwen-code -y
 ```
 
 `dakiquang/qk@<tên>` không chọn phiên bản: `npx skills` hiểu phần sau `@` là tên skill.
@@ -122,7 +122,7 @@ git -C ~/src/qk fetch --tags
 ```
 
 ```bash
-git -C ~/src/qk checkout v0.4.0
+git -C ~/src/qk checkout v0.5.0
 ```
 
 Để trở lại bản mới nhất trên `main`:
