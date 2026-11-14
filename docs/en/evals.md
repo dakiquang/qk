@@ -48,7 +48,7 @@ verdict: regression (criterion lost: csv-export/scope)
 The exit code is 1 when any of these happens, and the verdict line names each reason:
 
 - **Criterion lost:** a criterion that passed in the baseline fails now or is missing.
-- **Tokens:** more than 10% above the baseline of the same case and runtime (+10% is still fine, +11% is not). Time is reported but never fails the run.
+- **Tokens:** more than 10% **and** more than 25,000 tokens above the baseline of the same case and runtime. The floor is about one extra agent turn: on the small cases one turn alone is more than 10%, and repeated runs of the same prompt already vary by about 12%, so without it a single verification turn would read as a regression. On large cases 10% is above the floor and decides. Time is reported but never fails the run.
 - **Agent error:** any case whose agent call failed. `check.py` still runs on whatever the agent left.
 
 When the set of passing criteria differs from the baseline in either direction, that case is rerun once at once and the second run counts. A change in tokens alone does not trigger a rerun. Only the same runtime spec is ever compared.

@@ -48,7 +48,7 @@ verdict: regression (criterion lost: csv-export/scope)
 Mã thoát là 1 khi có bất kỳ trường hợp nào dưới đây, và dòng verdict nêu từng lý do:
 
 - **Mất tiêu chí:** một tiêu chí pass trong baseline nay fail hoặc không còn.
-- **Token:** vượt quá 10% so với baseline của cùng case và runtime (+10% vẫn ổn, +11% thì không). Thời gian chỉ được báo, không bao giờ làm lượt chạy fail.
+- **Token:** vượt baseline của cùng case và runtime **cả** hơn 10% **lẫn** hơn 25.000 token. Ngưỡng tuyệt đối này xấp xỉ một lượt agent thêm: ở các bài nhỏ, riêng một lượt đã hơn 10%, và chạy lại cùng một prompt đã dao động khoảng 12%, nên nếu không có nó thì một lượt kiểm thêm cũng bị tính là thụt lùi. Ở bài lớn, 10% đã lớn hơn ngưỡng này nên 10% quyết định. Thời gian chỉ được báo, không bao giờ làm lượt chạy fail.
 - **Lỗi agent:** bất kỳ case nào có lời gọi agent thất bại. `check.py` vẫn chạy trên những gì agent để lại.
 
 Khi tập tiêu chí pass khác baseline theo bất kỳ chiều nào, case đó được chạy lại một lần ngay lập tức và lượt thứ hai được tính. Chỉ thay đổi token thì không chạy lại. Chỉ so sánh cùng một spec runtime.
