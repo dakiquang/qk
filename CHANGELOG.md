@@ -27,7 +27,8 @@ All notable changes to this project are documented here. The format follows
   added, and the planner is asked for a title of at most 60 characters.
 - `qk-run` agents no longer load globally installed skills: Claude runs with
   `--disable-slash-commands`, omp with `--no-skills --no-extensions --no-rules`,
-  and Codex in a private home inside the run directory.
+  and Codex in a private home inside the run directory with plugins, remote
+  plugins and apps turned off.
   Read-only Claude stages also run with `--strict-mcp-config`.
 - A read-only `qk-run` stage that calls MCP or another `xd://` runtime device
   is stopped and blocks with `read-only stage called <action>`.

@@ -831,7 +831,8 @@ class AgentStreamTest(unittest.TestCase):
             self.assertEqual(env["UV_CACHE_DIR"], str(real_home / ".cache" / "uv"))
             self.assertEqual(env["UV_PYTHON_INSTALL_DIR"], str(real_home / ".local" / "share" / "uv" / "python"))
             config = home / ".codex" / "config.toml"
-            self.assertEqual(config.read_text(), 'model = "gpt-x"\nmodel_reasoning_effort = "high"\n')
+            self.assertEqual(config.read_text(), 'model = "gpt-x"\nmodel_reasoning_effort = "high"\n'
+                                                 '\n[features]\nplugins = false\nremote_plugin = false\napps = false\n')
             auth = home / ".codex" / "auth.json"
             self.assertTrue(auth.is_symlink())
             self.assertEqual(Path(os.readlink(auth)), real_codex / "auth.json")
