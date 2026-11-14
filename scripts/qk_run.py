@@ -782,6 +782,17 @@ def approved_plan(state):
     return path, text
 
 
+def review_prompt(worktree, plan, diff_file):
+    """Prompt of the independent review turn; qk_eval reuses it so evals review under the runner's exact text."""
+    return f"""Independent read-only review. Do not edit files and do not run commands that write.
+Repository: {worktree}. Approved plan: {plan}. Full diff: {diff_file}.
+Check correctness, security, regressions, scope versus the plan, and missing tests. Re-read every line you cite.
+Report only verified problems introduced by this diff. Put them in "findings" as
+{{"severity": "blocker|important|nit", "file": "<repo-relative path>", "line": N, "claim": "...", "fix": "..."}}.
+Use status "done" when the review itself completed, even if there are findings.
+{RESULT_CONTRACT}"""
+
+
 def reviewing(state):
     worktree = Path(state["worktree"])
     plan, _ = approved_plan(state)
@@ -789,13 +800,7 @@ def reviewing(state):
     git(worktree, "add", "-A")
     diff_file.write_text(git(worktree, "diff", "--cached", state["base_sha"]), encoding="utf-8")
     git(worktree, "reset", "-q")
-    prompt = f"""Independent read-only review. Do not edit files and do not run commands that write.
-Repository: {worktree}. Approved plan: {plan}. Full diff: {diff_file}.
-Check correctness, security, regressions, scope versus the plan, and missing tests. Re-read every line you cite.
-Report only verified problems introduced by this diff. Put them in "findings" as
-{{"severity": "blocker|important|nit", "file": "<repo-relative path>", "line": N, "claim": "...", "fix": "..."}}.
-Use status "done" when the review itself completed, even if there are findings.
-{RESULT_CONTRACT}"""
+    prompt = review_prompt(worktree, plan, diff_file)
     _, result = run_agent(state, "review", prompt)
     files = changed_files(worktree)
     findings = [f for f in result.get("findings") or [] if isinstance(f, dict)]

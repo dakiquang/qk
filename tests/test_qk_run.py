@@ -397,6 +397,31 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.latest()["stage"], "done")
         self.assertNotIn("fix", [c[0] for c in agent.calls])
 
+    def test_review_prompt_text_is_unchanged_and_used_by_the_runner(self):
+        pinned = """Independent read-only review. Do not edit files and do not run commands that write.
+Repository: /w. Approved plan: /r/approved-plan.md. Full diff: /r/review.diff.
+Check correctness, security, regressions, scope versus the plan, and missing tests. Re-read every line you cite.
+Report only verified problems introduced by this diff. Put them in "findings" as
+{"severity": "blocker|important|nit", "file": "<repo-relative path>", "line": N, "claim": "...", "fix": "..."}.
+Use status "done" when the review itself completed, even if there are findings.
+End your reply with exactly one fenced block:
+```qk-result
+{"status": "done|blocked|needs_input", "summary": "...", "files": [], "evidence": [], "reason": "", "findings": []}
+```
+Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the user's language."""
+        self.assertEqual(qk_run.review_prompt(Path("/w"), Path("/r/approved-plan.md"), Path("/r/review.diff")), pinned)
+        prompts, agent = [], Agent()
+
+        def recording(spec, prompt, *args, **kwargs):
+            prompts.append(prompt)
+            return agent(spec, prompt, *args, **kwargs)
+        state = self.start(recording)
+        self.cli("approve", state["id"])
+        state = self.latest()
+        directory = Path(os.environ["QK_RUN_STATE_DIR"]) / state["id"]
+        expected = qk_run.review_prompt(Path(state["worktree"]), directory / "approved-plan.md", directory / "review.diff")
+        self.assertEqual([p for p in prompts if p.startswith("Independent read-only review")], [expected])
+
     def test_reviewer_editing_files_is_blocked(self):
         def review(cwd, state_dir):
             (cwd / "greeting.txt").write_text("changed by reviewer\n")

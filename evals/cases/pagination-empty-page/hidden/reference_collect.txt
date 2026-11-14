@@ -1,0 +1,20 @@
+"""Collect every item from a paginated listing API."""
+
+
+def collect_all(fetch_page):
+    """Return all items of a listing, following `next` markers until the listing ends.
+
+    `fetch_page(marker)` returns {"items": [...], "next": str or None}; the first call gets marker None.
+    An empty page that still has a marker does not end the listing; a repeated marker does.
+    """
+    collected = []
+    marker = None
+    seen = set()
+    while True:
+        page = fetch_page(marker)
+        collected.extend(page.get("items") or [])
+        marker = page.get("next")
+        if not marker or marker in seen:
+            break
+        seen.add(marker)
+    return collected
