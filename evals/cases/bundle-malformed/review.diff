@@ -1,0 +1,116 @@
+diff --git a/bundle/loader.py b/bundle/loader.py
+new file mode 100644
+index 0000000..813ed10
+--- /dev/null
++++ b/bundle/loader.py
+@@ -0,0 +1,58 @@
++"""Load a bundle document (already parsed from JSON) into model objects."""
++from .models import Bundle, BundleError, Policy, Statement, Version
++
++EFFECTS = ("Allow", "Deny")
++
++
++def load_bundle(doc):
++    """Return the Bundle described by `doc`; raise BundleError when the document is invalid."""
++    if not isinstance(doc, dict):
++        raise BundleError("bundle: expected an object")
++    name = _field(doc, "name", str, "bundle")
++    if not name.strip():
++        raise BundleError("bundle.name: must not be empty")
++    if "capacity" not in doc:
++        raise BundleError("bundle: missing 'capacity'")
++    capacity = int(doc["capacity"])
++    if capacity < 1:
++        raise BundleError("bundle.capacity: must be at least 1")
++    policy = _policy(_field(doc, "policy", dict, "bundle"))
++    versions = [_version(raw, index) for index, raw in enumerate(_field(doc, "versions", list, "bundle"))]
++    return Bundle(name=name, capacity=capacity, policy=policy, versions=versions)
++
++
++def _field(raw, key, kind, where):
++    if key not in raw:
++        raise BundleError(f"{where}: missing {key!r}")
++    value = raw[key]
++    if not isinstance(value, kind):
++        raise BundleError(f"{where}.{key}: expected {kind.__name__}")
++    return value
++
++
++def _policy(raw):
++    name = _field(raw, "name", str, "policy")
++    statement = raw.get("statement")
++    if statement and not isinstance(statement, dict):
++        raise BundleError("policy.statement: expected an object")
++    return Policy(name=name, statement=_statement(statement) if statement else None)
++
++
++def _statement(raw):
++    effect = _field(raw, "effect", str, "statement")
++    if effect not in EFFECTS:
++        raise BundleError(f"statement.effect: must be one of {', '.join(EFFECTS)}")
++    actions = _field(raw, "actions", list, "statement")
++    if not all(isinstance(action, str) for action in actions):
++        raise BundleError("statement.actions: expected a list of strings")
++    return Statement(effect=effect, actions=list(actions))
++
++
++def _version(raw, index):
++    where = f"versions[{index}]"
++    if not isinstance(raw, dict):
++        raise BundleError(f"{where}: expected an object")
++    if "name" not in raw:
++        raise BundleError(f"{where}: missing 'name'")
++    created = _field(raw, "created", str, where)
++    return Version(name=raw["name"], created=created)
+diff --git a/tests/test_loader.py b/tests/test_loader.py
+new file mode 100644
+index 0000000..2ed52b7
+--- /dev/null
++++ b/tests/test_loader.py
+@@ -0,0 +1,46 @@
++import unittest
++
++from bundle.loader import load_bundle
++from bundle.models import BundleError
++
++
++def valid():
++    return {"name": "web", "capacity": 2,
++            "policy": {"name": "read-only", "statement": {"effect": "Allow", "actions": ["read", "list"]}},
++            "versions": [{"name": "v1", "created": "2026-11-01"}, {"name": "v2", "created": "2026-11-08"}]}
++
++
++def with_statement(statement):
++    doc = valid()
++    doc["policy"]["statement"] = statement
++    return doc
++
++
++class LoaderTest(unittest.TestCase):
++    def test_valid_bundle_loads(self):
++        bundle = load_bundle(valid())
++        self.assertEqual((bundle.name, bundle.capacity), ("web", 2))
++        self.assertEqual(bundle.policy.statement.effect, "Allow")
++        self.assertEqual(bundle.policy.statement.actions, ["read", "list"])
++        self.assertEqual([version.name for version in bundle.versions], ["v1", "v2"])
++
++    def test_invalid_documents_raise_bundle_error(self):
++        cases = {
++            "not an object": [],
++            "missing name": {key: value for key, value in valid().items() if key != "name"},
++            "empty name": dict(valid(), name="  "),
++            "missing capacity": {key: value for key, value in valid().items() if key != "capacity"},
++            "capacity zero": dict(valid(), capacity=0),
++            "policy not an object": dict(valid(), policy="admin"),
++            "unknown effect": with_statement({"effect": "Maybe", "actions": []}),
++            "actions not strings": with_statement({"effect": "Allow", "actions": [1]}),
++            "versions not a list": dict(valid(), versions={}),
++            "version missing created": dict(valid(), versions=[{"name": "v1"}]),
++        }
++        for label, doc in cases.items():
++            with self.subTest(label), self.assertRaises(BundleError):
++                load_bundle(doc)
++
++
++if __name__ == "__main__":
++    unittest.main()

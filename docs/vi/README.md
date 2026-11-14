@@ -14,6 +14,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 ## Hướng dẫn
 
 - [Runner qk-run](runner.md): tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, với một cổng duyệt plan.
+- [qk-eval](evals.md): kiểm trước/sau chấm bằng code khi bạn sửa một skill hoặc bước review của runner.
 - [Hook ghi nhận sở thích](preference-hook.md): hook tuỳ chọn biến câu "từ nay…" thành đề xuất chờ bạn duyệt.
 - [Thiết lập gọn nhẹ](lean-setup.md): đo và cắt bớt phần runtime nạp vào mỗi phiên, dùng chung với các bộ skill khác.
 
