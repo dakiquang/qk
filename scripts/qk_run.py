@@ -182,10 +182,21 @@ def agent_command(spec, write, cwd, extra_dirs):
     return cmd, None
 
 
+DISPLAY_ROOTS = []  # (prefix, replacement) pairs set by call_agent so paths display relative to the worktree
+
+
+def shorten(text):
+    """Show paths under the agent's working directory relative to it, and the home directory as ~."""
+    for prefix, replacement in DISPLAY_ROOTS:
+        text = text.replace(prefix + "/", replacement).replace(prefix, replacement.rstrip("/") or ".")
+    return text
+
+
 def action(verb, target, suffix=""):
     """One display line `<verb> <target><suffix>` of at most DISPLAY_LIMIT characters; only the target is clipped."""
     if not isinstance(target, str) or not target.strip():
         return None
+    target = shorten(target)
     room = DISPLAY_LIMIT - len(verb) - 1 - len(suffix)
     return f"{verb} {' '.join(target.split())[:room]}{suffix}"
 
@@ -281,6 +292,7 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     Raw JSON events are appended to `events`. Replaced in tests."""
     cmd, out_file = agent_command(spec, write, cwd, extra_dirs)
     parse = EVENT_PARSERS[parse_spec(spec)[0]]
+    DISPLAY_ROOTS[:] = [(str(Path(cwd).resolve()), ""), (str(Path(cwd)), ""), (str(Path.home()), "~/")]
     try:
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",

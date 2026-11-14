@@ -630,6 +630,17 @@ class AgentStreamTest(unittest.TestCase):
             self.assertEqual(shown, displays, runtime)
             self.assertEqual(final, "DONE", runtime)
 
+    def test_display_paths_are_relative_to_the_worktree(self):
+        qk_run.DISPLAY_ROOTS[:] = [("/w/tree", ""), ("/u/me", "~/")]
+        self.addCleanup(qk_run.DISPLAY_ROOTS.clear)
+        omp = qk_run.EVENT_PARSERS["omp"]
+        self.assertEqual(omp({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/w/tree/src/a.py"}})[0], "read src/a.py")
+        self.assertEqual(omp({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/w/tree"}})[0], "read .")
+        self.assertEqual(omp({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/u/me/x/y.md"}})[0], "read ~/x/y.md")
+
     def test_event_parsers_skip_unhashable_tool_names(self):
         events = {"claude": {"type": "assistant", "message": {"content": [
                       {"type": "tool_use", "name": ["Read"], "input": {"file_path": "x"}}]}},
