@@ -111,6 +111,20 @@ Not covered in the empty `HOME`: calling skills after this install (no login the
 
 **2026-11-14.** Second real task: a code change to the runner itself, making it type the commit and PR title from the repository's commit convention, with tests and EN/VI docs. omp with Opus 5.5 implemented and Codex reviewed. There was one `revise` before approval to settle two open questions in the plan; both verify commands passed, the review returned no findings, and no fix round was needed. A ready-for-review PR opened about four minutes after `approve`, and CI passed. Because the run itself used the previous runner code, its PR title was the bare plan title and was set to the conventional form when squash-merging.
 
+**2026-11-14, runs three to five.** All three used omp with Opus 5.5 to implement and Codex (`gpt-6-sol`) to review.
+
+| Run | Task | Before approval | After approval | Review |
+|---|---|---|---|---|
+| 3 | `versions` and `diff` commands for a small Python CLI, 16 files | One plan, approved as written | PR about 5 minutes later; CI passed on Python 3.10–3.15 | One important finding: tests could still read the host's AWS credentials. Fixed in the single fix round |
+| 4 | The runner streams agent actions, prints a heartbeat, and stops the agent's process group on timeout; 8 files | One plan, approved as written | PR about 12 minutes later; CI passed | One important finding: a negative queue timeout at the heartbeat boundary. Fixed in the fix round; one nit remained |
+| 5 | `check` command of the same CLI, 10 files, run with the runner from run 4 | One `revise` to settle two questions the planner raised itself | PR about 7 minutes later; CI passed | No findings, no fix round |
+
+Run 3's PR title was cut mid-word at 72 characters and kept a project prefix (`feat: waf-upgrade-check: … (project plan st`); it was retitled on merge, and run 4 fixed the cause.
+
+Run 5 was the first with live output: 33 action lines while planning, 29 while implementing and 46 while reviewing, each also saved as raw events in `<stage>-<ts>.events.jsonl`. The log showed two things that were invisible before: the planner read botocore's wafv2 service model to check field shapes, and the Codex reviewer read an `ak-code-review` skill installed globally on the machine, so globally installed skills can influence the runner's review.
+
+A separate cross-model review of run 4's pull request found one more important issue (an omp message with only tool calls could overwrite the final reply) and four nits; all five were fixed before merging, four with regression tests that fail on the previous code.
+
 ## Lean setup measurements
 
 The commands in [Lean setup](lean-setup.md) were checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 on 2026-11-13. Qwen Code was not checked.
