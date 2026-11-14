@@ -31,6 +31,7 @@ DEFAULT_REVIEW = "codex:"
 RUNTIMES = ("omp", "claude", "codex")
 DEFAULT_TIMEOUT = 1800
 HEARTBEAT_SECONDS = 60
+STDERR_DRAIN_SECONDS = 5
 KILL_GRACE_SECONDS = 10
 DISPLAY_LIMIT = 120
 TITLE_LIMIT = 72
@@ -186,9 +187,13 @@ DISPLAY_ROOTS = []  # (prefix, replacement) pairs set by call_agent so paths dis
 
 
 def shorten(text):
-    """Show paths under the agent's working directory relative to it, and the home directory as ~."""
+    """Show paths under the agent's working directory relative to it, and the home directory as ~.
+
+    A root is replaced only as a whole path segment, so `<root>-old/x` stays as it is."""
     for prefix, replacement in DISPLAY_ROOTS:
-        text = text.replace(prefix + "/", replacement).replace(prefix, replacement.rstrip("/") or ".")
+        bare = replacement.rstrip("/") or "."
+        text = re.sub(re.escape(prefix) + r"(/|(?=[\s'\":;,)]|$))",
+                      lambda m, r=replacement, b=bare: r if m.group(1) == "/" else b, text)
     return text
 
 
@@ -247,8 +252,9 @@ def omp_event(event):
     if event.get("type") == "message_end" and isinstance(message, dict) and message.get("role") == "assistant":
         content = message.get("content")
         parts = content if isinstance(content, list) else []
-        return None, "".join(p["text"] for p in parts
-                             if isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str))
+        texts = [p["text"] for p in parts
+                 if isinstance(p, dict) and p.get("type") == "text" and isinstance(p.get("text"), str)]
+        return None, "".join(texts) if texts else None
     return None, None
 
 
@@ -346,7 +352,7 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     finally:
         if proc.poll() is None:
             stop_agent(proc)
-    stderr_reader.join(timeout=max(deadline - time.monotonic(), 0))
+    stderr_reader.join(timeout=STDERR_DRAIN_SECONDS)  # the agent has exited; let the reader finish
     text = final or ""
     if out_file and out_file.is_file():
         text = out_file.read_text(encoding="utf-8")
@@ -414,7 +420,7 @@ def run_agent(state, role, prompt, write=None):
                       "restore it or abort the run")
     primary = checkout_state(Path(state["repo"]))
     log(state, f"{spec} ({'write' if write else 'read-only'})")
-    stem = run_dir(state["id"]) / f"{state['stage']}-{int(time.time())}"
+    stem = run_dir(state["id"]) / f"{state['stage']}-{int(time.time())}-{secrets.token_hex(2)}"
     error, text = None, ""
     try:
         text = call_agent(spec, prompt, worktree, write, state["timeout"], [run_dir(state["id"])],
@@ -660,8 +666,8 @@ def plan_title(state):
     _, plan = approved_plan(state)
     for line in plan.splitlines():
         if line.startswith("# "):
-            return clip_title(line[2:].strip())
-    return clip_title(state["task"].splitlines()[0])
+            return line[2:].strip()
+    return state["task"].splitlines()[0]
 
 
 def uses_conventional_commits(subjects):
@@ -673,7 +679,7 @@ def conventional_title(title, subjects):
 
     A non-conventional `<word>: ` prefix (e.g. a project or ticket name) is dropped before the type is added."""
     if not uses_conventional_commits(subjects) or CONVENTIONAL_RE.match(title):
-        return title
+        return clip_title(title)
     prefix = FOREIGN_PREFIX_RE.match(title)
     if prefix and title[prefix.end():].strip():
         title = title[prefix.end():].strip()

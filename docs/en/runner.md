@@ -30,7 +30,7 @@ Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:ant
 
 State and logs live outside the repository, in `$XDG_STATE_HOME/qk-run/<id>/` (default `~/.local/state/qk-run/`). The worktree stays there after the run.
 
-While an agent runs, the runner prints each of its tool actions as one line (`read <path>`, `edit <path>`, `write <path>`, `run <command>`, with ` -> exit <code>` when the runtime reports it) and `still running (<n>s, last: <action>)` after every 60 s without events. The raw events of each turn go to `<stage>-<ts>.events.jsonl` next to `<stage>-<ts>.out.md`, and the runner's own log is `run.log`, both in the run directory; `status` prints the run directory and the last 10 log lines. When `--timeout` elapses, the runner sends SIGTERM to the agent's process group, SIGKILL after 10 s, and the run blocks.
+While an agent runs, the runner prints each of its tool actions as one line (`read <path>`, `edit <path>`, `write <path>`, `run <command>`, with ` -> exit <code>` when the runtime reports it) and `still running (<n>s, last: <action>)` after every 60 s without events. The raw events of each turn go to `<stage>-<ts>-<id>.events.jsonl` next to `<stage>-<ts>-<id>.out.md`, and the runner's own log is `run.log`, both in the run directory; `status` prints the run directory and the last 10 log lines. When `--timeout` elapses, the runner sends SIGTERM to the agent's process group, SIGKILL after 10 s, and the run blocks.
 
 ## Authority
 

@@ -30,7 +30,7 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 
 Trạng thái và log nằm ngoài repo, tại `$XDG_STATE_HOME/qk-run/<id>/` (mặc định `~/.local/state/qk-run/`). Worktree được giữ lại sau khi chạy.
 
-Khi agent chạy, runner in mỗi thao tác công cụ của nó thành một dòng (`read <path>`, `edit <path>`, `write <path>`, `run <lệnh>`, kèm ` -> exit <mã>` khi runtime báo) và in `still running (<n>s, last: <thao tác>)` sau mỗi 60 giây không có sự kiện. Sự kiện thô của từng lượt được ghi vào `<stage>-<ts>.events.jsonl` cạnh `<stage>-<ts>.out.md`, còn log của runner là `run.log`, cả hai nằm trong thư mục run; `status` in đường dẫn thư mục run và 10 dòng log cuối. Khi hết `--timeout`, runner gửi SIGTERM tới process group của agent, SIGKILL sau 10 giây, và run dừng ở `blocked`.
+Khi agent chạy, runner in mỗi thao tác công cụ của nó thành một dòng (`read <path>`, `edit <path>`, `write <path>`, `run <lệnh>`, kèm ` -> exit <mã>` khi runtime báo) và in `still running (<n>s, last: <thao tác>)` sau mỗi 60 giây không có sự kiện. Sự kiện thô của từng lượt được ghi vào `<stage>-<ts>-<id>.events.jsonl` cạnh `<stage>-<ts>-<id>.out.md`, còn log của runner là `run.log`, cả hai nằm trong thư mục run; `status` in đường dẫn thư mục run và 10 dòng log cuối. Khi hết `--timeout`, runner gửi SIGTERM tới process group của agent, SIGKILL sau 10 giây, và run dừng ở `blocked`.
 
 ## Quyền
 

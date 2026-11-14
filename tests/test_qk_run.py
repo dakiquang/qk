@@ -155,6 +155,17 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn("--draft", creates[0])
         self.assertEqual(creates[0][creates[0].index("--title") + 1], "Add greeting")
 
+    def test_turns_in_the_same_second_keep_separate_records(self):
+        from unittest import mock
+        finding = {"severity": "blocker", "file": "greeting.txt", "line": 1, "claim": "x", "fix": "y"}
+        agent = Agent(review=lambda cwd, state_dir: result(findings=[finding]))
+        with mock.patch.object(qk_run.time, "time", return_value=1_800_000_000.0):
+            state = self.start(agent)
+            self.cli("approve", state["id"])
+        outs = list(qk_run.run_dir(state["id"]).glob("*.out.md"))
+        self.assertEqual([c[0] for c in agent.calls].count("review"), 2)
+        self.assertEqual(len(outs), len(agent.calls), sorted(p.name for p in outs))
+
     def test_conventional_history_types_commit_and_pr_title(self):
         self.push_history("feat: a", "fix(x): b", "docs!: c")
         state = self.start(Agent())
@@ -210,6 +221,17 @@ class RunnerTest(unittest.TestCase):
         self.assertLessEqual(len(clipped), 72)
         self.assertEqual(long_title[len(clipped)], " ")
         self.assertTrue(long_title.startswith(clipped))
+
+    def test_long_foreign_prefix_is_dropped_before_clipping(self):
+        most = ["feat: a", "fix: b", "docs: c"]
+        title = "some-very-long-project-name-prefix: Add streaming of agent progress to the runner loop"
+        self.assertGreater(len(title), 72)
+        self.push_history(*most)
+        plan = f"# {title}\n\n```qk-verify\ntest -f greeting.txt\n```\n"
+        state = self.start(Agent(plan=lambda cwd, state_dir: planned(plan)))
+        self.cli("approve", state["id"])
+        expected = "feat: add streaming of agent progress to the runner loop"
+        self.assertEqual(self.published_titles(), (expected, expected))
 
     def test_verification_artifacts_are_not_committed(self):
         def plan(cwd, state_dir):
@@ -629,6 +651,21 @@ class AgentStreamTest(unittest.TestCase):
                     final = text
             self.assertEqual(shown, displays, runtime)
             self.assertEqual(final, "DONE", runtime)
+
+    def test_omp_tool_only_message_keeps_earlier_final_text(self):
+        omp = qk_run.EVENT_PARSERS["omp"]
+        self.assertEqual(omp({"type": "message_end", "message": {"role": "assistant", "content": [
+            {"type": "toolCall", "name": "read", "arguments": {"path": "a"}}]}}), (None, None))
+        self.assertEqual(omp({"type": "message_end", "message": {"role": "assistant"}}), (None, None))
+
+    def test_display_root_is_replaced_only_as_a_whole_segment(self):
+        qk_run.DISPLAY_ROOTS[:] = [("/w/tree", "")]
+        self.addCleanup(qk_run.DISPLAY_ROOTS.clear)
+        run = qk_run.EVENT_PARSERS["omp"]
+        self.assertEqual(run({"type": "tool_execution_start", "toolName": "read",
+                              "args": {"path": "/w/tree-old/x"}})[0], "read /w/tree-old/x")
+        self.assertEqual(run({"type": "tool_execution_start", "toolName": "bash",
+                              "args": {"command": "cd /w/tree && ls /w/tree/src"}})[0], "run cd . && ls src")
 
     def test_display_paths_are_relative_to_the_worktree(self):
         qk_run.DISPLAY_ROOTS[:] = [("/w/tree", ""), ("/u/me", "~/")]
