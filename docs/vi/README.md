@@ -6,6 +6,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 
 ## Bắt đầu từ đây
 
+- [Triết lý](philosophy.md): ý tưởng lõi và ba nguyên tắc đứng sau mọi skill.
 - [Bắt đầu](getting-started.md): cài, gọi skill, cập nhật, cố định bản phát hành, gỡ.
 - [Quy trình](workflows.md): ghép skill cho ý tưởng mơ hồ, thay đổi đã rõ, lỗi, chuyển phiên và phát hành.
 - [Case study: xuất CSV](case-study-csv-export.md): một tính năng mẫu từ brainstorm và plan qua worker cô lập, PR review, merge đến ship.
@@ -40,13 +41,6 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 
 Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), một dự án riêng.
 
-## Nguyên lý chung
+## Nguyên tắc
 
-1. **Biết xong là gì trước khi làm:** kết quả, điều không được đổi, phạm vi và bằng chứng nghiệm thu. Chỉ hỏi quyết định nguồn không trả lời được.
-2. **Giao việc không phải giao quyền.** Sửa code không bao gồm commit, push, merge, tag, deploy hoặc đăng.
-3. **Báo xong không phải bằng chứng.** Kiểm hành vi, revision hoặc nguồn.
-4. **Quyết định nằm ngoài phiên chat**, trong plan hoặc file bàn giao.
-5. **Chọn quy trình theo điều còn thiếu.** Chưa rõ hướng → brainstorm; thiếu dữ kiện → research; việc đã rõ → cook. Không có pipeline bắt buộc.
-6. **Tiếp tục trong phạm vi đã duyệt;** dừng khi cần quyết định mới, gặp blocker hoặc cần quyền mới.
-7. **Mở rộng runtime, không chiếm quyền.** Runtime giữ tool, plan mode, subagent, cấu hình model và quyền; luật repo vẫn thắng.
-8. **Kết báo cáo nhất quán.** Kết thúc bằng Đã làm, Bằng chứng, Chưa kiểm chứng, Cần bạn quyết định, theo đúng thứ tự.
+**Đủ hiểu để quyết.** Mọi skill theo ba nguyên tắc: tách ba vai (làm, kiểm, quyết), bằng chứng thay cho lời khẳng định, và kiểm vừa đủ. Trang [triết lý](philosophy.md) giải thích từng nguyên tắc.

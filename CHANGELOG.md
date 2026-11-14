@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A one-page philosophy in English and Vietnamese: understand enough to decide,
+  through three principles (three roles, evidence rather than claims, enough).
+  The README and docs index now point to it instead of keeping their own lists.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added

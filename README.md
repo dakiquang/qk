@@ -10,13 +10,15 @@ qk extends the runtime and does not replace it. Every skill runs only when you c
 
 ## Why qk
 
-Coding agents are good at producing changes and less reliable at the steps around them: agreeing on what "done" means, proving it, and not treating permission to edit as permission to publish. qk writes those steps down as short, explicit workflows.
+> **Understand enough to decide.** Getting code to run is easy now; what stays hard is seeing clearly enough to make the call. qk optimizes only for that.
 
-- **Each skill states its result, its authority and when it is done.** Editing code never implies commit, push, merge, tag, deploy or publish.
-- **A report is not evidence.** Skills verify behaviour or sources and say what they did not verify.
-- **No pipeline.** Skills never call each other; each one names the next command and you decide whether to run it.
-- **Every report ends the same way:** Done, Evidence, Not verified, Needs your decision.
-- **Small on purpose.** The kit stays at twelve skills and about 50 KB of instructions. Adding a skill means replacing or merging one.
+Most kits help AI do more on its own. qk hands back what you need to decide, through three principles:
+
+- **Three roles: make, check, decide.** Whoever makes a change is not its final checker, and authority to commit, merge or publish stays with you.
+- **Evidence, not claims.** Reports separate what was seen from what was only told, and say what was not checked. Every report ends with Done, Evidence, Not verified, Needs your decision.
+- **Enough.** Check only what could change the decision, once; no mandatory pipeline; twelve skills, about 50 KB, nothing loaded until you call a skill.
+
+Read the [philosophy](docs/en/philosophy.md) for what each principle does and does not mean.
 
 ## Skills
 
