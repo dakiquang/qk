@@ -455,6 +455,10 @@ class RunnerTest(unittest.TestCase):
             with self.assertRaises(SystemExit) as caught:
                 self.cli("start", "task", "--repo", str(self.repo), "--read-only-mcp", "aws-mcp", *roles)
             self.assertIn("not supported for codex", str(caught.exception.code))
+        with self.assertRaises(SystemExit) as caught:
+            self.cli("start", "task", "--repo", str(self.repo), "--read-only-mcp", "",
+                     "--review", "omp:openai-codex/gpt-6.1-sol")
+        self.assertIn("needs a server name", str(caught.exception.code))
         state = self.start(Agent(), extra=["--read-only-mcp", "aws-mcp", "--review", "omp:openai-codex/gpt-6.1-sol"])
         self.assertEqual(state["stage"], "awaiting_approval")
         self.assertEqual(state["read_only_mcp"], ["aws-mcp"])
@@ -838,6 +842,20 @@ class AgentStreamTest(unittest.TestCase):
         self.assertEqual(config.read_text(), 'model = "kept"\n')
         self.assertEqual((env["UV_CACHE_DIR"], env["UV_PYTHON_INSTALL_DIR"]), ("/preset/cache", "/preset/python"))
 
+    def test_codex_private_home_links_a_login_made_after_it_was_created(self):
+        from unittest import mock
+        real_codex, run_directory = self.dir / "codex", self.dir / "run"
+        real_codex.mkdir()
+        run_directory.mkdir()
+        auth = run_directory / "codex-home" / ".codex" / "auth.json"
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(real_codex)}):
+            qk_run.agent_command("codex:", False, self.dir, [run_directory])
+            self.assertFalse(auth.is_symlink())
+            (real_codex / "auth.json").write_text("{}\n")
+            qk_run.agent_command("codex:", False, self.dir, [run_directory])
+        self.assertTrue(auth.is_symlink())
+        self.assertEqual(Path(os.readlink(auth)), real_codex / "auth.json")
+
     def test_read_only_mcp_call_stops_agent_and_blocks(self):
         qk_run.KILL_GRACE_SECONDS = 0.5
         pid_file = self.dir / "child.pid"
@@ -882,6 +900,35 @@ class AgentStreamTest(unittest.TestCase):
         with self.assertRaises(qk_run.Blocked) as caught:
             self.call(write=False, read_only_mcp=["aws-mcp"])
         self.assertEqual(str(caught.exception), "read-only stage called tool report_issue")
+
+    def test_read_only_guard_ignores_search_patterns(self):
+        done = (FIXTURES / "omp.jsonl").read_text(encoding="utf-8").splitlines()[3]
+        grep_omp = json.dumps({"type": "tool_execution_start", "toolName": "grep",
+                               "args": {"pattern": "xd://mcp__", "path": "."}})
+        grep_claude = json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "t1", "name": "Grep", "input": {"pattern": "mcp://x"}}]}})
+        self.fake_agent(f"print({grep_omp!r}, flush=True)\nprint({done!r}, flush=True)\n")
+        self.assertEqual(self.call(write=False)[0], "DONE")
+        self.fake_agent(f"print({grep_claude!r}, flush=True)\n"
+                        "print('{\"type\": \"result\", \"result\": \"DONE\"}', flush=True)\n")
+        self.assertEqual(self.call(spec="claude:", write=False)[0], "DONE")
+
+    def test_read_only_mcp_never_allows_mcp_resources_or_empty_names(self):
+        self.assertFalse(qk_run.mcp_allowed("mcp://private/resource", [""]))
+        self.assertFalse(qk_run.mcp_allowed("mcp://aws-mcp/doc", ["aws-mcp"]))
+        self.assertFalse(qk_run.mcp_allowed("xd://mcp__aws_mcp_aws_run_script", [""]))
+        self.assertTrue(qk_run.mcp_allowed("xd://mcp__aws_mcp_aws_run_script", ["", "aws-mcp"]))
+
+    def test_read_only_guard_keeps_the_usage_of_the_stopped_turn(self):
+        qk_run.KILL_GRACE_SECONDS = 0.5
+        turn = json.dumps({"type": "turn_end", "message": {"role": "assistant",
+                                                           "usage": {"input": 3, "output": 2, "cacheRead": 10}}})
+        self.fake_agent(f"import time\nprint({turn!r}, flush=True)\nprint({MCP_WRITE!r}, flush=True)\n"
+                        "time.sleep(60)\n")
+        with self.assertRaises(qk_run.Blocked) as caught:
+            self.call(write=False)
+        self.assertEqual(caught.exception.usage, {"input": 13, "cached": 10, "output": 2})
+        self.assertIn("tokens in=13 cached=10 out=2", self.progress)
 
     def test_call_agent_sums_usage_per_runtime(self):
         expected = {"claude": ({"input": 4812, "cached": 4500, "output": 80}, 0.0123,

@@ -156,8 +156,8 @@ def codex_home(directory):
     `auth.json`, so Codex loads no user skills or MCP servers but stays logged in."""
     home = Path(directory) / "codex-home"
     codex = home / ".codex"
+    real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     if not codex.is_dir():
-        real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
         codex.mkdir(parents=True)
         kept = []
         config = real / "config.toml"
@@ -168,8 +168,9 @@ def codex_home(directory):
                 if CODEX_KEEP_RE.match(line):
                     kept.append(line + "\n")
         (codex / "config.toml").write_text("".join(kept), encoding="utf-8")
-        if (real / "auth.json").is_file():
-            (codex / "auth.json").symlink_to(real / "auth.json")
+    auth = codex / "auth.json"
+    if (real / "auth.json").is_file() and not auth.exists() and not auth.is_symlink():
+        auth.symlink_to(real / "auth.json")  # checked on every call: a login made after the home was created still counts
     return home
 
 
@@ -252,16 +253,19 @@ CLAUDE_TOOLS = {"Read": ("read", "file_path"), "Edit": ("edit", "file_path"),
 OMP_TOOLS = {"read": ("read", "path"), "edit": ("edit", "path"),
              "write": ("write", "path"), "bash": ("run", "command")}
 MCP_PREFIXES = ("xd://", "mcp://")
+DESTINATION_KEYS = ("path", "file_path", "uri")  # arguments that name where a tool call goes, not what it searches for
 
 
 def mcp_target(name, args):
     """The MCP or runtime-device identifier a tool call reaches, or None for an ordinary tool call.
 
-    A call counts when the tool name contains `mcp__` or starts with `xd://`/`mcp://`, or when a top-level
-    string argument starts with `xd://`/`mcp://` (omp routes MCP through `write xd://mcp__...`)."""
+    A call counts when the tool name contains `mcp__` or starts with `xd://`/`mcp://`, or when a destination
+    argument (`path`, `file_path`, `uri`) starts with `xd://`/`mcp://` (omp routes MCP through
+    `write xd://mcp__...`). Other arguments, such as a search pattern, never count."""
     if "mcp__" in name or name.startswith(MCP_PREFIXES):
         return name
-    for value in args.values() if isinstance(args, dict) else ():
+    for key in DESTINATION_KEYS if isinstance(args, dict) else ():
+        value = args.get(key)
         if isinstance(value, str) and value.startswith(MCP_PREFIXES):
             return value
     return None
@@ -281,8 +285,10 @@ def normalise(text):
 
 def mcp_allowed(identifier, names):
     """True when the identifier is a tool of a server listed with --read-only-mcp (`mcp__<server>_...`)."""
+    if identifier.startswith("mcp://"):
+        return False
     name = identifier[len("xd://"):] if identifier.startswith("xd://") else identifier
-    return any(normalise(name).startswith(f"mcp__{normalise(server)}_") for server in names)
+    return any(normalise(name).startswith(f"mcp__{normalise(server)}_") for server in names if server.strip())
 
 
 def claude_calls(event):
@@ -505,7 +511,11 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
                         target = mcp_target(name, args)
                         if target and not mcp_allowed(target, read_only_mcp):
                             stop_agent(proc)
-                            raise Blocked(f"read-only stage called {target_display(target)}")
+                            if usage:
+                                progress(tokens_line(usage))
+                            blocked = Blocked(f"read-only stage called {target_display(target)}")
+                            blocked.usage = usage  # run_agent records the tokens the stopped turn used
+                            raise blocked
         try:
             proc.wait(timeout=max(deadline - time.monotonic(), 0))
         except subprocess.TimeoutExpired:
@@ -589,7 +599,7 @@ def run_agent(state, role, prompt, write=None):
                                  events=Path(f"{stem}.events.jsonl"), progress=lambda message: log(state, message),
                                  read_only_mcp=state.get("read_only_mcp", []))
     except Blocked as exc:
-        error = exc
+        error, usage = exc, getattr(exc, "usage", None)
     if usage:
         state.setdefault("usage", {}).setdefault(state["stage"], []).append({"spec": spec, **usage})
     Path(f"{stem}.out.md").write_text(text or "", encoding="utf-8")
@@ -967,6 +977,8 @@ def cmd_start(args):
     for spec in (args.impl, args.review):
         parse_spec(spec)
     read_only_mcp = args.read_only_mcp or []
+    if any(not name.strip() for name in read_only_mcp):
+        sys.exit("qk-run: --read-only-mcp needs a server name; got an empty value")
     for flag, spec in (("--impl", args.impl), ("--review", args.review)):
         if read_only_mcp and parse_spec(spec)[0] == "codex":
             sys.exit(f"qk-run: --read-only-mcp is not supported for codex ({flag} {spec}): planning and review "
