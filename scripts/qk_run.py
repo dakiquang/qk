@@ -147,13 +147,16 @@ def family(spec):
 
 CODEX_KEEP_RE = re.compile(r"^\s*(model|model_reasoning_effort)\s*=")
 TOML_TABLE_RE = re.compile(r"^\s*\[")
+# A fresh Codex home otherwise downloads the account's curated remote plugins, whose skills the agent would load.
+CODEX_FEATURES_OFF = "\n[features]\nplugins = false\nremote_plugin = false\napps = false\n"
 
 
 def codex_home(directory):
     """Private HOME for Codex inside the run directory, created once per run and reused.
 
-    It keeps only the real config's top-level `model` and `model_reasoning_effort` and links the real
-    `auth.json`, so Codex loads no user skills or MCP servers but stays logged in."""
+    It keeps only the real config's top-level `model` and `model_reasoning_effort`, turns off plugins, remote
+    plugins and apps, and links the real `auth.json`, so Codex loads no user skills, plugin skills or MCP servers
+    but stays logged in."""
     home = Path(directory) / "codex-home"
     codex = home / ".codex"
     real = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
@@ -167,6 +170,7 @@ def codex_home(directory):
                     break
                 if CODEX_KEEP_RE.match(line):
                     kept.append(line + "\n")
+        kept.append(CODEX_FEATURES_OFF)
         (codex / "config.toml").write_text("".join(kept), encoding="utf-8")
     auth = codex / "auth.json"
     if (real / "auth.json").is_file() and not auth.exists() and not auth.is_symlink():
