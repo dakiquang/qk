@@ -178,13 +178,15 @@ def codex_home(directory):
     return home
 
 
-def agent_command(spec, write, cwd, extra_dirs, read_only_mcp=()):
+def agent_command(spec, write, cwd, extra_dirs, read_only_mcp=(), claude_skills=None):
     """Command line, last-message file (Codex) and environment (None = inherit) for one agent turn.
 
-    Every runtime runs without user skills; read-only stages also run without MCP where the runtime allows it."""
+    Every runtime runs without user skills; read-only stages also run without MCP where the runtime allows it.
+    `claude_skills` replaces Claude's `--disable-slash-commands` (used by qk_eval to compare kits on one base)."""
     runtime, model = parse_spec(spec)
     if runtime == "claude":
-        cmd = ["claude", "-p", "--output-format", "stream-json", "--verbose", "--disable-slash-commands",
+        skills = ["--disable-slash-commands"] if claude_skills is None else list(claude_skills)
+        cmd = ["claude", "-p", "--output-format", "stream-json", "--verbose", *skills,
                "--permission-mode", "acceptEdits" if write else "plan"]
         if write:
             cmd += ["--allowedTools", "Bash,Edit,Write,Read,Grep,Glob"]
@@ -453,12 +455,12 @@ def pump(stream, put):
     put(None)
 
 
-def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=()):
+def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=(), claude_skills=None):
     """Run one headless agent turn, streaming its tool actions to `progress`; return (final text, usage or None).
 
     Raw JSON events are appended to `events`. A read-only turn that calls MCP or another runtime device
     (except servers in `read_only_mcp`) is stopped and blocks. Replaced in tests."""
-    cmd, out_file, env = agent_command(spec, write, cwd, extra_dirs, read_only_mcp)
+    cmd, out_file, env = agent_command(spec, write, cwd, extra_dirs, read_only_mcp, claude_skills)
     runtime = parse_spec(spec)[0]
     parse, calls, read_usage = EVENT_PARSERS[runtime], TOOL_CALLS[runtime], USAGE_READERS[runtime]
     DISPLAY_ROOTS[:] = [(str(Path(cwd).resolve()), ""), (str(Path(cwd)), ""), (str(Path.home()), "~/")]

@@ -59,6 +59,16 @@ Khi tập tiêu chí pass khác baseline theo bất kỳ chiều nào, case đó
 
 Chỉ cập nhật baseline sau khi bạn đã xem kết quả thay đổi và chủ động chấp nhận nó — không bao giờ để xoá dấu vết một tiêu chí bị mất. Ghi từng runtime một.
 
+## So sánh các kit
+
+`--kit none|qk|superpowers` chạy cùng các case với một kit khác, trên cùng một nền Claude Code cho cả ba: không có skill hay plugin của người dùng (`--setting-sources project`), không MCP ở lượt chỉ đọc, và giữ các skill có sẵn của Claude Code. `none` chỉ nhận việc; `superpowers` nhận việc cùng một bản Superpowers nạp bằng `--plugin-dir` (truyền qua `--superpowers-dir`), để nó tự kích hoạt đúng như thiết kế; `qk` nhận việc cùng skill qk hoặc prompt review của runner. Định dạng đầu ra mà bộ chấm cần (bốn dòng báo cáo, khối `qk-result` và dạng finding) được thêm vào cả ba bằng cùng một câu chữ, nên không kit nào thắng chỉ nhờ định dạng.
+
+```bash
+python3 scripts/qk_eval.py --all --runtime claude:claude-opus-5-5 --kit superpowers --superpowers-dir PATH
+```
+
+`--kit` chỉ chạy trên runtime `claude`, không bao giờ so sánh với hay cập nhật `baseline.json`, và ghi `"kit"` vào `results.json`.
+
 ## Kết quả trên đĩa
 
 Mỗi lượt chạy ghi vào `$XDG_STATE_HOME/qk-eval/<YYYYmmdd-HHMMSS>-<hex>/` (mặc định `~/.local/state/qk-eval/`):

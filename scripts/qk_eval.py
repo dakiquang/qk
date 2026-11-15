@@ -26,6 +26,14 @@ TOKEN_LIMIT_PERCENT = 110
 # One extra agent turn costs about 22-26k tokens on the small cases, more than 10% of them, so a token regression
 # must also exceed this absolute floor; otherwise a single verification turn reads as a regression.
 TOKEN_FLOOR = 25_000
+KITS = ("qk", "none", "superpowers")
+# Comparison runs (--kit) share one Claude Code base: no user skills or plugins, the runtime's own skills kept.
+COMPARISON_BASE = ("--setting-sources", "project")
+# Output formats the graders need, given identically to every kit so no kit wins on format alone.
+REPORT_FORMAT = ("End your reply with these four lines, in this order: Done: ..., Evidence: ..., "
+                 "Not verified: ..., Needs your decision: ...")
+FINDINGS_FORMAT = ('Put each problem in "findings" as {"severity": "blocker|important|nit", "file": '
+                   '"<repo-relative path>", "line": N, "claim": "...", "fix": "..."}.')
 GIT_IDENTITY = ("-c", "user.name=qk-eval", "-c", "user.email=qk-eval@example.invalid", "-c", "commit.gpgsign=false")
 
 
@@ -120,7 +128,36 @@ def touched_case_files(events):
     return [line[:200] for line in text.splitlines() if any(root in line for root in roots)]
 
 
-def run_case(case, spec, timeout, out_dir, scratch):
+def kit_prompt(case, kit, workdir, plan=None, diff=None):
+    """Prompt and write flag of one turn. Without a kit (None) this is the runner's own wording, unchanged."""
+    if case["skill"] == REVIEW:
+        if kit in (None, "qk"):
+            prompt = qk_run.review_prompt(workdir, plan, diff)
+        else:
+            prompt = (f"Review the uncommitted change in {workdir} (full diff: {diff}) against the approved plan "
+                      f"{plan}. Report only problems introduced by this change. Do not edit files.\n"
+                      f"{FINDINGS_FORMAT}\n{qk_run.RESULT_CONTRACT}")
+        return prompt, False
+    if kit in (None, "qk"):
+        prompt = (f"Read {qk_run.skill(case['skill'])} and follow it for the task in task.md in {workdir}. "
+                  f"Work only inside {workdir}.\n{qk_run.NO_GIT}")
+    else:
+        prompt = f"Do the task in task.md in {workdir}. Work only inside {workdir}.\n{qk_run.NO_GIT}"
+    if kit is not None:
+        prompt += f"\n{REPORT_FORMAT}"
+    return prompt, case["write"]
+
+
+def claude_skills(kit, superpowers_dir):
+    if kit is None:
+        return None
+    flags = list(COMPARISON_BASE)
+    if kit == "superpowers":
+        flags += ["--plugin-dir", str(superpowers_dir)]
+    return flags
+
+
+def run_case(case, spec, timeout, out_dir, scratch, kit=None, superpowers_dir=None):
     """One agent turn on a fresh copy of the case, graded; artifacts go to `out_dir`.
 
     The graders (check.py, hidden tests) are copied to a private directory before the turn and run from there,
@@ -134,21 +171,19 @@ def run_case(case, spec, timeout, out_dir, scratch):
         grader = Path(grader_tmp) / case["name"]
         shutil.copytree(case["dir"], grader, ignore=shutil.ignore_patterns("__pycache__"))
         workdir = prepare(case, Path(tmp))
+        plan = diff = None
         if case["skill"] == REVIEW:
             plan, diff = out_dir / "plan.md", out_dir / "review.diff"
             shutil.copy2(case["dir"] / "plan.md", plan)
             shutil.copy2(case["dir"] / "review.diff", diff)
-            prompt, write = qk_run.review_prompt(workdir, plan, diff), False
-        else:
-            prompt = (f"Read {qk_run.skill(case['skill'])} and follow it for the task in task.md in {workdir}. "
-                      f"Work only inside {workdir}.\n{qk_run.NO_GIT}")
-            write = case["write"]
+        prompt, write = kit_prompt(case, kit, workdir, plan, diff)
         text, usage, error = "", None, None
         start = time.monotonic()
         try:
             text, usage = qk_run.call_agent(
                 spec, prompt, workdir, write, timeout, [scratch], events=events,
-                progress=lambda message: print(f"[{case['name']}] {message}", file=sys.stderr, flush=True))
+                progress=lambda message: print(f"[{case['name']}] {message}", file=sys.stderr, flush=True),
+                claude_skills=claude_skills(kit, superpowers_dir))
         except qk_run.Blocked as exc:
             error, usage = str(exc), getattr(exc, "usage", None)
         seconds = time.monotonic() - start
@@ -280,31 +315,48 @@ def main(argv=None):
     parser.add_argument("--update-baseline", action="store_true",
                         help="after the comparison, record these results as the baseline for this runtime")
     parser.add_argument("--timeout", type=int, default=qk_run.DEFAULT_TIMEOUT, help="seconds per agent turn")
+    parser.add_argument("--kit", choices=KITS,
+                        help="compare kits on one Claude Code base (no baseline comparison or update)")
+    parser.add_argument("--superpowers-dir", type=Path, help="a Superpowers checkout, for --kit superpowers")
     args = parser.parse_args(argv)
     qk_run.parse_spec(args.runtime)
+    if args.kit:
+        problem = None
+        if qk_run.parse_spec(args.runtime)[0] != "claude":
+            problem = "--kit runs only on the claude runtime"
+        elif args.update_baseline:
+            problem = "--kit results are comparisons and never update the baseline"
+        elif args.kit == "superpowers" and not (args.superpowers_dir and
+                                                 (args.superpowers_dir / ".claude-plugin" / "plugin.json").is_file()):
+            problem = "--kit superpowers needs --superpowers-dir pointing at a Superpowers checkout"
+        if problem:
+            print(f"qk-eval: {problem}", file=sys.stderr)
+            return 2
     cases, problem = select(args)
     if problem:
         print(f"qk-eval: {problem}", file=sys.stderr)
         return 2
     baseline = load_baseline()
-    entries = baseline.get(args.runtime, {})
+    entries = {} if args.kit else baseline.get(args.runtime, {})
     started = time.strftime("%Y%m%d-%H%M%S")
     root = state_root() / f"{started}-{secrets.token_hex(2)}"
     root.mkdir(parents=True)
     results = {}
     for case in cases:
-        result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-1", root)
+        result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-1", root,
+                          args.kit, args.superpowers_dir)
         result["runs"] = 1
         base = entries.get(case["name"])
         if base is not None and compare(result, base)["flipped"]:
-            result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-2", root)
+            result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-2", root,
+                              args.kit, args.superpowers_dir)
             result["runs"] = 2
         results[case["name"]] = result
     lines, reasons, regression = report(args.runtime, results, entries)
     print("\n".join(lines))
     print(f"results: {root}")
     (root / "results.json").write_text(json.dumps(
-        {"runtime": args.runtime, "started": started, "cases": results, "regression": regression},
+        {"runtime": args.runtime, "kit": args.kit, "started": started, "cases": results, "regression": regression},
         indent=2) + "\n", encoding="utf-8")
     if args.update_baseline:
         skipped = update_baseline(baseline, args.runtime, results)

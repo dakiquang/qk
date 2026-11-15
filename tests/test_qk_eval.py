@@ -221,7 +221,8 @@ class Agent:
         self.reply = reply
         self.calls = []
 
-    def __call__(self, spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=()):
+    def __call__(self, spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=(),
+                 claude_skills=None):
         cwd = Path(cwd)
         task = cwd / "task.md"
         self.calls.append({"prompt": prompt, "cwd": cwd, "write": write, "extra_dirs": extra_dirs, "task": task.is_file(),
@@ -359,7 +360,8 @@ class HarnessTest(unittest.TestCase):
         self.case("alpha")
         check = self.cases / "alpha" / "check.py"
 
-        def tamper(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=()):
+        def tamper(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=(),
+                   claude_skills=None):
             check.write_text('import json\nprint(json.dumps([{"name": "a", "passed": True, "detail": ""},'
                              ' {"name": "b", "passed": True, "detail": ""}]))\n')
             Path(events).write_text(json.dumps({"type": "tool_execution_start", "toolName": "write",
@@ -381,6 +383,47 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("baseline not updated for cases with an agent or grader error: alpha", out)
         self.assertEqual(json.loads(qk_eval.BASELINE.read_text()), {SPEC: {"alpha": self.entry()}})
+
+    def test_kit_comparison_uses_one_claude_base_and_the_same_output_format(self):
+        self.case("alpha")
+        self.case("rev", skill=qk_eval.REVIEW, write=False)
+        sp = Path(self.tmp.name) / "sp"
+        (sp / ".claude-plugin").mkdir(parents=True)
+        (sp / ".claude-plugin" / "plugin.json").write_text("{}")
+        self.baseline({"claude:x": {"alpha": self.entry(tokens=1)}})
+        seen = []
+
+        def agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=(),
+                  claude_skills=None):
+            seen.append((prompt, write, claude_skills))
+            return "<a><b>", {"input": 999_999, "cached": 0, "output": 0}
+        for kit in ("none", "superpowers", "qk"):
+            qk_run.call_agent = agent
+            with contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+                code = qk_eval.main(["--all", "--runtime", "claude:x", "--kit", kit, "--superpowers-dir", str(sp)])
+            self.assertEqual(code, 0, out.getvalue())  # no baseline comparison for --kit
+            self.assertIn("no baseline for claude:x", out.getvalue())
+        by_kit = dict(zip(("none", "superpowers", "qk"), [seen[i:i + 2] for i in (0, 2, 4)]))
+        for kit, (alpha, rev) in by_kit.items():
+            expected = ["--setting-sources", "project"] + (["--plugin-dir", str(sp)] if kit == "superpowers" else [])
+            self.assertEqual(alpha[2], expected, kit)
+            self.assertIn(qk_eval.REPORT_FORMAT, alpha[0], kit)
+            self.assertEqual(alpha[1], True, kit)
+            self.assertIn("qk-result", rev[0], kit)
+            self.assertEqual(rev[1], False, kit)
+            self.assertEqual(("SKILL.md" in alpha[0]), kit == "qk", kit)
+            self.assertEqual(("Review by defect class" in rev[0]), kit == "qk", kit)
+        self.assertEqual(json.loads(qk_eval.BASELINE.read_text()), {"claude:x": {"alpha": self.entry(tokens=1)}})
+
+    def test_kit_comparison_is_refused_where_it_cannot_be_fair(self):
+        self.case("alpha")
+        for argv, message in ((["--runtime", "omp:anthropic/x", "--kit", "none"], "only on the claude runtime"),
+                              (["--runtime", "claude:x", "--kit", "none", "--update-baseline"], "never update"),
+                              (["--runtime", "claude:x", "--kit", "superpowers"], "needs --superpowers-dir")):
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                self.assertEqual(qk_eval.main(["--case", "alpha", *argv]), 2)
+            self.assertIn(message, err.getvalue())
 
     def test_update_baseline_merges_into_this_runtime(self):
         self.case("alpha")
