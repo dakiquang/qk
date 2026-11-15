@@ -145,7 +145,7 @@ The new prompt ([#26](https://github.com/dakiquang/qk/pull/26)) asks reviewers t
 | omp, `waf-bundle-review` | 0/8 | 5, 5, 4 | 0.81M → 0.75–1.05M |
 | Claude Code, `waf-bundle-review` | 0/8 | 3, 6, 5 | 0.61M → 0.38–0.47M |
 | omp, `bundle-malformed` | 6/6 | 6/6 | see below |
-| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99,628 → 78,700–81,643 |
+| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99,628 → 59,028–81,643 |
 
 The first omp run of `bundle-malformed` used 36% more tokens than the baseline. Six more runs explained it:
 
