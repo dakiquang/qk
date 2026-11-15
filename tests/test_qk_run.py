@@ -708,7 +708,7 @@ class AgentStreamTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def fake_agent(self, script, *args):
-        qk_run.agent_command = (lambda spec, write, cwd, extra_dirs, read_only_mcp=():
+        qk_run.agent_command = (lambda spec, write, cwd, extra_dirs, read_only_mcp=(), claude_skills=None:
                                 ([sys.executable, "-c", script, *args], None, None))
 
     def call(self, timeout=30, spec="omp:anthropic/x", write=True, read_only_mcp=()):
@@ -844,6 +844,16 @@ class AgentStreamTest(unittest.TestCase):
             self.assertIsNone(env)
             for flag in ("--no-skills", "--no-extensions", "--no-rules"):
                 self.assertIn(flag, omp, (flag, write))
+
+    def test_claude_skills_replace_the_skill_isolation_flag(self):
+        default = qk_run.agent_command("claude:", False, self.dir, [self.dir])[0]
+        self.assertIn("--disable-slash-commands", default)
+        base = qk_run.agent_command("claude:", False, self.dir, [self.dir],
+                                    claude_skills=["--setting-sources", "project", "--plugin-dir", "/sp"])[0]
+        self.assertNotIn("--disable-slash-commands", base)
+        self.assertEqual(base[base.index("--setting-sources"):base.index("--setting-sources") + 4],
+                         ["--setting-sources", "project", "--plugin-dir", "/sp"])
+        self.assertIn("--strict-mcp-config", base)
 
     def test_codex_runs_in_a_private_home_reused_across_calls(self):
         from unittest import mock

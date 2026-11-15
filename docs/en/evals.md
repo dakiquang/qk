@@ -59,6 +59,16 @@ When the set of passing criteria differs from the baseline in either direction, 
 
 Update the baseline only after you have looked at a changed result and accepted it on purpose — never to make a lost criterion disappear. Record one runtime at a time.
 
+## Comparing kits
+
+`--kit none|qk|superpowers` runs the same cases with a different kit, on one Claude Code base for all three: no user skills or plugins (`--setting-sources project`), no MCP in read-only turns, and Claude Code's own skills kept. `none` gets only the task; `superpowers` gets the task plus a Superpowers checkout loaded with `--plugin-dir` (pass it with `--superpowers-dir`), so it activates as it is designed to; `qk` gets the task plus the qk skill or the runner's review prompt. The output format the graders need (the four report lines, the `qk-result` block and the findings shape) is added to all three in the same words, so no kit wins on format alone.
+
+```bash
+python3 scripts/qk_eval.py --all --runtime claude:claude-opus-5-5 --kit superpowers --superpowers-dir PATH
+```
+
+`--kit` runs only on the `claude` runtime, never compares with or updates `baseline.json`, and records `"kit"` in `results.json`.
+
 ## Results on disk
 
 Each run writes to `$XDG_STATE_HOME/qk-eval/<YYYYmmdd-HHMMSS>-<hex>/` (default `~/.local/state/qk-eval/`):
