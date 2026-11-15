@@ -43,6 +43,18 @@ def finding(file, line, severity="important", claim="x", fix="y"):
     return {"severity": severity, "file": file, "line": line, "claim": claim, "fix": fix}
 
 
+def pip_findings():
+    """Handwritten review samples, independent of the grader's matching rules."""
+    path = "src/pip/_internal/configuration.py"
+    return [
+        finding(path, 402, claim="PIP_CONFIG_FILE=/dev/null allows config set to report success while discarding data."),
+        finding(path, 405, "blocker", claim="The fallback parser is appended to Kind.ENV instead of self.load_only; "
+                "the next set constructs another parser and loses pending writes."),
+        finding(path, 204, claim="unset_value checks self.load_only although the environment file was loaded into "
+                "Kind.ENV, so unsetting an existing key raises No such key."),
+    ]
+
+
 def graded_detail(case, workdir, test, name):
     final = Path(test.tmp.name) / "final-detail.md"
     final.write_text(LABELS)
@@ -78,7 +90,7 @@ class CaseSanityTest(unittest.TestCase):
         cases = {case["name"]: case for case in qk_eval.all_cases()}
         self.assertEqual({name: case["skill"] for name, case in cases.items()},
                          {"csv-export": "qk-cook", "pagination-empty-page": "qk-debug", "bundle-malformed": "runner-review",
-                          "waf-bundle-review": "runner-review"})
+                          "waf-bundle-review": "runner-review", "pip-config-review": "runner-review"})
         for name, case in cases.items():
             directory = REAL_CASES / name
             self.assertTrue((directory / "check.py").is_file(), name)
@@ -212,6 +224,118 @@ class CaseSanityTest(unittest.TestCase):
         outside = self.grade(case, workdir, review_result(*covering, finding("bundle/models.py", 20)))
         self.assertFalse(outside["no-outside-important"])
         self.assertTrue(all(outside[name] for name in places))
+
+    def assert_pip_criteria(self, case, workdir, text, *caught, result=True, outside=False):
+        self.assertEqual(self.grade(case, workdir, text),
+                         {"result": result, "null-device": "null-device" in caught,
+                          "parser-reuse": "parser-reuse" in caught, "env-unset": "env-unset" in caught,
+                          "no-outside-important": not outside})
+
+    def test_pip_review_grading(self):
+        case, workdir = self.prepare("pip-config-review")
+        self.assertEqual(git_out(workdir, "rev-list", "--count", "HEAD").strip(), "1")
+        self.assertEqual(sorted(git_out(workdir, "diff", "--name-only").splitlines()),
+                         ["src/pip/_internal/configuration.py", "tests/functional/test_configuration.py"])
+        self.assertIn("?? news/13279.bugfix.rst", git_out(workdir, "status", "--porcelain", "--untracked-files=all"))
+        self.assert_pip_criteria(case, workdir, "", result=False)
+        self.assert_pip_criteria(case, workdir, review_result())
+        covering = pip_findings()
+        self.assert_pip_criteria(case, workdir, review_result(*covering),
+                                 "null-device", "parser-reuse", "env-unset")
+        for name, sample in zip(("null-device", "parser-reuse", "env-unset"), covering):
+            with self.subTest(defect=name):
+                self.assert_pip_criteria(case, workdir, review_result(sample), name)
+
+    def test_pip_review_accepts_alternate_claims_and_fix_only_wording(self):
+        case, workdir = self.prepare("pip-config-review")
+        path = "src/pip/_internal/configuration.py"
+        samples = [
+            ("null-device", 400, "Writing to os.devnull silently drops the value."),
+            ("null-device", 413, "Config set exits zero for the null device and the change is lost."),
+            ("null-device", 402, "Windows NUL must be rejected before constructing a writable fallback."),
+            ("null-device", 405, "Add a devnull guard before config writes can report success."),
+            ("parser-reuse", 400, "The parser goes into the wrong container, leaving the selected list empty."),
+            ("parser-reuse", 405, "Make parser selection reentrant so repeated set calls retain earlier changes."),
+            ("parser-reuse", 402, "Reuse the existing parser to avoid overwriting pending changes on save."),
+            ("parser-reuse", 405, "Store the fallback parser under self.load_only, not Kind.ENV."),
+            ("env-unset", 194, "Removing an environment-file key reads only load_only and reports No such key."),
+            ("env-unset", 224, "Use the ENV scope for the unset lookup and deletion so existing keys are found."),
+            ("env-unset", 203, "PIP_CONFIG_FILE removal looks in the wrong scope; the key is absent there."),
+            ("env-unset", 222, "When PIP_CONFIG_FILE is set, remove the key from Kind.ENV instead of self.load_only."),
+        ]
+        for name, line, words in samples:
+            for field in ("claim", "fix"):
+                with self.subTest(defect=name, words=words, field=field):
+                    sample = finding(path, line, **{field: words})
+                    self.assert_pip_criteria(case, workdir, review_result(sample), name)
+        # Absolute/relative paths, string line numbers and severity case follow existing review graders.
+        for file in (f"{workdir}/{path}", f"./{path}"):
+            sample = dict(pip_findings()[0], file=file, line="402", severity="IMPORTANT")
+            self.assert_pip_criteria(case, workdir, review_result(sample), "null-device")
+
+    def test_pip_review_rejects_vague_or_unrelated_findings_at_defective_lines(self):
+        case, workdir = self.prepare("pip-config-review")
+        path = "src/pip/_internal/configuration.py"
+        samples = [
+            finding(path, 402), finding(path, 204),
+            finding(path, 402, claim="PIP_CONFIG_FILE warning should show a nicer filename."),
+            finding(path, 402, claim="Document the null device spelling in the warning message."),
+            finding(path, 405, claim="The parser variable name is unclear and should be shortened."),
+            finding(path, 405, claim="The parser prints a warning instead of a debug message."),
+            finding(path, 405, claim="The parser has lost its helpful error text."),
+            finding(path, 405, claim="The warning uses the wrong container name."),
+            finding(path, 204, claim="Unset should have a better error message."),
+            finding(path, 204, claim="Unset with PIP_CONFIG_FILE fails."),
+            finding(path, 204, claim="The environment unset help text should mention load_only."),
+            finding(path, 204, claim="Reading the wrong scope can hide keys."),
+            # The two fields must not supply disconnected halves of a defect description.
+            finding(path, 402, claim="Document os.devnull.", fix="Reject an invalid section name."),
+            finding(path, 405, claim="Rename the parser.", fix="Reuse the log prefix."),
+            finding(path, 204, claim="Document environment unset.", fix="Look up keys in the wrong section."),
+        ]
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assert_pip_criteria(case, workdir, review_result(sample))
+
+    def test_pip_review_requires_serious_findings_in_the_right_file_and_ranges(self):
+        case, workdir = self.prepare("pip-config-review")
+        samples = pip_findings()
+        for name, sample, limits in zip(("null-device", "parser-reuse", "env-unset"), samples,
+                                        ((400, 413), (400, 405), (194, 224))):
+            for line in limits:
+                with self.subTest(defect=name, boundary=line):
+                    self.assert_pip_criteria(case, workdir, review_result(dict(sample, line=line)), name)
+            for severity in ("nit", "suggestion", "", "critical"):
+                with self.subTest(defect=name, severity=severity):
+                    self.assert_pip_criteria(case, workdir, review_result(dict(sample, severity=severity)))
+            for line in (limits[0] - 1, limits[1] + 1, None, "unknown"):
+                with self.subTest(defect=name, line=line):
+                    self.assert_pip_criteria(case, workdir, review_result(dict(sample, line=line)))
+            for file, outside in (("tests/functional/test_configuration.py", False),
+                                  ("news/13279.bugfix.rst", False), ("src/pip/_internal/commands/configuration.py", True)):
+                with self.subTest(defect=name, file=file):
+                    self.assert_pip_criteria(case, workdir, review_result(dict(sample, file=file)), outside=outside)
+        # The retained loader redirect and the read-side devnull guard are not target ranges.
+        for sample, lines in ((samples[0], (269, 275)), (samples[2], (277, 286, 290))):
+            for line in lines:
+                with self.subTest(line=line):
+                    self.assert_pip_criteria(case, workdir, review_result(dict(sample, line=line)))
+        for severity in ("important", "blocker"):
+            self.assert_pip_criteria(case, workdir,
+                                     review_result(*samples, finding("outside.py", 10, severity)),
+                                     "null-device", "parser-reuse", "env-unset", outside=True)
+        self.assert_pip_criteria(case, workdir, review_result(*samples, finding("outside.py", 10, "nit")),
+                                 "null-device", "parser-reuse", "env-unset")
+
+    def test_pip_review_result_parsing(self):
+        case, workdir = self.prepare("pip-config-review")
+        for payload in ("not json", "[]", "null", '{"status": "blocked", "findings": []}'):
+            with self.subTest(payload=payload):
+                self.assert_pip_criteria(case, workdir, f"```qk-result\n{payload}\n```\n", result=False)
+        good = review_result(*pip_findings())
+        self.assert_pip_criteria(case, workdir, "```qk-result\ninvalid\n```\n" + good,
+                                 "null-device", "parser-reuse", "env-unset")
+        self.assert_pip_criteria(case, workdir, good + review_result())
 
 
 class Agent:
