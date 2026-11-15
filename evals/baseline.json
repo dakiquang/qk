@@ -39,6 +39,19 @@
       "seconds": 35,
       "tokens": 371524
     },
+    "pip-config-review": {
+      "criteria": {
+        "clean": true,
+        "env-unset": true,
+        "no-outside-important": true,
+        "null-device": true,
+        "parser-reuse": true,
+        "result": true
+      },
+      "date": "2026-11-15",
+      "seconds": 114,
+      "tokens": 237877
+    },
     "waf-bundle-review": {
       "criteria": {
         "caller-account-check": false,
@@ -97,6 +110,19 @@
       "date": "2026-11-14",
       "seconds": 41,
       "tokens": 116182
+    },
+    "pip-config-review": {
+      "criteria": {
+        "clean": true,
+        "env-unset": true,
+        "no-outside-important": true,
+        "null-device": true,
+        "parser-reuse": false,
+        "result": true
+      },
+      "date": "2026-11-15",
+      "seconds": 118,
+      "tokens": 149308
     },
     "waf-bundle-review": {
       "criteria": {

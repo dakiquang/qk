@@ -1,0 +1,197 @@
+diff --git a/src/pip/_internal/configuration.py b/src/pip/_internal/configuration.py
+--- a/src/pip/_internal/configuration.py
++++ b/src/pip/_internal/configuration.py
+@@ -93,6 +93,13 @@
+     }
+ 
+ 
++class _RawConfigParser(configparser.RawConfigParser):
++    """RawConfigParser with normalized key names."""
++
++    def optionxform(self, optionstr: str) -> str:
++        return _normalize_name(optionstr)
++
++
+ class Configuration:
+     """Handles management of configuration.
+ 
+@@ -140,7 +147,7 @@
+ 
+         try:
+             return self._get_parser_to_modify()[0]
+-        except IndexError:
++        except ConfigurationError:
+             return None
+ 
+     def items(self) -> Iterable[tuple[str, Any]]:
+@@ -191,12 +198,10 @@
+         self._ensure_have_load_only()
+ 
+         assert self.load_only
+-        fname, parser = self._get_parser_to_modify()
+-
+-        if (
+-            key not in self._config[self.load_only][fname]
+-            and key not in self._config[self.load_only]
+-        ):
++        fname, parser = self._get_parser_to_modify(key)
++
++        file_config = self._config[self.load_only].get(fname, {})
++        if key not in file_config:
+             raise ConfigurationError(f"No such key - {orig_key}")
+ 
+         if parser is not None:
+@@ -269,13 +274,20 @@
+             )
+             return
+ 
++        env_config_file = os.environ.get("PIP_CONFIG_FILE")
+         for variant, files in config_files.items():
+             for fname in files:
+                 # If there's specific variant set in `load_only`, load only
+                 # that variant, not the others.
+                 if self.load_only is not None and variant != self.load_only:
+-                    logger.debug("Skipping file '%s' (variant: %s)", fname, variant)
+-                    continue
++                    is_env_redirect = (
++                        variant == Kind.ENV
++                        and fname == env_config_file
++                        and self.load_only == Kind.USER
++                    )
++                    if not is_env_redirect:
++                        logger.debug("Skipping file '%s' (variant: %s)", fname, variant)
++                        continue
+ 
+                 parser = self._load_file(variant, fname)
+ 
+@@ -286,15 +298,15 @@
+         logger.verbose("For variant '%s', will try loading '%s'", variant, fname)
+         parser = self._construct_parser(fname)
+ 
++        self._config[variant].setdefault(fname, {})
+         for section in parser.sections():
+             items = parser.items(section)
+-            self._config[variant].setdefault(fname, {})
+             self._config[variant][fname].update(self._normalized_keys(section, items))
+ 
+         return parser
+ 
+     def _construct_parser(self, fname: str) -> RawConfigParser:
+-        parser = configparser.RawConfigParser()
++        parser = _RawConfigParser()
+         # If there is no such file, don't bother reading it but create the
+         # parser anyway, to hold the data.
+         # Doing this is useful when modifying and saving files, where we don't
+@@ -380,15 +392,37 @@
+         """Get values present in a config file"""
+         return self._config[variant]
+ 
+-    def _get_parser_to_modify(self) -> tuple[str, RawConfigParser]:
++    def _get_parser_to_modify(
++        self, key: str | None = None
++    ) -> tuple[str, RawConfigParser]:
+         # Determine which parser to modify
+         assert self.load_only
+         parsers = self._parsers[self.load_only]
+         if not parsers:
+-            # This should not happen if everything works correctly.
++            env_config_file = os.environ.get("PIP_CONFIG_FILE")
++            if env_config_file and self.load_only in (Kind.USER, Kind.GLOBAL):
++                parser = self._construct_parser(env_config_file)
++                self._parsers[Kind.ENV].append((env_config_file, parser))
++                logger.warning(
++                    "Because PIP_CONFIG_FILE is set, changes will be applied to "
++                    "'%s', not to '%s'. To restore normal behavior, "
++                    "unset PIP_CONFIG_FILE.",
++                    env_config_file,
++                    self.load_only,
++                )
++                return env_config_file, parser
++
+             raise ConfigurationError(
+                 "Fatal Internal error [id=2]. Please report as a bug."
+             )
++
++        if key is None:
++            return parsers[-1]
++
++        section, name = _disassemble_key(key)
++        for fname, parser in reversed(parsers):
++            if parser.has_section(section) and parser.has_option(section, name):
++                return fname, parser
+ 
+         # Use the highest priority parser.
+         return parsers[-1]
+diff --git a/tests/functional/test_configuration.py b/tests/functional/test_configuration.py
+--- a/tests/functional/test_configuration.py
++++ b/tests/functional/test_configuration.py
+@@ -155,6 +155,63 @@
+         assert "freeze.timeout: 10" in result.stdout
+         assert re.search(r"env:\n(  .+\n)+", result.stdout)
+ 
++    def test_env_set_values(self, script: PipTestEnvironment) -> None:
++        """Test that custom pip configuration using the environment variable
++        PIP_CONFIG_FILE doesn't fail when setting values."""
++
++        config_file = script.scratch_path / "test-pip.cfg"
++        config_file.write_text("")
++        script.environ["PIP_CONFIG_FILE"] = str(config_file)
++
++        result = script.pip(
++            "config",
++            "set",
++            "global.index-url",
++            "https://example.com/",
++            allow_stderr_warning=True,
++        )
++        assert "Because PIP_CONFIG_FILE is set, changes" in result.stderr
++        assert "Writing to" in result.stdout
++        assert result.returncode == 0
++
++    def test_env_unset_values(self, script: PipTestEnvironment) -> None:
++        """Test that custom pip configuration using the environment variable
++        PIP_CONFIG_FILE doesn't fail when unsetting values."""
++
++        config_file = script.scratch_path / "test-pip.cfg"
++        config_file.write_text("")
++        script.environ["PIP_CONFIG_FILE"] = str(config_file)
++
++        script.pip(
++            "config",
++            "set",
++            "global.index-url",
++            "https://example.com/",
++            allow_stderr_warning=True,
++        )
++        result = script.pip(
++            "config", "unset", "global.index-url", allow_stderr_warning=True
++        )
++        assert "Because PIP_CONFIG_FILE is set, changes" in result.stderr
++        assert "Writing to" in result.stdout
++        assert result.returncode == 0
++
++    def test_env_raises_error_on_devnull_directory(
++        self, script: PipTestEnvironment
++    ) -> None:
++        config_file = os.devnull
++        script.environ["PIP_CONFIG_FILE"] = str(config_file)
++
++        result = script.pip(
++            "config",
++            "set",
++            "global.index-url",
++            "https://example.com/",
++            expect_error=True,
++        )
++        assert "Cannot write to PIP_CONFIG_VALUE" in result.stderr
++        assert result.returncode == 1
++
+     def test_user_values(self, script: PipTestEnvironment) -> None:
+         """Test that the user pip configuration set using --user
+         is correctly displayed under "user".  This configuration takes place
+diff --git a/news/13279.bugfix.rst b/news/13279.bugfix.rst
+new file mode 100644
+--- /dev/null
++++ b/news/13279.bugfix.rst
+@@ -0,0 +1 @@
++Fixed fatal error when using ``PIP_CONFIG_FILE`` environment variable with ``pip config set``

@@ -178,6 +178,38 @@ Kết quả này cho thấy gì và không cho thấy gì:
 - Bài này dựng từ chính lịch sử của qk, và prompt review hiện tại được viết sau khi thấy reviewer bỏ sót nó. Kết quả cho thấy prompt có tác dụng với đúng loại lỗi nó được viết ra để sửa, chưa cho thấy qk review tốt hơn nói chung. Bước tiếp theo là một bài từ dự án khác.
 - Superpowers được thiết kế quanh quy trình riêng của nó (brainstorm, plan, TDD, subagent). Các bài này cho mỗi kit một lượt và một việc cố định, nên không dùng tới phần lớn quy trình đó.
 
+### Một bài từ dự án khác
+
+`pip-config-review` được dựng lại từ pypa/pip#13535 (MIT) theo bản gửi review đầu tiên, với ba lỗi mà lượt review công khai của PR đã tìm ra:
+
+| Lỗi | Hành vi sai |
+|---|---|
+| `null-device` | Với `PIP_CONFIG_FILE=/dev/null`, `pip config set` thoát với mã 0 nhưng làm mất giá trị. |
+| `parser-reuse` | Parser của file env được thêm vào `_parsers[Kind.ENV]` thay vì `self.load_only`, nên việc nạp không thể gọi lại an toàn. |
+| `env-unset` | `unset` không bao giờ hoạt động khi dùng `PIP_CONFIG_FILE`. |
+
+Đây là bài đầu tiên không lấy từ lịch sử của qk. Bài được chọn từ bốn ứng viên công khai trước khi chạy qk trên nó, và prompt review không được đổi cho bài này. Xem [evals.md](evals.md#các-case) để biết cách chấm các bài.
+
+**2026-11-15.** Mỗi ô là một lần chạy, trừ khi có ghi khác. `n/3` đếm số lỗi được báo ở mức blocker hoặc important trên đúng dòng.
+
+| Runtime | Kit | Lỗi | Token |
+|---|---|---|---|
+| Claude Code, Claude Opus 5.5 | none | 1/3 (`env-unset`) | 65k |
+| Claude Code, Claude Opus 5.5 | Superpowers 7.0.2 | 2/3 (`parser-reuse`, `env-unset`) | 97k |
+| Claude Code, Claude Opus 5.5 | qk | 2/3 và 3/3 trong hai lần chạy (cả hai lần đều có `null-device` và `env-unset`; `parser-reuse` được xếp nit một lần, important một lần) | 198k, 238k |
+| omp, Claude Opus 5.5 | qk | 2/3 (`parser-reuse` được xếp nit) | 149k |
+| Codex, GPT-6.1-sol | qk | 2/3 trong ba lần chạy; không lần nào báo `parser-reuse` | 166k–286k |
+
+Baseline `pip-config-review` ghi ngày 2026-11-15: Claude Code 3/3 (237.877 token), omp 2/3 (149.308 token).
+
+Kết quả này cho thấy gì và không cho thấy gì:
+
+- qk là kit duy nhất báo `null-device`; nó tốn nhiều token nhất.
+- Trên các model Claude, qk thấy `parser-reuse` ở mọi lần chạy nhưng xếp nit ở hai trong ba lần, nên lỗi này không được tính. Trên Codex, qk hoàn toàn không thấy lỗi này.
+- Đây là các lần chạy đơn lẻ, trừ khi có ghi khác; chênh lệch một lỗi nằm trong mức dao động giữa các lần chạy và không cho thấy kit nào review tốt hơn.
+- Bộ chấm được sửa hai lần trong lúc đo (`72c1741`: một finding `null-device` còn được tính nhầm cho `parser-reuse`; `656cb88`: bản sửa đó lại bác một finding đúng về việc thêm trùng). Mọi câu trả lời đều được chấm lại bằng bộ chấm cuối cùng; bảng dùng điểm cuối cùng.
+- Một thay đổi prompt thử nghiệm yêu cầu reviewer gọi tên loại lỗi theo hành vi sai không làm thay đổi kết quả nào trên Codex (`pip-config-review` 2/3, `bundle-malformed` 3/3, `waf-bundle-review` 6/8), và không được giữ lại.
+
 ## Số đo thiết lập gọn nhẹ
 
 Các lệnh trong [Thiết lập gọn nhẹ](lean-setup.md) được kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 ngày 13/11/2026. Qwen Code chưa kiểm.

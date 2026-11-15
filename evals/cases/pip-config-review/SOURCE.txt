@@ -1,0 +1,362 @@
+Historical public-source review fixture: pypa/pip#13535
+=====================================================
+Selection frozen: 2026-11-15, before implementation or qk/model evaluation.
+Repository: https://github.com/pypa/pip
+Public PR: https://github.com/pypa/pip/pull/13535 (Fix fatal config set error).
+Original author: Sepehr Rasouli, GitHub sepehr-rs (historical git name
+sepehrrasooli). Credit the original author for the PR, not this fixture's assembler.
+Project copyright: Copyright (c) 2008-present The pip developers (see AUTHORS.txt
+file). MIT permission and disclaimer are retained verbatim in repo/LICENSE.txt;
+repo/AUTHORS.txt is the historical public project attribution list.
+
+Pinned public Git revisions (all full hashes)
+--------------------------------------------
+PR API base / every retained repo file:
+  1000636317b856a7a8d0ae6662c3eb30c2a9bfed
+First submission:
+  b8d2cde90c71d2ec611f7e3b6f18286f00da5107
+First submission parent (different from the final PR API base):
+  4fe68d78ae8b117ad413ec61c518dd600af08bf0
+Common revision named by the three original reviews:
+  ca887570a89a727deb62f97fc4d3436b81c5f0fc
+Three-defect repairing commit:
+  8aa4aa764c1fe165b1d0c1e7f463192e01159c5e
+Historical functional-test addition:
+  706c3745e22c563f1986a030ba5fc9ce116f8e75
+Later scoped-read regression revision (NOT restored):
+  96f3c97989c0cf102d8ce0644b7dcbb9eb0ba0df
+Later scoped-read repair (RETAINED):
+  ff3d15bc91e1bd59fcbb05d105b735d04a4e3a99
+Final PR head:
+  e4e0a1b93489d747f9cfe193f590b9e8c0dc818c
+Merge commit:
+  7b566d160ddb07cb98eef3e306c9e93b0ae8d3d5
+Earlier key-aware parser selection change retained through the final head:
+  3b31ff4bc7803af39491cdc23de2bbd321dd4213
+
+Reconstruction contract
+-----------------------
+repo/ contains only unmodified blobs from the PR API base, exported with git
+show from the cached public bare clone. It contains 29 files, 181578 bytes,
+5873 lines, including license/authors, configuration, configuration command,
+its relevant CLI/support/exception modules, two historical configuration test
+modules and their small configuration helper. This is reviewer context, not a
+complete runnable pip distribution. Transitive imports/test infrastructure may
+be absent. No vendored dependencies, generated artifacts, large test fixtures,
+CI, lockfiles, or .git directory are included. Retained files are in repo/;
+the pinned base above identifies their public source blobs.
+
+review.diff starts with the final head's three PR files and reverses ONLY the
+three original defective behaviors below. It is an explicitly reconstructed
+composite, NOT a claim that the final-sized patch existed in the first submission
+or that the complete patch equals ca887570a89a727deb62f97fc4d3436b81c5f0fc.
+The original submission was +14/-1 in one file. The final PR was +114/-15 in
+three files. This reconstructed patch is +105/-13 in the same three files:
+  src/pip/_internal/configuration.py: +47/-13
+  tests/functional/test_configuration.py: +57/-0
+  news/13279.bugfix.rst: +1/-0
+The tests and news entry are byte-identical to the final head. They are preserved
+as legitimate historical PR additions, including tests expected to expose the
+restored unset and null-device defects.
+
+Exact reversed fixes / applied line ranges
+-----------------------------------------
+All fixture line numbers below refer to src/pip/_internal/configuration.py
+AFTER applying review.diff, not to the unmodified repo/ file.
+
+A. Null-device write: omit final-head lines 404-408 (the os.devnull write guard).
+   Fixture lines 400-413, especially 402-405, now create a writable fallback
+   parser without the guard. The historical read-side devnull short circuit
+   remains at fixture lines 269-275; it is not a write guard.
+   Original/common reviewed fallback: original lines 379-397 and common
+   review lines 379-392. Core repair: 8aa4aa... lines 394-405.
+   Public claim: with PIP_CONFIG_FILE=/dev/null, config set exits successfully
+   while discarding the value; an error was requested, including Windows nul.
+   https://github.com/pypa/pip/pull/13535#discussion_r3523647331
+
+B. Parser reuse: replace final-head lines 411-412 with fixture line 405,
+   self._parsers[Kind.ENV].append((env_config_file, parser)), removing _use_env.
+   Fixture line 400 still reads self._parsers[self.load_only]. This is the
+   original wrong-container behavior, with Kind.ENV replacing the obsolete
+   kinds.ENV spelling because the specified base uses the Kind enum.
+   Original/common reviewed fallback: original lines 379-397 and common
+   review lines 379-392. Core repair: 8aa4aa... lines 394-405.
+   Public claim: append to self.load_only rather than ENV for reentrancy.
+   Losing a pending earlier set when multiple snapshots are saved is the
+   source-derived consequence, also confirmed by the limited API proof below.
+   https://github.com/pypa/pip/pull/13535#discussion_r3523650997
+
+C. Unset wrong scope: restore the entire common reviewed unset_value method
+   verbatim at fixture lines 194-224. In particular lines 203-205 read only
+   self.load_only, and 222-224 delete there. Final-head lines 203-204, 223,
+   and 225 are replaced; final line 137 (_use_env initialization) is removed.
+   Common reviewed method: lines 180-210; common loader: 263-274.
+   Core repair: 8aa4aa... lines 188-218, 271-289, 402-405.
+   Public claim: set succeeds under PIP_CONFIG_FILE but a subsequent unset
+   fails with No such key because ENV-loaded values are absent from load_only.
+   https://github.com/pypa/pip/pull/13535#discussion_r3523655380
+   The restored .get(fname, {}) lookup is the actual reviewed implementation;
+   using the older base's direct indexing instead could substitute a KeyError
+   and is deliberately avoided. The loader's later USER-only redirection is
+   retained: the original wrong unset lookup still fails against ENV values.
+
+Retained changes and limits
+---------------------------
+Retain the final head's _RawConfigParser option normalization, key-aware reverse
+parser search, get_file_to_edit's ConfigurationError handling, initialization
+of empty per-file config dictionaries, warning text/punctuation, all 57 added
+functional-test lines, the news entry, and Kind enum spellings.
+Retain the USER-only environment redirect at fixture lines 277-290, including
+line 286. Its narrowing from USER/GLOBAL was the ff3d15... repair of the later
+--global get/list regression. That later regression is NOT a substitute target:
+https://github.com/pypa/pip/pull/13535#discussion_r4395412439
+The repair's common loader additions are thus partly retained while its unset
+scope tracking is reversed. These are intentional source-documented choices,
+not an assertion of a single historical checkout. No synthetic defect is added.
+
+plan.md is a short neutral paraphrase of the public PR description and scope;
+it carries no review findings. case.json selects runner-review with write=false.
+check.py and tests/test_qk_eval.py (at the project root) own exact grading logic.
+
+Evidence, selection criteria and all four candidates
+---------------------------------------------------
+Evidence comes from public GitHub API metadata, historical source snapshots,
+and public Git objects identified by the URLs and full revisions in this record.
+No private/employer source or authenticated connector data was used.
+
+The coordinator independently verified that every retained base blob matched
+its pinned base and that git apply --check passed. With installed pip 26.2.1
+supplying dependency imports and filesystem paths isolated through the
+get_configuration_files test seam, real configuration/parser/file I/O confirmed:
+API set/set/save loses the first pending value; fresh-instance unset raises
+"No such key"; null-device set accepts a pending write. Null-device save was
+deliberately not called to avoid writes outside allowed paths. The final-head
+module corrects all three. This is limited API proof, not complete CLI or
+upstream-suite proof.
+
+The following frozen appendix records selection research before implementation.
+Its cache paths, unexecuted-reproduction limitations, and proposed next steps
+are historical evidence only, not dependencies or current workflow instructions.
+All four candidates' licenses, sizes, review/fix links, timing caveats and
+selection decisions remain unchanged. The reconstruction contract above governs
+this fixture.
+
+----- BEGIN FROZEN 2026-11-15 SELECTION REPORT -----
+# Public Python PR candidates for a future review eval
+
+Research date: 2026-11-15 (UTC). Research only. No case implementation, project tests, qk runs, model measurements, or Anthropic calls were performed.
+
+**Recommend [pypa/pip#13535](https://github.com/pypa/pip/pull/13535) — “Fix fatal config set error.”** It is merged, MIT licensed, and adds 114 lines while deleting 15 across three files. Three distinct correctness defects coexist at reviewed commit `ca887570a89a727deb62f97fc4d3436b81c5f0fc` and are repaired by later commit `8aa4aa764c1fe165b1d0c1e7f463192e01159c5e` in the same PR. A fourth publicly reviewed regression is fixed later in that PR. The exact original commit also remains fetchable. Click #1572 is a viable alternative with three evidenced defects, but its comments are post-merge and its repairs span follow-ups.
+
+## Contents
+
+- [Selection and method](#selection-and-method)
+- [1. pip #13535 — recommended](#1-pip-13535--recommended)
+- [2. Click #1572 — eligible alternative](#2-click-1572--eligible-alternative)
+- [3. pip #14205 — reject](#3-pip-14205--reject)
+- [4. Werkzeug #2981 — reject](#4-werkzeug-2981--reject)
+- [Evidence cache and limits](#evidence-cache-and-limits)
+
+## Selection and method
+
+All four candidates are public, merged PRs in the community projects PyPA pip or Pallets Click/Werkzeug, rather than company-owned repositories or this workspace author's projects. These are among the community projects explicitly allowed in the brief. License text credits the pip developers or Pallets; public project READMEs and source are cached. No employer accounts, company repositories, private connectors, account profiles, or private operational data were queried. Contributors' employment is neither investigated nor inferred from their public participation.
+
+Only public `https://api.github.com/repos/...` read endpoints and public `https://github.com/...git` clones/fetches supplied external evidence. No GitHub web scraping, general search engines, non-GitHub external links, or write APIs were used. Links to standards inside quoted review comments were not fetched.
+
+Size means the final PR API's `additions`, `deletions`, and `changed_files`, not a reconstructed diff. Original, reviewed, and fixing commits are distinguished below. “Evidenced” means a concrete public claim plus matching historical code and a later correcting diff; it does **not** mean that this research executed a reproduction. Duplicate manifestations of one root cause are counted once. Testing requests, naming, refactoring, intentional contract changes, and unverified claims do not become defects merely because a reviewer mentioned them.
+
+| Candidate | Merged at (UTC) | Added / deleted / files | License proof | Evidenced defects and decision |
+|---|---|---:|---|---|
+| [pypa/pip#13535](https://github.com/pypa/pip/pull/13535) | 2026-11-01 19:30:22 | +114 / −15 / 3 | [MIT](https://github.com/pypa/pip/blob/e4e0a1b93489d747f9cfe193f590b9e8c0dc818c/LICENSE.txt) | **Recommend.** Three simultaneous defects at one reviewed revision; four fixed across PR history. |
+| [pallets/click#1572](https://github.com/pallets/click/pull/1572) | 2026-04-29 23:33:44 | +138 / −74 / 7 | [BSD-3-Clause](https://github.com/pallets/click/blob/9cbbf10782d555d6995ef8969276d6a89792bc0c/LICENSE.txt) | **Eligible alternative.** Three source-evidenced defects; post-merge review, multiple follow-ups, more files. |
+| [pypa/pip#14205](https://github.com/pypa/pip/pull/14205) | 2026-10-29 18:48:05 | +110 / −26 / 8 | [MIT](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/LICENSE.txt) | **Reject.** One fixing chain established; parsing reports remain uncorrected in the inspected follow-up. |
+| [pallets/werkzeug#2981](https://github.com/pallets/werkzeug/pull/2981) | 2024-10-31 03:37:57 | +167 / −71 / 5 | [BSD-3-Clause](https://github.com/pallets/werkzeug/blob/e3a50c9ac130658e15bc8e8a4555a58379006cba/LICENSE.txt) | **Reject.** One runtime defect, not three; other reviewed items are documentation errors or intended changes. |
+
+The license names are also independently returned by the public repository `/license` APIs, cached as `*-license.json`.
+
+Local context read: `docs/en/evals.md`, existing `case.json` files, and the existing review cases' plan/source shapes. The present harness uses a frozen repo/diff and defect-specific checks. This report supplies provenance for choosing such a case later; it does not create a prompt, graders, reconstructed defects, tests, or baseline.
+
+## 1. pip #13535 — recommended
+
+Public PR: [pypa/pip#13535](https://github.com/pypa/pip/pull/13535). Public metadata: [PR API](https://api.github.com/repos/pypa/pip/pulls/13535), [review comments](https://api.github.com/repos/pypa/pip/pulls/13535/comments?per_page=100), [commits](https://api.github.com/repos/pypa/pip/pulls/13535/commits?per_page=100), [files](https://api.github.com/repos/pypa/pip/pulls/13535/files?per_page=100).
+
+Final file footprint: `src/pip/_internal/configuration.py` +56/−15; `tests/functional/test_configuration.py` +57/−0; `news/13279.bugfix.rst` +1/−0. Real CLI configuration logic, one production module. [Pinned MIT permission and disclaimer](https://github.com/pypa/pip/blob/e4e0a1b93489d747f9cfe193f590b9e8c0dc818c/LICENSE.txt#L1-L20).
+
+### Provenance and revision choice
+
+- Original listed PR commit: [`b8d2cde90c71d2ec611f7e3b6f18286f00da5107`](https://github.com/pypa/pip/commit/b8d2cde90c71d2ec611f7e3b6f18286f00da5107). Parent/base at that point: `4fe68d78ae8b117ad413ec61c518dd600af08bf0`. This initial patch is only **+14/−1 in one file**, rather than the final PR's +114/−15. It is available from the public clone. Do not imply the final footprint was present on day one.
+- Best common review snapshot: [`ca887570a89a727deb62f97fc4d3436b81c5f0fc`](https://github.com/pypa/pip/commit/ca887570a89a727deb62f97fc4d3436b81c5f0fc). The three core comments below were posted on 2026-07-04 against this SHA. Use this real historical tree if a later case needs all three defects together; do not manufacture a composite of different revisions.
+- Core repair: [`8aa4aa764c1fe165b1d0c1e7f463192e01159c5e`](https://github.com/pypa/pip/commit/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e), committed 2026-07-05, after those comments.
+- Historical tests added in [`706c3745e22c563f1986a030ba5fc9ce116f8e75`](https://github.com/pypa/pip/commit/706c3745e22c563f1986a030ba5fc9ce116f8e75) cover environment-file set/unset and null-device rejection. They are source evidence, not tests run by this research.
+- Final head: `e4e0a1b93489d747f9cfe193f590b9e8c0dc818c`. Merge commit: [`7b566d160ddb07cb98eef3e306c9e93b0ae8d3d5`](https://github.com/pypa/pip/commit/7b566d160ddb07cb98eef3e306c9e93b0ae8d3d5). The PR API confirms `merged: true` and the timestamp above.
+
+### Core defect A: silently successful writes to the null device
+
+[review comment](https://github.com/pypa/pip/pull/13535#discussion_r3523647331) states exactly:
+
+> no devnull guard on the write side, so `PIP_CONFIG_FILE=/dev/null pip config set ...` now exits 0 and drops the value.
+>
+> #11880 asked for an error, not a warned no-op. (`os.devnull` is `nul` on Windows too.)
+
+Defective range: [src/pip/_internal/configuration.py:379–392](https://github.com/pypa/pip/blob/ca887570a89a727deb62f97fc4d3436b81c5f0fc/src/pip/_internal/configuration.py#L379-L392). The fallback opens whatever `PIP_CONFIG_FILE` names without rejecting `os.devnull`.
+
+Fixed range: [src/pip/_internal/configuration.py:394–405](https://github.com/pypa/pip/blob/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e/src/pip/_internal/configuration.py#L394-L405). Fixing commit: [`8aa4aa764c1fe165b1d0c1e7f463192e01159c5e`](https://github.com/pypa/pip/commit/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e) adds the explicit null-device `ConfigurationError` before constructing a writable parser. The later functional test asserts exit 1. The diagnostic's literal `PIP_CONFIG_VALUE` spelling is present upstream; it is not a separate counted defect.
+
+### Core defect B: parser stored in the wrong scope, losing reuse
+
+[review comment](https://github.com/pypa/pip/pull/13535#discussion_r3523650997) states exactly:
+
+> I think this should be append to `_parsers[self.load_only]`, not `_parsers[kinds.ENV]`, or it's not re-entrant.
+
+Defective range: [src/pip/_internal/configuration.py:379–392](https://github.com/pypa/pip/blob/ca887570a89a727deb62f97fc4d3436b81c5f0fc/src/pip/_internal/configuration.py#L379-L392). `_get_parser_to_modify` looks in `_parsers[self.load_only]` but appends the newly created parser to `_parsers[kinds.ENV]`. A second modification on the same `Configuration` object therefore misses its first parser and reconstructs another. **Source-derived consequence:** when changes have not yet been saved, separate parser snapshots can overwrite rather than preserve the preceding pending change. That consequence is an inference from parser construction and the save loop, not an additional quotation or an executed experiment.
+
+Fixed range: [src/pip/_internal/configuration.py:394–405](https://github.com/pypa/pip/blob/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e/src/pip/_internal/configuration.py#L394-L405). Fixing commit: [`8aa4aa764c1fe165b1d0c1e7f463192e01159c5e`](https://github.com/pypa/pip/commit/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e) appends to the same `self.load_only` list that subsequent calls read. This is a state correctness fix, not merely a preference about container naming. No dedicated reentrancy regression test was found among this PR's added functional tests.
+
+### Core defect C: `unset` cannot edit the environment-selected config
+
+[review comment](https://github.com/pypa/pip/pull/13535#discussion_r3523655380) states exactly:
+
+> `unset` never works under `PIP_CONFIG_FILE`, even though `set` now does. `set_value` writes to the env file; `unset_value` hits the same fallback (prints the "changes will be applied" warning) and then this guard fires, because `_config[load_only]` is empty when the file is loaded under ENV.
+
+The comment's concrete sequence is `pip config set global.x v` succeeding, then `pip config unset global.x` failing with “No such key”, and it asks to point unset at the ENV scope/parser.
+
+Defective ranges: [src/pip/_internal/configuration.py:180–210](https://github.com/pypa/pip/blob/ca887570a89a727deb62f97fc4d3436b81c5f0fc/src/pip/_internal/configuration.py#L180-L210) and [src/pip/_internal/configuration.py:263–274](https://github.com/pypa/pip/blob/ca887570a89a727deb62f97fc4d3436b81c5f0fc/src/pip/_internal/configuration.py#L263-L274). The read scope and unset lookup do not expose the environment-selected file to this path.
+
+Fixed ranges: [src/pip/_internal/configuration.py:188–218](https://github.com/pypa/pip/blob/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e/src/pip/_internal/configuration.py#L188-L218), [src/pip/_internal/configuration.py:271–289](https://github.com/pypa/pip/blob/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e/src/pip/_internal/configuration.py#L271-L289), and [src/pip/_internal/configuration.py:402–405](https://github.com/pypa/pip/blob/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e/src/pip/_internal/configuration.py#L402-L405). Fixing commit: [`8aa4aa764c1fe165b1d0c1e7f463192e01159c5e`](https://github.com/pypa/pip/commit/8aa4aa764c1fe165b1d0c1e7f463192e01159c5e) admits the ENV file for the redirected operation, tracks `_use_env`, and reads/deletes from the correct config scope. The later `test_env_unset_values` in the historical test commit exercises set followed by unset against that file.
+
+### Additional defect D: `--global get/list` reads the environment override
+
+This is a **later revision**, not a fourth simultaneous defect at `ca887570a89a727deb62f97fc4d3436b81c5f0fc`. [review comment](https://github.com/pypa/pip/pull/13535#discussion_r4395412439) reports:
+
+> With `timeout = 10` in the global config and `timeout = 999` in `custom.conf`, this command now prints `999`:
+>
+> `PIP_CONFIG_FILE=custom.conf pip config --global get global.timeout`
+>
+> Before this change, it prints `10`. `--global` should read only the global files, but this branch also loads `custom.conf`; `--global list` includes it too.
+
+Defective range: [src/pip/_internal/configuration.py:275–283](https://github.com/pypa/pip/blob/96f3c97989c0cf102d8ce0644b7dcbb9eb0ba0df/src/pip/_internal/configuration.py#L275-L283).
+
+Fixed range: [src/pip/_internal/configuration.py:275–283](https://github.com/pypa/pip/blob/ff3d15bc91e1bd59fcbb05d105b735d04a4e3a99/src/pip/_internal/configuration.py#L275-L283). Fixing commit: [`ff3d15bc91e1bd59fcbb05d105b735d04a4e3a99`](https://github.com/pypa/pip/commit/ff3d15bc91e1bd59fcbb05d105b735d04a4e3a99) narrows environment redirection to `USER`. Review: 2026-10-27; repair: 2026-10-29.
+
+A fifth review comment, [underscore key normalization](https://github.com/pypa/pip/pull/13535#discussion_r3523646306), is matched by `_RawConfigParser.optionxform` in the core repair. It is **not needed for the count**: it also addresses an existing incomplete fix, and the reviewer wording “Now a regression” is ambiguous. No style or warning-wording comments are counted.
+
+**Decision:** recommend. Meets merge, license, size, community-project, real CLI logic, and minimum-three evidence gates. Prefer the common reviewed SHA over the original first commit for any eventual three-defect eval. Original history is reproducible; runtime/dependency compatibility and independent reproduction remain untested research limitations.
+
+## 2. Click #1572 — eligible alternative
+
+Public PR: [pallets/click#1572](https://github.com/pallets/click/pull/1572) — “Add file-like pager: `click.get_pager_file()`”. [PR API](https://api.github.com/repos/pallets/click/pulls/1572), [review comments](https://api.github.com/repos/pallets/click/pulls/1572/comments?per_page=100). Merged +138/−74 in seven files: three documentation/changelog files, public export, compatibility helper, `_termui_impl.py`, and `termui.py`. [Pinned BSD-3-Clause text](https://github.com/pallets/click/blob/9cbbf10782d555d6995ef8969276d6a89792bc0c/LICENSE.txt).
+
+Original listed commit: [`24929b0ea14db37ac33a247544fcd0a83c7ba2fe`](https://github.com/pallets/click/commit/24929b0ea14db37ac33a247544fcd0a83c7ba2fe); reviewed/final head: `9cbbf10782d555d6995ef8969276d6a89792bc0c`; merge: [`c69643b60cf971cd5d8e5d3902632807ceab9b8f`](https://github.com/pallets/click/commit/c69643b60cf971cd5d8e5d3902632807ceab9b8f). Both original and reviewed SHAs were fetched explicitly from the public remote because they were absent from the default-branch clone.
+
+**Timing caveat:** all ten cached review comments were posted at 23:39 UTC on merge day, approximately five minutes **after** merge. They are public review comments on the PR, but not pre-merge defect discovery. Repairs below are later direct follow-ups.
+
+### Defect A: text-only `StringIO` is treated as a binary stream
+
+[review comment](https://github.com/pallets/click/pull/1572#discussion_r3164813519) states:
+
+> `get_pager_file`'s stream-wrapping logic can't correctly handle `io.StringIO` (used when no stdio streams are attached, or in the cmd-not-found fallbacks). `StringIO` has no `.buffer` and no `.encoding`, so it will take the “BinaryIO” branch and attempt to wrap a text stream in `io.TextIOWrapper`, which will raise a `TypeError`.
+
+Defective range: [src/click/_termui_impl.py:419–429](https://github.com/pallets/click/blob/9cbbf10782d555d6995ef8969276d6a89792bc0c/src/click/_termui_impl.py#L419-L429). Fixed range: [src/click/_termui_impl.py:436–449](https://github.com/pallets/click/blob/1aa2d53d63ff68bf14b35931177aac9270e39713/src/click/_termui_impl.py#L436-L449) plus its buffer-capability helper at lines 35–47. Fixing commit: [`1aa2d53d63ff68bf14b35931177aac9270e39713`](https://github.com/pallets/click/commit/1aa2d53d63ff68bf14b35931177aac9270e39713), in merged direct follow-up [pallets/click#3405](https://github.com/pallets/click/pull/3405) (“`click.get_pager_file`: add tests (#1572 followup)”, merged 2026-05-16). It distinguishes buffered text streams and yields text-only streams without a binary wrapper.
+
+The comment additionally claims that `StringIO` cannot accept arbitrary attributes. That assertion is **not adopted or counted**; the verified issue is the binary wrapping path.
+
+### Defect B: temporary wrapper can close borrowed stdout
+
+[review comment](https://github.com/pallets/click/pull/1572#discussion_r3164813497) states:
+
+> `MaybeStripAnsi` subclasses `io.TextIOWrapper` directly and doesn't implement the non-closing behavior Click uses elsewhere (`_NonClosingTextIOWrapper.__del__` detaches to avoid closing shared global streams).
+
+It explicitly reports that short-lived wrappers around `sys.stdout.buffer` can close the shared stream during garbage collection and break subsequent output.
+
+Defective ranges: [src/click/_termui_impl.py:369–377](https://github.com/pallets/click/blob/9cbbf10782d555d6995ef8969276d6a89792bc0c/src/click/_termui_impl.py#L369-L377) and [src/click/_termui_impl.py:419–433](https://github.com/pallets/click/blob/9cbbf10782d555d6995ef8969276d6a89792bc0c/src/click/_termui_impl.py#L419-L433). Fixed range: [src/click/_termui_impl.py:442–466](https://github.com/pallets/click/blob/051bb0f30b545cf7426deef819811815297c2798/src/click/_termui_impl.py#L442-L466). Fixing commit: [`051bb0f30b545cf7426deef819811815297c2798`](https://github.com/pallets/click/commit/051bb0f30b545cf7426deef819811815297c2798), in merged direct follow-up [pallets/click#3533](https://github.com/pallets/click/pull/3533) (merged 2026-06-03). The `finally` detaches the wrapper, including when flush raises. The public [commit-to-PR API](https://api.github.com/repos/pallets/click/commits/051bb0f30b545cf7426deef819811815297c2798/pulls) confirms that association; cached locally.
+
+### Defect C: stdout fallback forces the wrong encoding
+
+[review comment](https://github.com/pallets/click/pull/1572#discussion_r3164813467) states exactly:
+
+> The fallback path when the pager executable isn't found also hard-codes `"utf-8"` for the encoding. If this falls back to writing directly to stdout, this can produce incorrectly-encoded output compared to writing via `sys.stdout`'s configured encoding. Use `get_best_encoding(stdout)` (and/or avoid wrapping stdout.buffer) to keep behavior consistent with normal output.
+
+Defective range: [src/click/_termui_impl.py:459–467](https://github.com/pallets/click/blob/9cbbf10782d555d6995ef8969276d6a89792bc0c/src/click/_termui_impl.py#L459-L467). Fixed ranges: [src/click/_termui_impl.py:498–505](https://github.com/pallets/click/blob/051bb0f30b545cf7426deef819811815297c2798/src/click/_termui_impl.py#L498-L505) and [src/click/_termui_impl.py:637–653](https://github.com/pallets/click/blob/051bb0f30b545cf7426deef819811815297c2798/src/click/_termui_impl.py#L637-L653). Fixing commit: [`051bb0f30b545cf7426deef819811815297c2798`](https://github.com/pallets/click/commit/051bb0f30b545cf7426deef819811815297c2798) routes fallback through `_nullpager`, which derives `get_best_encoding(stream)`. Duplicate empty-command and tempfile fallback comments are the same root cause, not extra defects.
+
+The [missing-tests request](https://github.com/pallets/click/pull/1572#discussion_r3164813485) does not count. The [ignored tempfile pager arguments](https://github.com/pallets/click/pull/1572#discussion_r3164813556) and [flush BrokenPipeError claim](https://github.com/pallets/click/pull/1572#discussion_r3164813443) are not used to increase the count: the former remains explicit behavior in later code, and the latter interacts with `_pipepager`'s existing exception handling. This avoids accepting every review allegation as established fact.
+
+**Decision:** eligible alternative with three distinct review-to-fix chains at one real reviewed head. Prefer pip #13535 because Click spans seven files and follow-up PRs, and the comments were post-merge. This research does not assert that every original pager review allegation was correct.
+
+## 3. pip #14205 — reject
+
+Public PR: [pypa/pip#14205](https://github.com/pypa/pip/pull/14205) — “Add support for -r pylock.toml[extras]”. [PR API](https://api.github.com/repos/pypa/pip/pulls/14205), [review comments](https://api.github.com/repos/pypa/pip/pulls/14205/comments?per_page=100). Merged +110/−26 in eight files; [pinned MIT proof](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/LICENSE.txt).
+
+Original listed commit: [`c9e6a6ef30ecbed7b1562b5e2e07cc3791d21f8e`](https://github.com/pypa/pip/commit/c9e6a6ef30ecbed7b1562b5e2e07cc3791d21f8e) moves `strip_extras`; behavior-bearing second commit and reviewed/final head: `b1364802957ad8b5448589a227f339dcec7efca5`. Merge: [`92c0cce89e91904651cf4a9706087d0e2776eb96`](https://github.com/pypa/pip/commit/92c0cce89e91904651cf4a9706087d0e2776eb96).
+
+### Reported parsing failures — no correcting commit established
+
+[review comment](https://github.com/pypa/pip/pull/14205#discussion_r4380009578) states exactly:
+
+> Currently `-r 'requirements[not an extra]'` raises `InvalidRequirement`, and `-r 'file:///path/pylock.toml?token=[dev]'` activates `dev` and changes the query. I think it should use the same parsing in `check_dist_restriction()`.
+
+Defective ranges: [src/pip/_internal/cli/req_command.py:362–375](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/src/pip/_internal/cli/req_command.py#L362-L375), [cmdoptions.py:141–150](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/src/pip/_internal/cli/cmdoptions.py#L141-L150), and [urls.py:63–78](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/src/pip/_internal/utils/urls.py#L63-L78). The parser strips bracket suffixes before deciding whether the input is a pylock file and treats URL query text as part of the filename syntax.
+
+Fix hash / fixed ranges: **not established**. In inspected direct follow-up [pypa/pip#14390](https://github.com/pypa/pip/pull/14390), [src/pip/_internal/cli/req_command.py:98–106](https://github.com/pypa/pip/blob/956b2522bd936ab7a5eeeeef9d3f80a0494f77b3/src/pip/_internal/cli/req_command.py#L98-L106) still calls `strip_extras(source)` before classifying the source. Do not label these reports repaired merely because a later PR merged.
+
+### Aggregating extras per lock — one established fixed defect
+
+[review comment](https://github.com/pypa/pip/pull/14205#discussion_r4380009598) states exactly:
+
+> Combine extras per lock before calling `select()`, as #14390 does for groups. Repeated `-r 'pylock.toml[dev]' -r 'pylock.toml[docs]'` can omit packages requiring both extras or fail with duplicate locked links for shared packages.
+
+Defective range: [src/pip/_internal/cli/req_command.py:363–385](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/src/pip/_internal/cli/req_command.py#L363-L385). Independent selection for each occurrence is the one root cause behind both consequences.
+
+Fixed range: [src/pip/_internal/cli/req_command.py:90–119](https://github.com/pypa/pip/blob/956b2522bd936ab7a5eeeeef9d3f80a0494f77b3/src/pip/_internal/cli/req_command.py#L90-L119). Fixing commit: [`956b2522bd936ab7a5eeeeef9d3f80a0494f77b3`](https://github.com/pypa/pip/commit/956b2522bd936ab7a5eeeeef9d3f80a0494f77b3), in merged direct follow-up [pypa/pip#14390](https://github.com/pypa/pip/pull/14390) (2026-11-02). It accumulates `request.extras` per source before selection. The original thread [explicitly coordinates the follow-up](https://github.com/pypa/pip/pull/14205#discussion_r4380207963), so this relationship is not inferred just from similar filenames.
+
+### Unknown extras — delegated future repair, not counted
+
+[review comment](https://github.com/pypa/pip/pull/14205#discussion_r4380009614) asks to “normalize requested extras and check them against `lock.extras`” and start with an error for unknown names. Defective/concern range: [pylock.py:294–297](https://github.com/pypa/pip/blob/b1364802957ad8b5448589a227f339dcec7efca5/src/pip/_internal/utils/pylock.py#L294-L297). [The author response](https://github.com/pypa/pip/pull/14205#discussion_r4380127025) points to a future packaging change. The inspected follow-up comments and source defer validation to a future vendoring update, rather than providing a verified fix here. Fix hash / fixed ranges: **not established; not counted**.
+
+**Decision:** reject under the three-fixed-defects gate. The PR is real and near the size range, but one proven fixing chain is insufficient. The direct follow-up itself is +945/−40 across nine files, making it a worse size fit as a replacement candidate.
+
+## 4. Werkzeug #2981 — reject
+
+Public PR: [pallets/werkzeug#2981](https://github.com/pallets/werkzeug/pull/2981) — “more cache-control cleanup”. [PR API](https://api.github.com/repos/pallets/werkzeug/pulls/2981), [review comments](https://api.github.com/repos/pallets/werkzeug/pulls/2981/comments?per_page=100). Merged +167/−71 in five files. [Pinned BSD-3-Clause proof](https://github.com/pallets/werkzeug/blob/e3a50c9ac130658e15bc8e8a4555a58379006cba/LICENSE.txt).
+
+Original, reviewed, and final head are the single listed commit `e3a50c9ac130658e15bc8e8a4555a58379006cba`. Merge: [`fa387288bd2ffccedc632ccdffb0f3f1c0b25ece`](https://github.com/pallets/werkzeug/commit/fa387288bd2ffccedc632ccdffb0f3f1c0b25ece). Reviews were posted later on merge day.
+
+### One runtime defect: `private` loses permitted field-name arguments
+
+[review comment](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824344507) states:
+
+> It returned `*` when *present* without an argument. It should not be bool since arguments are permitted
+
+The review's exact failing assertion is:
+
+```python
+cc = parse_cache_control_header('private="Set-Cookie, Authorization"', cls=ResponseCacheControl)
+assert cc.private == 'Set-Cookie, Authorization', f"{cc.private=}"
+# AssertionError: cc.private=True
+```
+
+Defective range: [src/werkzeug/datastructures/cache_control.py:266–269](https://github.com/pallets/werkzeug/blob/e3a50c9ac130658e15bc8e8a4555a58379006cba/src/werkzeug/datastructures/cache_control.py#L266-L269). Fixed range: [src/werkzeug/datastructures/cache_control.py:259–261](https://github.com/pallets/werkzeug/blob/b0f361ce69038a55f7ca8cfb6262ddc5ffe1eeea/src/werkzeug/datastructures/cache_control.py#L259-L261). Fixing commit: [`b0f361ce69038a55f7ca8cfb6262ddc5ffe1eeea`](https://github.com/pallets/werkzeug/commit/b0f361ce69038a55f7ca8cfb6262ddc5ffe1eeea), in merged direct follow-up [pallets/werkzeug#2983](https://github.com/pallets/werkzeug/pull/2983) (2024-10-31 16:42:36 UTC). It restores a string-capable accessor instead of converting presence to bool. [Author acknowledgment](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824577836) says “Totally right, I missed that it can have an argument.” The public commit-to-PR API confirms #2983.
+
+### Review items excluded from runtime-defect count
+
+- [Request `no_cache`](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824308155): “It returned `*` when *present*”. Original docstring range: [src/werkzeug/datastructures/cache_control.py:177–178](https://github.com/pallets/werkzeug/blob/e3a50c9ac130658e15bc8e8a4555a58379006cba/src/werkzeug/datastructures/cache_control.py#L177-L178); corrected by `b0f361ce69038a55f7ca8cfb6262ddc5ffe1eeea` at lines 178–180. This fixes the versionchanged explanation. A boolean request `no_cache` is an intentional behavior change described by the PR, not a discovered runtime defect.
+- [Request `max_age`](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824316427): “It returned `-1` when *present*.” Original docstring line 174; corrected at `b0f361ce69038a55f7ca8cfb6262ddc5ffe1eeea` lines 174–175. [Author clarification](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824572839) says the previous case was “when present without a value, which is not valid.” The changed runtime handling of invalid valueless input is intentional.
+- [Request `min_fresh`](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824319738): “It returned `*` when *present*.” Original docstring line 190; corrected at `b0f361ce69038a55f7ca8cfb6262ddc5ffe1eeea` lines 190–191. [Author clarification](https://github.com/pallets/werkzeug/pull/2981#discussion_r1824575608) makes the same distinction. This is a documentation correction, not a third logic defect.
+
+**Decision:** reject. One well-evidenced runtime defect plus several documentation corrections must not be inflated into three correctness defects for an API/backend review case.
+
+## Evidence cache and limits
+
+All external evidence and research helpers are under `/tmp/qk-oss-case-research/`:
+
+- `*-<PR>-pr.json`, `*-comments.json`, `*-commits.json`, and `*-files.json`: public GitHub API responses. Candidate-specific comment files are complete for these PRs (each has fewer than 100 comments); discovery lists are sampled pages, not complete repository histories.
+- `*-license.json`: public GitHub license classification and text.
+- `*-<commit>-pulls.json`: verified association of direct follow-up fixes with Click #3533 and Werkzeug #2983.
+- `pip.git`, `click.git`, `werkzeug.git`: public bare git clones. The Click original/reviewed commits were explicitly fetched. No checkout, branch change, index edit, commit, or push was made in the working project.
+- `sources/<project>/<full-sha>/<path>`: exact historical file snapshots, adjacent `.numbered` copies, and `change.diff` patches. `source-manifest.json` records their SHA-256 checksums. Fix diffs and original snapshots can be inspected without network access.
+- `fetch.py`, the research fetch scripts, and `export-evidence.py`: the API routes and read-only extraction method. Discovery sampled recent review comments from five allowed community projects, then expanded older pip and Click comments. Open pip #13971 and #14258 were eliminated before the final four; #14011 was eliminated for its +18-line footprint. Their cached leads do not become selected cases.
+
+Limitations: no code, test suite, browser reproduction, or eval was run. The fix classifications are based on public review claims, source snapshots, and correcting diffs. The three-defect recommendation therefore establishes provenance and a plausible historical case, not measured grader validity or runtime reproducibility. No attempt was made to prove the absence of every other defect. This is a bounded candidate search, not an exhaustive survey of all public Python PRs.
+
+**Next step, when separately authorized:** use pip #13535's actual reviewed commit `ca887570a89a727deb62f97fc4d3436b81c5f0fc` as the starting point for case design, first reproduce the three core behaviors, then decide on case packaging. That implementation and all qk/model measurements remain outside this research step.
+
+----- END FROZEN SELECTION REPORT -----
