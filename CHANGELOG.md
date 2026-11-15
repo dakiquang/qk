@@ -6,10 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-15
+
 ### Added
 
 - `qk_eval.py --kit none|qk|superpowers` compares kits on one Claude Code base (no user skills or plugins, the
   same output format for every kit); results never touch the baseline.
+
+### Fixed
+
+- The Claude Code `bundle-malformed` baseline is re-recorded with the new review prompt; it was the only
+  review-case entry still from the previous prompt.
 
 ## [0.6.0] - 2026-11-15
 
