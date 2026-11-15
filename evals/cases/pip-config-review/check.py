@@ -24,11 +24,11 @@ SUBSTANCE = {
     ),
     "parser-reuse": (
         r"parser",
-        r"wrong (?:container|scope|bucket|list|variant)|"
-        r"(?:instead of|rather than).{0,40}(?:load_only|kind\.env|scope|container|bucket)|"
-        r"load_only.{0,30}(?:not|instead of|rather than).{0,30}(?:kind\.env|\benv\b)|"
-        r"re[ -]?use|re[ -]?entran|recreat|"
-        r"(?:lost|loses?|overwrit|discard).{0,40}(?:pending|earlier|unsaved|write|change|set|value)|"
+        r"wrong (?:kind|container|scope|bucket|list|variant)|"
+        r"(?:instead of|rather than).{0,40}(?:load_only|kinds?\.env|scope|container|bucket)|"
+        r"load_only.{0,30}(?:not|instead of|rather than).{0,30}(?:kinds?\.env|\benv\b)|"
+        r"re[ -]?entran|"
+        r"(?:lost|loses?|overwrit|discard).{0,40}(?:pending|earlier|unsaved)|"
         r"(?:pending|earlier|unsaved).{0,40}(?:lost|loses?|overwrit|discard)",
     ),
     "env-unset": (

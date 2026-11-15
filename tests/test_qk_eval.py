@@ -246,6 +246,25 @@ class CaseSanityTest(unittest.TestCase):
             with self.subTest(defect=name):
                 self.assert_pip_criteria(case, workdir, review_result(sample), name)
 
+    def test_pip_review_null_device_does_not_imply_parser_reuse(self):
+        case, workdir = self.prepare("pip-config-review")
+        sample = finding("src/pip/_internal/configuration.py", 403,
+                         claim="The fallback accepts PIP_CONFIG_FILE=/dev/null after loading intentionally skips "
+                         "all parsers. On POSIX, config set then writes successfully to /dev/null and returns "
+                         "success while discarding the setting. The added test_env_raises_error_on_devnull_directory "
+                         "instead requires failure and a diagnostic that no implementation emits, so that test also fails.",
+                         fix="Reject os.devnull as a modification target before constructing the fallback parser, "
+                         "emit the intended diagnostic using PIP_CONFIG_FILE, and align the functional assertion "
+                         "with that message.")
+        self.assert_pip_criteria(case, workdir, review_result(sample), "null-device")
+
+    def test_pip_review_accepts_public_parser_reuse_wording(self):
+        case, workdir = self.prepare("pip-config-review")
+        sample = finding("src/pip/_internal/configuration.py", 405,
+                         claim="should append to _parsers[self.load_only], not _parsers[kinds.ENV], "
+                         "or it's not re-entrant")
+        self.assert_pip_criteria(case, workdir, review_result(sample), "parser-reuse")
+
     def test_pip_review_accepts_alternate_claims_and_fix_only_wording(self):
         case, workdir = self.prepare("pip-config-review")
         path = "src/pip/_internal/configuration.py"
