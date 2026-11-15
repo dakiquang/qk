@@ -145,7 +145,7 @@ Prompt mới ([#26](https://github.com/dakiquang/qk/pull/26)) yêu cầu reviewe
 | omp, `waf-bundle-review` | 0/8 | 5, 5, 4 | 0,81M → 0,75–1,05M |
 | Claude Code, `waf-bundle-review` | 0/8 | 3, 6, 5 | 0,61M → 0,38–0,47M |
 | omp, `bundle-malformed` | 6/6 | 6/6 | xem bên dưới |
-| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99.628 → 78.700–81.643 |
+| Claude Code, `bundle-malformed` | 6/6 | 6/6 | 99.628 → 59.028–81.643 |
 
 Lần chạy omp đầu tiên của `bundle-malformed` tốn hơn baseline 36% token. Sáu lần chạy thêm giải thích điều này:
 
