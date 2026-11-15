@@ -158,6 +158,26 @@ Cùng số lượt, prompt mới tốn hơn khoảng 4% (finding dài hơn). Con
 
 Kết quả bài khó dao động giữa các lần chạy (omp 4–5, Claude Code 3–6): mức tăng từ 0/8 lên khoảng 5/8 là rõ, nhưng muốn so các chênh lệch nhỏ hơn trên bài này thì cần chạy nhiều lần. Khi ghi baseline omp đầu tiên, chốt chặn bước chỉ đọc đã dừng reviewer lúc nó gọi công cụ `run_script` của AWS MCP; lần đó không được ghi, và prompt giờ dặn reviewer không gọi MCP.
 
+## So sánh các kit
+
+**2026-11-15, Claude Code với Claude Opus 5.5.** Bốn bài đo, mỗi bài chạy hai lần với ba kit trên cùng một nền ([cách làm](evals.md#so-sánh-các-kit)): không có skill hay plugin của người dùng, không MCP ở lượt chỉ đọc, giữ skill có sẵn của Claude Code, và định dạng đầu ra mà bộ chấm cần được đưa cho cả ba kit bằng cùng một câu chữ. `none` chỉ nhận việc; Superpowers 7.0.2 (commit `22f0b46`) nạp bằng `--plugin-dir` và tự kích hoạt; qk nhận skill của nó (`qk-cook`, `qk-debug`) hoặc prompt review của runner. Tổng chi phí Claude Code báo: 8,74 USD.
+
+| Bài | none | Superpowers | qk |
+|---|---|---|---|
+| `bundle-malformed` (review, 3 lỗi) | 3/3, 3/3 · 33k token | 3/3, 3/3 · 37k | 3/3, 3/3 · 36k |
+| `csv-export` (`qk-cook`) | đạt, đạt · 185k | đạt, đạt · 240k | đạt, đạt · 166k |
+| `pagination-empty-page` (`qk-debug`) | đạt, đạt · 178k | đạt, đạt · 210k | đạt, đạt · 226k |
+| `waf-bundle-review` (review, 8 lỗi) | **0/8, 0/8** · 320k | **0/8, 0/8** · 376k | **3/8, 4/8** · 532k |
+
+Token là trung vị của hai lần chạy. Mọi lần chạy đều đạt `clean`: không agent nào đọc bộ chấm.
+
+Kết quả này cho thấy gì và không cho thấy gì:
+
+- Ở ba bài nhỏ, cả ba kit đều đạt mọi tiêu chí; các bài này quá dễ để phân biệt. qk không hơn ở đây. qk tốn ít token nhất ở `csv-export` và nhiều nhất ở `pagination-empty-page`; chênh lệch cỡ này nằm trong mức dao động giữa các lần chạy đã đo ở trên.
+- Ở bài review khó, chỉ qk bắt được lỗi ở mức blocker hoặc important, và qk tốn nhiều token nhất. Hai kit còn lại có thấy một phần: một lần `none` và cả hai lần Superpowers báo rằng `WebACL.Rules` không được kiểm là danh sách, nhưng xếp ở mức nit, giống prompt cũ của qk.
+- Bài này dựng từ chính lịch sử của qk, và prompt review hiện tại được viết sau khi thấy reviewer bỏ sót nó. Kết quả cho thấy prompt có tác dụng với đúng loại lỗi nó được viết ra để sửa, chưa cho thấy qk review tốt hơn nói chung. Bước tiếp theo là một bài từ dự án khác.
+- Superpowers được thiết kế quanh quy trình riêng của nó (brainstorm, plan, TDD, subagent). Các bài này cho mỗi kit một lượt và một việc cố định, nên không dùng tới phần lớn quy trình đó.
+
 ## Số đo thiết lập gọn nhẹ
 
 Các lệnh trong [Thiết lập gọn nhẹ](lean-setup.md) được kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 ngày 13/11/2026. Qwen Code chưa kiểm.

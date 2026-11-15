@@ -158,6 +158,26 @@ With the same number of turns the new prompt costs about 4% more (longer finding
 
 Results on the hard case vary between runs (omp 4–5, Claude Code 3–6), so the change from 0/8 to about 5/8 is clear, but smaller differences on this case need several runs. While the first omp baseline was recorded, the read-only guard stopped the reviewer when it called the AWS MCP `run_script` tool; that run was not recorded, and the prompt now tells reviewers not to call MCP.
 
+## Kit comparison
+
+**2026-11-15, Claude Code with Claude Opus 5.5.** The four eval cases, each run twice with three kits on one base ([how](evals.md#comparing-kits)): no user skills or plugins, no MCP in read-only turns, Claude Code's own skills kept, and the graders' output format given in the same words to every kit. `none` gets only the task; Superpowers 7.0.2 (commit `22f0b46`) is loaded with `--plugin-dir` and activates by itself; qk gets its skill (`qk-cook`, `qk-debug`) or the runner's review prompt. Total cost reported by Claude Code: $8.74.
+
+| Case | none | Superpowers | qk |
+|---|---|---|---|
+| `bundle-malformed` (review, 3 defects) | 3/3, 3/3 · 33k tokens | 3/3, 3/3 · 37k | 3/3, 3/3 · 36k |
+| `csv-export` (`qk-cook`) | pass, pass · 185k | pass, pass · 240k | pass, pass · 166k |
+| `pagination-empty-page` (`qk-debug`) | pass, pass · 178k | pass, pass · 210k | pass, pass · 226k |
+| `waf-bundle-review` (review, 8 defects) | **0/8, 0/8** · 320k | **0/8, 0/8** · 376k | **3/8, 4/8** · 532k |
+
+Tokens are the median of the two runs. Every run passed `clean`: no agent read the graders.
+
+What this shows and does not show:
+
+- On the three small cases all three kits pass every criterion; the cases are too easy to separate them. qk is not better there. It used the fewest tokens on `csv-export` and the most on `pagination-empty-page`; differences of this size are within the run-to-run noise measured above.
+- On the hard review case, only qk caught defects at blocker or important severity, and it used the most tokens. The others did see part of it: one `none` run and both Superpowers runs reported that `WebACL.Rules` is not checked to be a list, but rated it a nit, as the previous qk prompt did.
+- This case was built from qk's own history, and the current review prompt was written after seeing reviewers miss it. The result shows that the prompt works on the failure it was written for, not that qk reviews better in general. A case from another project is the next step.
+- Superpowers is designed around its own workflow (brainstorm, plan, TDD, subagents). These cases give each kit one turn and a fixed task, which does not exercise most of that workflow.
+
 ## Lean setup measurements
 
 The commands in [Lean setup](lean-setup.md) were checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 on 2026-11-13. Qwen Code was not checked.
