@@ -8,6 +8,16 @@ qk extends the runtime and does not replace it. Every skill runs only when you c
 
 > **Status.** A personal project, not affiliated with any company, published as is. It is maintained for its author's own work and versioned with tags, but there is no support commitment. Issues and pull requests are welcome; a reply is not guaranteed.
 
+### ☕ Found it useful? Buy me a coffee
+
+If this project saves you time, a coffee keeps it maintained. Any amount helps. More
+options on the [donate page](https://dakiquang.github.io/donate/).
+
+| MoMo · VietQR | PayPal |
+|:---:|:---:|
+| <img src="https://dakiquang.github.io/donate/images/qr-momo.png" width="180" alt="MoMo and VietQR code"> | <img src="https://dakiquang.github.io/donate/images/qr-paypal.png" width="180" alt="PayPal QR code"> |
+| [![Mở MoMo](https://img.shields.io/badge/M%E1%BB%9F%20MoMo-%E2%86%92-A50064?style=for-the-badge)](https://me.momo.vn/dakiquang) | [![Open PayPal](https://img.shields.io/badge/Open%20PayPal-%E2%86%92-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/dakiquang) |
+
 ## Why qk
 
 > **Understand enough to decide.** Getting code to run is easy now; what stays hard is seeing clearly enough to make the call. qk optimizes only for that.
