@@ -178,6 +178,38 @@ What this shows and does not show:
 - This case was built from qk's own history, and the current review prompt was written after seeing reviewers miss it. The result shows that the prompt works on the failure it was written for, not that qk reviews better in general. A case from another project is the next step.
 - Superpowers is designed around its own workflow (brainstorm, plan, TDD, subagents). These cases give each kit one turn and a fixed task, which does not exercise most of that workflow.
 
+### A case from another project
+
+`pip-config-review` was rebuilt from pypa/pip#13535 (MIT) as first submitted for review, with the three defects its public review found:
+
+| Defect | What goes wrong |
+|---|---|
+| `null-device` | With `PIP_CONFIG_FILE=/dev/null`, `pip config set` exits 0 and drops the value. |
+| `parser-reuse` | The env file parser is appended to `_parsers[Kind.ENV]` instead of `self.load_only`, so loading is not re-entrant. |
+| `env-unset` | `unset` never works under `PIP_CONFIG_FILE`. |
+
+This is the first case not taken from qk's history. It was chosen from four public candidates before qk ran on it, and the review prompt was not changed for it. See [evals.md](evals.md#cases) for how cases are graded.
+
+**2026-11-15.** One run per cell unless stated. `n/3` counts defects reported at blocker or important severity on the right lines.
+
+| Runtime | Kit | Defects | Tokens |
+|---|---|---|---|
+| Claude Code, Claude Opus 5.5 | none | 1/3 (`env-unset`) | 65k |
+| Claude Code, Claude Opus 5.5 | Superpowers 7.0.2 | 2/3 (`parser-reuse`, `env-unset`) | 97k |
+| Claude Code, Claude Opus 5.5 | qk | 2/3 and 3/3 in two runs (`null-device` and `env-unset` both times; `parser-reuse` reported as nit once, as important once) | 198k, 238k |
+| omp, Claude Opus 5.5 | qk | 2/3 (`parser-reuse` reported as nit) | 149k |
+| Codex, GPT-6.1-sol | qk | 2/3 in three runs; `parser-reuse` never reported | 166k–286k |
+
+`pip-config-review` baselines recorded on 2026-11-15: Claude Code 3/3 (237,877 tokens), omp 2/3 (149,308 tokens).
+
+What this shows and does not show:
+
+- qk was the only kit that reported `null-device`; it used the most tokens.
+- On Claude models qk saw `parser-reuse` every time but rated it nit in two of three runs, so it did not count. On Codex it did not see it at all.
+- These are single runs unless stated; one-defect differences are within run-to-run variation and do not show that one kit reviews better.
+- The grader was corrected twice while measuring (`72c1741`: a `null-device` finding had also been credited as `parser-reuse`; `656cb88`: that fix rejected a correct duplicate-append finding). Every reply was regraded with the final grader; the table uses the final grades.
+- A trial prompt change that asked reviewers to name defect classes by what goes wrong did not change any result on Codex (`pip-config-review` 2/3, `bundle-malformed` 3/3, `waf-bundle-review` 6/8), and was not kept.
+
 ## Lean setup measurements
 
 The commands in [Lean setup](lean-setup.md) were checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 on 2026-11-13. Qwen Code was not checked.
