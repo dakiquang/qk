@@ -265,6 +265,17 @@ class CaseSanityTest(unittest.TestCase):
                          "or it's not re-entrant")
         self.assert_pip_criteria(case, workdir, review_result(sample), "parser-reuse")
 
+    def test_pip_review_accepts_duplicate_append_parser_reuse_wording(self):
+        case, workdir = self.prepare("pip-config-review")
+        sample = finding("src/pip/_internal/configuration.py", 404,
+                         claim="Each call to _get_parser_to_modify on the redirect path builds a new parser and "
+                         "appends a duplicate (env_file, parser) to _parsers[ENV], separate from the parser loaded "
+                         "in _load_config_files. set_value then records the value under _config[USER] while the "
+                         "loaded data sits under _config[ENV], leaving in-memory state inconsistent.",
+                         fix="Reuse the already-loaded ENV parser, or build and cache it once, and keep "
+                         "_config/_parsers writes under one variant.")
+        self.assert_pip_criteria(case, workdir, review_result(sample), "parser-reuse")
+
     def test_pip_review_accepts_alternate_claims_and_fix_only_wording(self):
         case, workdir = self.prepare("pip-config-review")
         path = "src/pip/_internal/configuration.py"
