@@ -213,3 +213,51 @@ What this shows and does not show:
 ## Lean setup measurements
 
 The commands in [Lean setup](lean-setup.md) were checked once on Claude Code 2.1.322, Codex 0.160.0 and omp 18.18.3 on 2026-11-13. Qwen Code was not checked.
+
+## Evidence ledger and CLI
+
+**2026-11-16, macOS.** An isolated ledger captured a real `qk run start` blocked by
+the dirty-checkout gate, without creating a worktree or publishing anything.
+Claude Code (Claude Opus 5.5), Codex (GPT-6.1-sol), and omp (Claude Opus 5.5)
+each executed `qk show` and `qk log claim` through their shell. Each claim referenced
+the observed run and retained model provenance. Codex's first smoke stopped before
+tool execution because its temporary directory was not a Git repository; initializing
+that fixture allowed the remaining runtime checks to proceed. Qwen Code was not checked.
+
+Live `qk sync --backfill` imported 10 existing runs and one remaining finding.
+Repeating it kept both counts unchanged; each sync appended nine dated PR-state
+observations. All observed PRs were merged or closed, so the offline brief correctly
+showed none pending. Open/stale/unknown PR behavior is covered by the CLI tests,
+not by an open real PR in this smoke. No merge, close, comment, commit or push ran.
+
+Three skills gained one optional claim instruction each: 543 additional bytes,
+49,039 bytes total across `SKILL.md`. Before/after observations on
+`omp:anthropic/claude-opus-5-5`, one run per side:
+
+| Case | Criteria before → after | Tokens before | Tokens after |
+|---|---|---:|---:|
+| `csv-export` | 6/6 → 6/6 | 79,807 | 77,109 |
+| `test-failure-triage` | 7/7 → 7/7 | 63,199 | 57,108 |
+| `handoff-drift` | 7/7 → 7/7 | 46,703 | 56,622 |
+
+The per-session comparison reported no criterion loss or token-threshold violation;
+the handoff increase was 9,919 tokens, below the 25,000-token floor. Only the two new
+cases received new repository baseline entries; existing baselines were not replaced.
+Two grader false negatives were fixed using the saved before replies and events:
+an immediately captured `$?` was valid evidence despite a zero-exit shell wrapper,
+and two correct drift examples were not an error. Original artifacts were retained;
+these corrections did not rerun a model.
+
+**Performance verdict: inconclusive.** There is one observation per side and no
+effect interval; cache and background load were not controlled. Runtime startup,
+model/tool work and grading are included. These runs show observed behavior, not a
+token-saving or speed claim. [Ledger guide](ledger.md).
+
+The Python 3.12 validator and full suite passed before review (192 tests, one
+skip). Independent review found two defects, both reproduced and repaired: delayed
+backfill could hide a resumed run, and a short-circuited shell chain could fool the
+triage observation grader. Source revisions now preserve run chronology; only the
+actual check and validated wrappers count as observations. After repair, Python
+3.12 passed CLI 24, triage 8, ledger 27 and resume 4 tests; Python 3.9 passed the
+late-backfill regression and all eight triage tests. The saved real model replies
+still pass the tightened grader. No additional model run was needed.

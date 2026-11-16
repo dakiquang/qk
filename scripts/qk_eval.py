@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qk_run  # noqa: E402
+import qk_ledger  # noqa: E402
 
 CASES = qk_run.QK_ROOT / "evals" / "cases"
 BASELINE = qk_run.QK_ROOT / "evals" / "baseline.json"
@@ -305,6 +306,19 @@ def update_baseline(baseline, spec, results):
     return [name for name, result in results.items() if invalid(result)]
 
 
+def record_ledger(spec, case, result, directory, kit):
+    """Evidence collection must not change an eval's result."""
+    try:
+        qk_ledger.record_eval(spec, case, result, directory, kit)
+    except Exception as error:
+        warning = f"qk-eval: ledger warning: {error}"
+        print(warning, file=sys.stderr)
+        try:
+            (directory / "ledger-warning.log").write_text(warning + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="qk-eval", description=__doc__.splitlines()[0])
     which = parser.add_mutually_exclusive_group(required=True)
@@ -345,11 +359,13 @@ def main(argv=None):
     for case in cases:
         result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-1", root,
                           args.kit, args.superpowers_dir)
+        record_ledger(args.runtime, case["name"], result, root / case["name"] / "run-1", args.kit)
         result["runs"] = 1
         base = entries.get(case["name"])
         if base is not None and compare(result, base)["flipped"]:
             result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-2", root,
                               args.kit, args.superpowers_dir)
+            record_ledger(args.runtime, case["name"], result, root / case["name"] / "run-2", args.kit)
             result["runs"] = 2
         results[case["name"]] = result
     lines, reasons, regression = report(args.runtime, results, entries)

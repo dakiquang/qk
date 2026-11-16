@@ -48,6 +48,8 @@ Read <files>. Re-check the revision and repo state before working. Ask the user 
 3. Report: what still holds, what has drifted, the reasonable next step, and the permissions that must be requested again.
 4. Wait for the user to confirm before changing anything.
 
+If `qk` is available, a relevant ledger ID is known and writes are authorized, save one conclusion with `qk log claim --about ID --text "..."`; otherwise skip. Never invent an ID.
+
 ## Report
 
 Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:

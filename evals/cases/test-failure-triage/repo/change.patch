@@ -1,0 +1,10 @@
+diff --git a/checkout.py b/checkout.py
+--- a/checkout.py
++++ b/checkout.py
+@@ -1,5 +1,5 @@
+ def free_shipping(total):
+-    return total >= 50
++    return total > 50
+ 
+ 
+ def legacy_slug(title):

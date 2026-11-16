@@ -26,8 +26,12 @@ Cases live in `evals/cases/<name>/`. Each one runs as a single agent turn in a f
 | `waf-bundle-review` | the runner's review prompt, read-only, on the real `waf-upgrade-check` pull request that added the AWS MCP bundle mode (about 1,200 added lines in 10 files), with the eight defects its real review needed several rounds to find put back | `result`, one criterion per defect (`pagination-empty-page`, `rules-not-list`, `priority-type`, `nested-statement`, `capacity-type`, `label-name-type`, `listed-version-name`, `caller-account-check`: a blocker or important finding on the right file that names the field and what is wrong with it), `no-outside-important` |
 | `bundle-malformed` | the runner's review prompt (`qk_run.review_prompt`), read-only, on an uncommitted diff | `result` (a valid `qk-result` with status `done`), `capacity`, `nested-statement`, `list-name` (a blocker or important finding on each of three missed validation checks, at the right lines and naming the field and what is wrong with it), `no-outside-important` (no blocker or important finding on a file outside the diff) |
 | `pip-config-review` | the runner's review prompt, read-only, on public [pypa/pip#13535](https://github.com/pypa/pip/pull/13535) (MIT): reconstructed +105/-13 three-file diff with three original submission defects restored and non-defective merged changes retained ([provenance](../../evals/cases/pip-config-review/SOURCE.txt)) | `result`, `null-device`, `parser-reuse`, `env-unset`, `no-outside-important` ([grader](../../evals/cases/pip-config-review/check.py), [tests](../../tests/test_qk_eval.py) own the exact logic) |
+| `test-failure-triage` | `qk-test`: execute a failing check, separate a new boundary regression from a saved base-CI failure, without changing files | `observed-check`, `failed-result`, `new-failure`, `baseline-failure`, `actual-values`, `read-only` |
+| `handoff-drift` | `qk-handoff resume`: inspect a stale handoff against the actual checkout, without continuing implementation or inheriting permissions | `checkout-state`, `concrete-drift`, `fresh-authority`, `await-confirmation`, `verification-honesty`, `read-only` |
 
 Every case also gets `clean`, added by the harness: it fails when the turn's events name the case directory (`evals/cases/`), because the agent may have read the graders. The graders (`check.py`, `hidden/`) are copied to a private directory before the turn and run from that copy, so an agent with write access cannot change what grades it.
+
+The two inspection cases enable the harness's generic execution tools so Git/check commands can run; this does not authorize edits. Their graders reject changed fixture files. Triage also requires a completed command observation in the raw runtime events, not just a model statement that it ran.
 
 `report` passes when the final reply contains the labels `Done`, `Evidence`, `Not verified` and `Needs your decision`, each at the start of a line and followed by `:` (bold or not). Each case's `check.py` prints its criteria as JSON; a `check.py` that crashes, times out or prints something else counts as one failed criterion named `check.py`.
 
@@ -85,6 +89,8 @@ results.json                  runtime, start time, counted result per case, regr
 ```
 
 The temporary repository is deleted after grading. Codex also keeps its private home in the run directory.
+
+Each attempt also contributes a summary to the [local evidence ledger](ledger.md). Both attempts remain evidence when a flipped result triggers a rerun. Ledger errors warn without changing the eval verdict.
 
 ## Cost and limits
 

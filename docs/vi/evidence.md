@@ -213,3 +213,48 @@ Kết quả này cho thấy gì và không cho thấy gì:
 ## Số đo thiết lập gọn nhẹ
 
 Các lệnh trong [Thiết lập gọn nhẹ](lean-setup.md) được kiểm một lần trên Claude Code 2.1.322, Codex 0.160.0 và omp 18.18.3 ngày 13/11/2026. Qwen Code chưa kiểm.
+
+## Sổ bằng chứng và CLI
+
+**16/11/2026, macOS.** Sổ cô lập ghi nhận một lần `qk run start` thật bị chặn bởi
+checkout còn thay đổi, không tạo worktree hay publish. Claude Code (Claude Opus 5.5),
+Codex (GPT-6.1-sol) và omp (Claude Opus 5.5) mỗi runtime chạy `qk show` rồi
+`qk log claim` qua shell. Mỗi claim trỏ tới run đã quan sát và giữ nguồn model.
+Lần smoke Codex đầu dừng trước khi gọi công cụ vì thư mục tạm chưa phải repo Git;
+khởi tạo đúng fixture cho phép tiếp tục các runtime còn lại. Qwen Code chưa kiểm.
+
+`qk sync --backfill` thật nạp 10 run cũ và một finding còn lại. Chạy lại giữ nguyên
+hai số đếm; mỗi lần sync thêm chín quan sát trạng thái PR có thời điểm.
+Các PR đã quan sát đều merge hoặc đóng, nên brief offline hiện đúng là không có
+PR chờ. Nhánh PR mở/bằng chứng cũ/chưa biết được kiểm bằng test CLI, không phải PR
+thật còn mở trong lần smoke này. Không chạy merge, close, comment, commit hay push.
+
+Ba skill mỗi skill thêm một dòng claim tuỳ chọn: tăng 543 byte, tổng `SKILL.md`
+là 49.039 byte. Quan sát trước/sau trên `omp:anthropic/claude-opus-5-5`,
+mỗi bên một lần:
+
+| Case | Tiêu chí trước → sau | Token trước | Token sau |
+|---|---|---:|---:|
+| `csv-export` | 6/6 → 6/6 | 79.807 | 77.109 |
+| `test-failure-triage` | 7/7 → 7/7 | 63.199 | 57.108 |
+| `handoff-drift` | 7/7 → 7/7 | 46.703 | 56.622 |
+
+So sánh trong phiên không báo mất tiêu chí hay vượt ngưỡng token; handoff tăng
+9.919 token, dưới sàn 25.000. Chỉ hai ca mới được thêm baseline vào repo; baseline
+cũ không bị thay. Hai lần chấm trượt nhầm được sửa từ câu trả lời và sự kiện trước
+đã lưu: `$?` được lấy ngay vẫn là bằng chứng hợp lệ dù shell wrapper thoát 0,
+và hai ví dụ drift đúng không phải lỗi. Giữ nguyên bằng chứng gốc; sửa bộ chấm
+không chạy lại model.
+
+**Kết luận hiệu năng: inconclusive.** Mỗi bên chỉ có một quan sát, không có khoảng
+ước lượng hiệu ứng; cache và tải nền không được kiểm soát. Số đo gồm khởi động
+runtime, công việc model/công cụ và chấm kết quả. Chỉ chứng minh hành vi đã quan sát,
+không khẳng định tiết kiệm token hay nhanh hơn. [Hướng dẫn sổ](ledger.md).
+
+Validator và full suite Python 3.12 đạt trước review (192 test, một skip).
+Review độc lập tìm hai lỗi, đều đã tái hiện và sửa: backfill đến muộn che run đã
+resume; chuỗi shell short-circuit đánh lừa bộ chấm triage. Revision nguồn nay giữ
+đúng thứ tự run; chỉ lệnh kiểm thật và wrapper được xác thực mới tính là quan sát.
+Sau sửa, Python 3.12 đạt CLI 24, triage 8, ledger 27 và resume 4 test;
+Python 3.9 đạt regression late-backfill và cả tám test triage. Câu trả lời model
+thật đã lưu vẫn đạt bộ chấm siết lại, không cần gọi thêm model.
