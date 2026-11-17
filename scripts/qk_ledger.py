@@ -187,6 +187,16 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
                 if record.get("key") == key:
                     if record["kind"] != kind:
                         raise ValueError("idempotency key belongs to another record kind")
+                    fd = _open_private(directory / STORE_NAME, os.O_WRONLY)
+                    try:
+                        os.fsync(fd)
+                    finally:
+                        os.close(fd)
+                    fd = os.open(str(directory), os.O_RDONLY)
+                    try:
+                        os.fsync(fd)
+                    finally:
+                        os.close(fd)
                     return record
         ids = {record["id"] for record in existing}
         identifier = secrets.token_hex(6)
@@ -364,11 +374,10 @@ def record_run(state: dict, directory: object) -> dict:
     if not isinstance(verify, list):
         raise ValueError("verify_results must be a list")
     checks = []
-    for check in verify:
+    for index, check in enumerate(verify):
         if not isinstance(check, dict) or type(check.get("exit")) is not int:
             raise ValueError("verification result requires an integer exit")
-        checks.append({"cmd": _text(check.get("cmd"), "verification command"),
-                       "exit": check["exit"]})
+        checks.append({"index": index, "exit": check["exit"]})
     data = {
         "run_id": _text(state.get("id"), "run id", empty=False),
         "run_key": str(source), "status": state["stage"],

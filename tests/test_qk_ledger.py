@@ -145,7 +145,16 @@ class LedgerTests(unittest.TestCase):
         with patch.object(ledger.os, "fsync", side_effect=OSError("fsync failed")):
             with self.assertRaisesRegex(OSError, "fsync failed"):
                 ledger.append("run", {"value": 1}, key="durable")
-        record = ledger.append("run", {"value": 1}, key="durable")
+        synced = []
+        real_fsync = os.fsync
+
+        def sync(fd):
+            synced.append(stat.S_IFMT(os.fstat(fd).st_mode))
+            real_fsync(fd)
+
+        with patch.object(ledger.os, "fsync", side_effect=sync):
+            record = ledger.append("run", {"value": 1}, key="durable")
+        self.assertEqual(synced, [stat.S_IFREG, stat.S_IFDIR])
         self.assertEqual(ledger.records(), [record])
 
     def test_invalid_json_inputs_do_not_damage_existing_evidence(self):
@@ -298,12 +307,13 @@ class LedgerTests(unittest.TestCase):
     def test_run_projection_omits_sensitive_raw_fields_and_keeps_provenance(self):
         state = self.run_state()
         state["findings"] = [self.finding()]
+        state["verify_results"].append({"cmd": "PRIVATE COMMAND", "exit": 2})
         record = ledger.record_run(state, self.root / "artifacts")
         records = ledger.records()
         self.assertEqual(record["repo"], "project")
         self.assertEqual(record["task_kind"], "bugfix")
         self.assertEqual(record["data"]["repo_path"], str(self.root / "project"))
-        self.assertEqual(record["data"]["verify_results"], [{"cmd": "python3 -m unittest", "exit": 0}])
+        self.assertEqual(record["data"]["verify_results"], [{"index": 0, "exit": 0}, {"index": 1, "exit": 2}])
         self.assertEqual(record["data"]["remaining_count"], 1)
         self.assertEqual(record["data"]["addressed_count"], 1)
         self.assertEqual(record["refs"], [str(self.root / "artifacts" / "state.json")])
@@ -317,6 +327,8 @@ class LedgerTests(unittest.TestCase):
         encoded = json.dumps(records)
         for sensitive in ("PRIVATE", "private claim", "claim\":", "fix\":", "tail\":"):
             self.assertNotIn(sensitive, encoded)
+        self.assertNotIn("python3 -m unittest", encoded)
+        self.assertEqual(state["verify_results"][1]["cmd"], "PRIVATE COMMAND")
         self.assertNotIn("raw", record["data"]["usage"]["reviewing"][0])
 
     def test_run_rejects_active_stages_and_projects_minimal_aborted_state(self):

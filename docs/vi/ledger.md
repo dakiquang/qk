@@ -22,7 +22,9 @@ Bắt đầu bằng `qk show --help`, `qk sync --help` hoặc `qk brief --help`.
 
 Sổ là `ledger.jsonl` trong `$QK_STATE_DIR`, hoặc `$XDG_STATE_HOME/qk`, hoặc `~/.local/state/qk`. Để ngoài mọi repo, kể cả repo riêng. Bản ghi nằm trên máy và file chỉ dành cho user hiện tại. Bằng chứng gốc của run/eval vẫn ở thư mục state cũ; tham chiếu có thể mất hiệu lực khi bạn xoá hoặc di chuyển chúng.
 
-Sổ chỉ giữ tóm tắt và tham chiếu, không chép code, diff, prompt hay log thô. Tên lệnh kiểm, repo, đường dẫn và claim vẫn có thể là dữ liệu riêng. Không công bố sổ. Dùng `qk stats --public` để lấy số đếm tổng hợp không mang nhãn riêng tuỳ ý; vẫn đọc lại trước khi công bố.
+Sổ chỉ giữ tóm tắt và tham chiếu, không chép code, diff, prompt hay log thô. Mỗi lượt kiểm chỉ lưu vị trí và mã thoát; nội dung lệnh vẫn nằm trong `state.json` của run được tham chiếu. Tên repo, đường dẫn và claim vẫn có thể là dữ liệu riêng. Không công bố sổ. Dùng `qk stats --public` để lấy số đếm tổng hợp không mang nhãn riêng tuỳ ý; vẫn đọc lại trước khi công bố.
+
+Dòng cuối bị ghi dở do crash hoặc đầy đĩa sẽ khiến các lần đọc và ghi sau cố ý báo lỗi; `qk-run` và `qk_eval` chỉ ghi cảnh báo ledger. Để khôi phục, bảo đảm không có lệnh `qk-run`, `qk_eval` hay `qk` nào đang chạy, sao chép `ledger.jsonl` thành bản sao lưu, chỉ xoá dòng cuối chưa hoàn chỉnh, rồi chạy `qk show` để xác nhận file đọc được trở lại.
 
 `source` cho biết ai tạo nội dung; `recorded_by` cho biết ai thu nhận. Finding vẫn do model tạo dù runner ghi lại. `claim` là kết luận chưa được kiểm của model về sự kiện đã có, không phải quan sát mới. CLI công khai chỉ nhận claim; đây là ranh giới giao diện, không chống tiến trình khác có cùng quyền user sửa sổ. Code thu nhận một nhận định không chứng minh nhận định đó đúng.
 

@@ -22,7 +22,9 @@ Start with `qk show --help`, `qk sync --help` or `qk brief --help`. `qk run --he
 
 The ledger is `ledger.jsonl` under `$QK_STATE_DIR`, or `$XDG_STATE_HOME/qk`, or `~/.local/state/qk`. Keep it outside repositories, including private ones. Records are local and the file is private to your user. Run and eval artifacts remain in their original state directories; references can stop working if those artifacts are removed or moved.
 
-The store keeps summaries and references, not copies of code, diffs, prompts or raw logs. Verification command names, repository names, paths and model claims can still be private. Do not publish the ledger. Use `qk stats --public` for aggregate counts without arbitrary private labels; inspect any output before publishing it.
+The store keeps summaries and references, not copies of code, diffs, prompts or raw logs. Verification checks store only their position and exit code; command text stays in the run's referenced `state.json`. Repository names, paths and model claims can still be private. Do not publish the ledger. Use `qk stats --public` for aggregate counts without arbitrary private labels; inspect any output before publishing it.
+
+A torn final line from an append interrupted by a crash or a full disk deliberately makes later reads and writes fail; `qk-run` and `qk_eval` only log a ledger warning. To recover, make sure no `qk-run`, `qk_eval` or `qk` command is running, copy `ledger.jsonl` to a backup, remove only the incomplete final line, then run `qk show` to confirm the file reads again.
 
 `source` identifies who supplied the content; `recorded_by` identifies who collected it. A finding is model-authored even when the runner records it. A `claim` is an unverified model conclusion about an existing record, not a new observation. The public CLI only accepts claims; this is an interface boundary, not tamper protection against another process with your user permissions. Code collecting a statement does not establish that the statement is true.
 

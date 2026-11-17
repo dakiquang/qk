@@ -45,7 +45,7 @@ class CliTests(unittest.TestCase):
         data = {"run_id": key, "run_key": str(self.root / key), "status": "done",
                 "repo_path": str(self.root / "missing-checkout"), "impl": "codex/model",
                 "review": "claude/model", "commit": SHA, "pr_url": URL,
-                "verify_results": [{"cmd": "python -m unittest", "exit": 0}],
+                "verify_results": [{"index": 0, "exit": 0}],
                 "remaining_count": 0, "addressed_count": 2}
         data.update(overrides)
         return ledger.append("run", data, repo=repo, task_kind=kind, refs=refs)
@@ -155,9 +155,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(finding["source"], "model")
         self.assertEqual(finding["recorded_by"], "code")
 
+    def test_brief_includes_claims_about_matched_decisions(self):
+        for link in ("run_key", "run_id", "refs"):
+            with self.subTest(link=link):
+                run = self.run_record(link, repo=link)
+                data = {link: run["data"][link]} if link != "refs" else {}
+                decision = ledger.append("decision", data,
+                                         refs=[run["id"]] if link == "refs" else [])
+                claim = ledger.append("claim", {"about": decision["id"],
+                                                "text": "decision assertion"})
+                status, output, errors = self.cli("brief", "--repo", link)
+                self.assertEqual((status, errors), (0, ""))
+                self.assertIn(claim["id"], output)
+                self.assertIn("decision assertion", output)
+                self.assertIn("1 total; preview only:", output)
+
     def test_brief_bounds_many_checks_and_claims_without_hiding_failed_checks(self):
-        verifies = [{"cmd": "long command " * 100, "exit": 0} for _ in range(30)]
-        verifies.extend([{"cmd": "last check fails", "exit": 2}, {"cmd": "unknown result"}])
+        verifies = [{"index": index, "exit": 0} for index in range(30)]
+        verifies.extend([{"index": 30, "exit": 2}, {"index": 31}])
         run = self.run_record(commit="a" * 64, verify_results=verifies)
         self.decision(run, head_sha="b" * 64)
         claims = [ledger.append("claim", {"about": run["id"], "text": "long claim " * 50},

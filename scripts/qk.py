@@ -276,6 +276,15 @@ def _related_claims(run, records):
                 continue
             if owner == key:
                 related.add(record["id"])
+        elif kind == "decision":
+            data = _data(record)
+            owner = data.get("run_key")
+            if (owner == key or (not owner and (
+                    (data.get("run_id") is not None
+                     and data.get("run_id") == _data(run).get("run_id"))
+                    or run["id"] in record.get("refs", [])))):
+                related.add(record["id"])
+            continue
         else:
             continue
         evidence[record["id"]] = record
