@@ -199,6 +199,18 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing"):
             ledger.append("claim", {"about": "missing", "text": "observation"}, key="claim-key")
 
+    def test_claim_metadata_follows_its_reference_not_caller_labels(self):
+        for repo, task_kind in (("project", "bugfix"), ("", "")):
+            with self.subTest(repo=repo, task_kind=task_kind):
+                parent = ledger.append("finding", {}, repo=repo, task_kind=task_kind)
+                ledger.append("run", {}, repo="unrelated", task_kind="different")
+                claim = ledger.append("claim", {"about": parent["id"], "text": "Observation"},
+                                      repo="caller-label", task_kind="caller-task")
+                nested = ledger.append("claim", {"about": claim["id"], "text": "Follow-up"})
+                for record in (claim, nested):
+                    self.assertEqual((record["repo"], record["task_kind"]), (repo, task_kind))
+                    self.assertEqual((record["source"], record["recorded_by"]), ("model", "model"))
+
     def test_concurrent_appends_deduplicate_and_claims_remain_reachable(self):
         parent = ledger.append("run", {})
         context = multiprocessing.get_context("spawn")

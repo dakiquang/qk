@@ -35,6 +35,8 @@ A torn final line from an append interrupted by a crash or a full disk deliberat
 - `qk brief` reads local evidence without a network call. Read its sync timestamp. Evidence is stale when the PR head differs from the recorded commit; missing sync or commit data is not a clean bill of health.
 - `qk log claim --about ID --text "One conclusion"` attaches one model conclusion to an existing event. Get the ID from `qk show --json`; never invent one. Skill use remains within the current session's write authority.
 
+New claims inherit the referenced event's repository and task-kind labels, including when that event is another claim. Repository/task filters therefore keep the related observations together. Existing append-only records are not rewritten; older claims with empty labels remain unclassified.
+
 The compact brief summarizes verification exits as zero/nonzero/unknown and shows a partial claim preview. Use its record IDs with `qk show` for full evidence; `queued-for-fix` is not a confirmed fix.
 
 History counts `done` runs, not proven-correct changes. A merged PR is an observed human action, not proof that no defect remains. Older runs lack complete review history; an absent finding in a later review does not prove a fix. Eval records retain every attempt, including an initial result that caused a rerun.
