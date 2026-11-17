@@ -447,6 +447,13 @@ class LedgerTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", json.dumps(record))
         self.assertNotIn("/secret/path", json.dumps(record))
 
+    def test_eval_backfill_can_leave_unavailable_timing_unknown(self):
+        result = dict(self.eval_result(False), tokens=None, seconds=None)
+        record = ledger.record_eval("codex:", "case-name", result, self.root / "attempt")
+        self.assertIsNone(record["data"]["tokens"])
+        self.assertIsNone(record["data"]["seconds"])
+        self.assertFalse(record["data"]["passed"])
+
     def test_eval_rejects_invalid_criteria_and_numeric_data_without_appending(self):
         invalid = [dict(self.eval_result(), criteria=[{"name": "works", "passed": "yes"}]),
                    dict(self.eval_result(), criteria=[{"passed": True}]),

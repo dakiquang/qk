@@ -30,8 +30,8 @@ A torn final line from an append interrupted by a crash or a full disk deliberat
 
 ## Use the evidence to decide
 
-- `qk sync --backfill` imports stopped runs from the runner state directory and reads their PR states. Repeating an unchanged import does not duplicate tasks.
-- `qk sync` refreshes PR state. It only reads GitHub; it never merges, closes or comments. Select the correct account per command with `GH_TOKEN` where necessary; the CLI does not switch your active account.
+- `qk sync --backfill` imports stopped runs and every saved eval attempt from their state roots without duplicates (earlier reruns recover grades from `check.json`, with unavailable timing and token totals left unknown), and warns once per missing or malformed eval result directory.
+- `qk sync` records only changed PR snapshots, reports recorded and unchanged counts, and leaves the `qk brief` sync timestamp at the last observed change. It only reads GitHub; it never merges, closes or comments. Select the correct account per command with `GH_TOKEN` where necessary; the CLI does not switch your active account.
 - `qk brief` reads local evidence without a network call. Read its sync timestamp. Evidence is stale when the PR head differs from the recorded commit; missing sync or commit data is not a clean bill of health.
 - `qk log claim --about ID --text "One conclusion"` attaches one model conclusion to an existing event. Get the ID from `qk show --json`; never invent one. Skill use remains within the current session's write authority.
 

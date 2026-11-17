@@ -30,8 +30,8 @@ Dòng cuối bị ghi dở do crash hoặc đầy đĩa sẽ khiến các lần 
 
 ## Dùng bằng chứng để quyết
 
-- `qk sync --backfill` nạp run đã dừng từ thư mục state của runner và đọc trạng thái PR. Nạp lại dữ liệu không đổi không đếm thêm việc.
-- `qk sync` cập nhật trạng thái PR. Lệnh chỉ đọc GitHub, không merge, đóng hay comment. Chọn đúng tài khoản qua `GH_TOKEN` cho từng lệnh nếu cần; CLI không đổi tài khoản đang active.
+- `qk sync --backfill` nạp run đã dừng và mọi lượt eval đã lưu từ các thư mục state mà không ghi trùng (lượt chạy lại trước đó lấy điểm từ `check.json`, để thời gian và tổng token không còn dữ liệu ở trạng thái chưa biết), đồng thời cảnh báo một dòng cho mỗi thư mục eval thiếu hoặc sai kết quả.
+- `qk sync` chỉ ghi snapshot PR có thay đổi, báo số đã ghi và không đổi, đồng thời giữ thời điểm sync trong `qk brief` ở lần quan sát thấy thay đổi gần nhất. Lệnh chỉ đọc GitHub, không merge, đóng hay comment. Chọn đúng tài khoản qua `GH_TOKEN` cho từng lệnh nếu cần; CLI không đổi tài khoản đang active.
 - `qk brief` chỉ đọc bằng chứng cục bộ, không gọi mạng. Đọc thời điểm sync. Bằng chứng đã cũ khi HEAD của PR khác commit đã ghi; thiếu sync hoặc commit không có nghĩa là an toàn.
 - `qk log claim --about ID --text "Một kết luận"` gắn kết luận model vào sự kiện có sẵn. Lấy ID từ `qk show --json`, không tự đặt. Ghi qua skill vẫn phải nằm trong quyền ghi của phiên hiện tại.
 
