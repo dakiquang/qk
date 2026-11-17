@@ -692,7 +692,7 @@ commands discovered from this repository that prove the done criteria. Each runs
 and must exit 0 on success. Do not invent commands; if none can be discovered, report needs_input.
 {revision}
 {NO_GIT}
-{RESULT_CONTRACT}"""
+{stage_lessons(state, "plan")}{RESULT_CONTRACT}"""
     text, _ = run_agent(state, "impl", prompt, write=False)
     plans = PLAN_RE.findall(text)
     if not plans:
@@ -720,7 +720,7 @@ def implementing(state):
 Work only inside {state['worktree']}. The plan is approved; do not ask for approval again.
 {CLEAN}
 {NO_GIT}
-{RESULT_CONTRACT}"""
+{stage_lessons(state, "impl")}{RESULT_CONTRACT}"""
     run_agent(state, "impl", prompt)
     if not git(Path(state["worktree"]), "status", "--porcelain"):
         raise Blocked("implementation produced no changes")
@@ -787,6 +787,19 @@ def repo_path(path, worktree):
     return text
 
 
+def stage_lessons(state, stage):
+    """Verified-lessons block for one stage of a run started with --lessons; empty otherwise.
+    The chosen lesson ids are kept in the run state."""
+    if not state.get("lessons"):
+        return ""
+    try:
+        chosen = qk_ledger.lessons_for(stage, Path(state["repo"]).name)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise Blocked(f"--lessons: cannot read lessons from the ledger: {error}")
+    state.setdefault("lessons_used", {})[stage] = [lesson_id for lesson_id, _ in chosen]
+    return qk_ledger.lessons_block(chosen)
+
+
 def approved_plan(state):
     """The plan exactly as the user approved it; agents may edit their working copy, not this one."""
     import hashlib
@@ -797,8 +810,9 @@ def approved_plan(state):
     return path, text
 
 
-def review_prompt(worktree, plan, diff_file):
-    """Prompt of the independent review turn; qk_eval reuses the runner's exact text."""
+def review_prompt(worktree, plan, diff_file, lessons=""):
+    """Prompt of the independent review turn; qk_eval reuses the runner's exact text.
+    `lessons` is a verified-lessons block; empty leaves the prompt unchanged."""
     return f"""Independent read-only review. Do not edit files and do not run commands that write.
 Repository: {worktree}. Approved plan: {plan}. Full diff: {diff_file}.
 Check correctness, security, regressions, scope versus the plan, and missing tests. Re-read every line you cite.
@@ -812,7 +826,7 @@ Report only verified problems introduced by this diff. Put them in "findings" as
 {{"severity": "blocker|important|nit", "class": "...", "file": "<repo-relative path>", "line": N, "claim": "...",
 "fix": "..."}}.
 Use status "done" when the review itself completed, even if there are findings.
-{RESULT_CONTRACT}"""
+{lessons}{RESULT_CONTRACT}"""
 
 
 def reviewing(state):
@@ -822,7 +836,7 @@ def reviewing(state):
     git(worktree, "add", "-A")
     diff_file.write_text(git(worktree, "diff", "--cached", state["base_sha"]), encoding="utf-8")
     git(worktree, "reset", "-q")
-    prompt = review_prompt(worktree, plan, diff_file)
+    prompt = review_prompt(worktree, plan, diff_file, stage_lessons(state, "review"))
     _, result = run_agent(state, "review", prompt)
     files = changed_files(worktree)
     findings = [f for f in result.get("findings") or [] if isinstance(f, dict)]
@@ -856,7 +870,7 @@ Problems:
 {problems}
 {CLEAN}
 {NO_GIT}
-{RESULT_CONTRACT}"""
+{stage_lessons(state, "impl")}{RESULT_CONTRACT}"""
     run_agent(state, "impl", prompt)
     state["impl_tree"] = tree_snapshot(Path(state["worktree"]))
     return "verifying"
@@ -1022,6 +1036,8 @@ def cmd_start(args):
     state = {"id": run_id, "task": args.task, "slug": slugify(args.task), "repo": str(Path(args.repo).resolve()),
              "impl": args.impl, "review": args.review, "timeout": args.timeout, "read_only_mcp": read_only_mcp,
              "task_kind": args.task_kind or "", "stage": "preflight"}
+    if args.lessons:
+        state["lessons"] = True
     run_dir(run_id).mkdir(parents=True, exist_ok=False)
     save(state)
     print(f"qk-run {run_id}")
@@ -1104,6 +1120,8 @@ def main(argv=None):
     start.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="seconds per agent turn or verify command")
     start.add_argument("--read-only-mcp", action="append", metavar="NAME",
                        help="MCP server that read-only stages may call (repeatable; claude and omp only)")
+    start.add_argument("--lessons", action="store_true",
+                       help="add active verified lessons scoped to each stage (at most 5 per turn)")
     start.set_defaults(func=cmd_start)
     for name, func in (("approve", cmd_approve), ("resume", cmd_resume), ("status", cmd_status), ("abort", cmd_abort)):
         command = sub.add_parser(name)

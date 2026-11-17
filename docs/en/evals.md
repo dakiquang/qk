@@ -74,6 +74,8 @@ python3 scripts/qk_eval.py --all --runtime claude:claude-opus-5-5 --kit superpow
 
 `--kit` runs only on the `claude` runtime, never compares with or updates `baseline.json`, and records `"kit"` in `results.json`.
 
+`--lessons` adds the active [lessons](ledger.md#lessons) for each case's stage (review cases: review; `qk-plan`: plan; other skills: impl) to the qk prompts. It cannot be combined with `--update-baseline` or a kit other than `qk`, so the baseline stays lesson-free; the comparison against that baseline still runs. The lesson IDs used are recorded in `results.json` and in the ledger's eval records.
+
 ## Results on disk
 
 Each run writes to `$XDG_STATE_HOME/qk-eval/<YYYYmmdd-HHMMSS>-<hex>/` (default `~/.local/state/qk-eval/`):

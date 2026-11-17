@@ -37,6 +37,7 @@ Dùng `qk lesson propose` với class, rule, 1–3 scope (có stage), ít nhất
 Lesson không thể active trước khi được đo; chức năng đo thuộc bước sau.
 `qk lesson decide ID STATUS` cho phép proposed → dismissed hoặc active sau khi đo, rồi active → retired/promoted.
 Đề xuất ghi `source: model`; quyết định ghi `source: user`, nhưng CLI không thể chứng minh ai đã chạy lệnh.
+Lesson active chỉ đến được agent qua cờ `--lessons` của `qk-run` và `qk_eval`; lesson có eval case đã bị xoá thì bị bỏ qua.
 
 ## Dùng bằng chứng để quyết
 

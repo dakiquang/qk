@@ -694,6 +694,44 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(row.split(None, 1)[1].split(), ["a,", "b=FAIL,", "clean", "FAIL(1)", "1,234", "0s"])
         self.assertIn(f"no baseline for {SPEC}", out)
 
+    @staticmethod
+    def active_lesson(scope, rule):
+        ledger = qk_ledger
+        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        proposal = ledger.append("lesson", {"status": "proposed", "class": "test", "rule": rule, "scope": scope,
+                                            "evidence": evidence, "case": "csv-export", "measured": []},
+                                 source="model")
+        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=["fixture"]))
+        with ledger.store_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(measured) + "\n")
+        ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"}, source="user")
+        return proposal["id"]
+
+    def test_lessons_flag_adds_case_stage_lessons_and_records_their_ids(self):
+        review = self.active_lesson(["stage:review"], "review rule.")
+        plan = self.active_lesson(["stage:plan"], "plan rule.")
+        self.case("beta", skill=qk_eval.REVIEW, write=True)
+        self.case("gamma", skill="qk-plan", write=False)
+        code, _, agent = self.run_eval(lambda cwd, prompt: ("<a><b>", None), "--all", "--lessons")
+        self.assertEqual(code, 0)
+        beta, gamma = agent.calls
+        run = self.results_root() / "beta" / "run-1"
+        self.assertEqual(beta["prompt"], qk_run.review_prompt(
+            beta["cwd"], run / "plan.md", run / "review.diff",
+            qk_ledger.lessons_block([(review, "review rule.")])))
+        self.assertTrue(gamma["prompt"].endswith("\n- plan rule."))
+        self.assertNotIn("review rule.", gamma["prompt"])
+        evals = {r["data"]["case"]: r["data"] for r in qk_ledger.records() if r["kind"] == "eval" and r["data"]}
+        self.assertEqual((evals["beta"]["lessons"], evals["gamma"]["lessons"]), ([review], [plan]))
+        results = json.loads((self.results_root() / "results.json").read_text())
+        self.assertEqual(results["cases"]["beta"]["lessons"], [review])
+
+    def test_lessons_flag_never_updates_the_baseline(self):
+        self.case("alpha")
+        code, _, agent = self.run_eval(lambda cwd, prompt: ("<a><b>", None),
+                                       "--case", "alpha", "--lessons", "--update-baseline")
+        self.assertEqual((code, agent.calls), (2, []))
+
     def test_skill_case_runs_in_a_fresh_repository(self):
         self.case("alpha", skill="qk-debug", write=False)
         code, _, agent = self.run_eval(lambda cwd, prompt: ("<a><b>", None), "--skill", "qk-debug")

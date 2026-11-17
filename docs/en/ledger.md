@@ -37,6 +37,7 @@ Use `qk lesson propose` with a class, rule, 1–3 scopes (including a stage), at
 A lesson cannot become active before measurement; measurement is a later step.
 `qk lesson decide ID STATUS` allows proposed → dismissed or measured active, then active → retired/promoted.
 Proposals record `source: model`; decisions record `source: user`, but the CLI cannot prove who ran it.
+Active lessons reach agents only through the `--lessons` flag of `qk-run` and `qk_eval`; a lesson whose eval case was deleted is skipped.
 
 ## Use the evidence to decide
 
