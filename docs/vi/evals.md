@@ -26,8 +26,12 @@ Case nằm ở `evals/cases/<tên>/`. Mỗi case chạy một lượt agent tron
 | `waf-bundle-review` | prompt review của runner, chỉ đọc, trên pull request thật của `waf-upgrade-check` thêm chế độ bundle cho AWS MCP (khoảng 1.200 dòng thêm, 10 file), với tám lỗi mà lượt review thật cần nhiều vòng mới tìm hết được đặt lại | `result`, một tiêu chí cho mỗi lỗi (`pagination-empty-page`, `rules-not-list`, `priority-type`, `nested-statement`, `capacity-type`, `label-name-type`, `listed-version-name`, `caller-account-check`: một finding blocker hoặc important đúng file, nêu được trường nào sai và sai thế nào), `no-outside-important` |
 | `bundle-malformed` | prompt review của runner (`qk_run.review_prompt`), chỉ đọc, trên một diff chưa commit | `result` (`qk-result` hợp lệ với status `done`), `capacity`, `nested-statement`, `list-name` (một finding blocker hoặc important cho mỗi chỗ trong ba chỗ kiểm tra bị bỏ sót, đúng dòng và nêu được trường nào sai, sai thế nào), `no-outside-important` (không có finding blocker hoặc important trên file ngoài diff) |
 | `pip-config-review` | prompt review của runner, chỉ đọc, trên PR công khai [pypa/pip#13535](https://github.com/pypa/pip/pull/13535) (MIT): diff tái dựng +105/-13 trên ba file, khôi phục ba lỗi từ bản gửi ban đầu và giữ các thay đổi đã merge không có lỗi ([nguồn gốc](../../evals/cases/pip-config-review/SOURCE.txt)) | `result`, `null-device`, `parser-reuse`, `env-unset`, `no-outside-important` ([bộ chấm](../../evals/cases/pip-config-review/check.py), [test](../../tests/test_qk_eval.py) sở hữu logic chính xác) |
+| `test-failure-triage` | `qk-test`: chạy lệnh kiểm lỗi, tách regression ở biên mới khỏi lỗi đã có trong CI base, không sửa file | `observed-check`, `failed-result`, `new-failure`, `baseline-failure`, `actual-values`, `read-only` |
+| `handoff-drift` | `qk-handoff resume`: đối chiếu handoff cũ với checkout thật, không tiếp tục triển khai hay kế thừa quyền | `checkout-state`, `concrete-drift`, `fresh-authority`, `await-confirmation`, `verification-honesty`, `read-only` |
 
 Mỗi case còn có tiêu chí `clean` do harness thêm: fail khi sự kiện của lượt chạy nhắc tới thư mục case (`evals/cases/`), vì agent có thể đã đọc bộ chấm. Bộ chấm (`check.py`, `hidden/`) được chép sang một thư mục riêng trước lượt chạy và chạy từ bản sao đó, nên agent có quyền ghi không sửa được thứ chấm mình.
+
+Hai ca kiểm tra bật công cụ thực thi chung của harness để chạy lệnh Git/kiểm; điều đó không cho phép sửa file. Bộ chấm từ chối fixture bị thay đổi. Ca triage còn đòi quan sát lệnh đã hoàn tất trong sự kiện runtime thô, không chỉ lời model nói đã chạy.
 
 `report` pass khi câu trả lời cuối có các nhãn `Done`, `Evidence`, `Not verified` và `Needs your decision`, mỗi nhãn ở đầu dòng và theo sau là `:` (in đậm hay không đều được). `check.py` của mỗi case in tiêu chí dưới dạng JSON; `check.py` bị lỗi, quá thời gian hoặc in thứ khác được tính là một tiêu chí fail tên `check.py`.
 
@@ -85,6 +89,8 @@ results.json                  runtime, thời điểm bắt đầu, kết quả 
 ```
 
 Repo tạm bị xoá sau khi chấm. Codex cũng giữ home riêng của nó trong thư mục lượt chạy.
+
+Mỗi lượt thử còn đóng góp tóm tắt vào [sổ bằng chứng cục bộ](ledger.md). Khi kết quả đổi làm phát sinh lượt chạy lại, cả hai lượt vẫn được giữ làm bằng chứng. Lỗi ghi sổ chỉ cảnh báo, không đổi kết luận eval.
 
 ## Chi phí và giới hạn
 

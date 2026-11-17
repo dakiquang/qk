@@ -1,0 +1,11 @@
+{
+  "source": "saved base CI result (fixture, not a live CI lookup)",
+  "revision": "before-shipping-boundary-change",
+  "command": "python3 -B checks.py",
+  "exit": 1,
+  "result": {
+    "suite": "checkout",
+    "checked": 4,
+    "failures": [{"id": "legacy-slug", "expected": "red-bike", "actual": "red--bike"}]
+  }
+}

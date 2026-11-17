@@ -38,6 +38,8 @@ Flaky:         <...>
 
 Report remote CI status as CI, not as local tests.
 
+If `qk` is available, a relevant ledger ID is known and writes are authorized, save one conclusion with `qk log claim --about ID --text "..."`; otherwise skip. Never invent an ID.
+
 Close every report with these four lines, in this order, translating the labels to the user's language; write "none" when a line is empty:
 
 **Done**: what was produced or changed, with paths

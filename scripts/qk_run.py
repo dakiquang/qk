@@ -23,6 +23,8 @@ import threading
 import time
 from pathlib import Path
 
+import qk_ledger
+
 QK_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(QK_ROOT / "skills" / "qk-commit" / "scripts"))
 from qk_preflight import check_identity  # noqa: E402
@@ -76,9 +78,20 @@ def save(state):
     directory = run_dir(state["id"])
     directory.mkdir(parents=True, exist_ok=True)
     state["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    state["ledger_revision"] = state.get("ledger_revision", 0) + 1
     tmp = directory / "state.json.tmp"
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(directory / "state.json")
+    if state.get("stage") in ("done", "blocked", "aborted"):
+        try:
+            qk_ledger.record_run(state, directory)
+        except Exception as error:
+            warning = f"ledger warning: {error}"
+            print(f"qk-run: {warning}", file=sys.stderr)
+            try:
+                log(state, warning)
+            except OSError:
+                pass
 
 
 def log(state, message):
@@ -818,6 +831,8 @@ def reviewing(state):
         finding["severity"] = str(finding.get("severity", "")).lower()
     serious = [f for f in findings if f["severity"] in ("blocker", "important") and f["file"] in files]
     state["findings"] = findings
+    state.setdefault("review_history", []).append(
+        {"round": state.get("fix_rounds", 0), "findings": findings})
     if not serious:
         return "publishing"
     state["problems"] = [f"[{f['severity']}] {f['file']}:{f.get('line')} {f.get('claim')} Fix: {f.get('fix')}" for f in serious]
@@ -1006,7 +1021,7 @@ def cmd_start(args):
     run_id = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
     state = {"id": run_id, "task": args.task, "slug": slugify(args.task), "repo": str(Path(args.repo).resolve()),
              "impl": args.impl, "review": args.review, "timeout": args.timeout, "read_only_mcp": read_only_mcp,
-             "stage": "preflight"}
+             "task_kind": args.task_kind or "", "stage": "preflight"}
     run_dir(run_id).mkdir(parents=True, exist_ok=False)
     save(state)
     print(f"qk-run {run_id}")
@@ -1083,6 +1098,7 @@ def main(argv=None):
     start = sub.add_parser("start", help="start a run and stop at plan approval")
     start.add_argument("task")
     start.add_argument("--repo", default=".")
+    start.add_argument("--task-kind", default="", help="optional history label, e.g. docs-only")
     start.add_argument("--impl", default=DEFAULT_IMPL, help=f"runtime:model (default {DEFAULT_IMPL})")
     start.add_argument("--review", default=DEFAULT_REVIEW, help=f"runtime:model (default {DEFAULT_REVIEW} = Codex default model)")
     start.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="seconds per agent turn or verify command")

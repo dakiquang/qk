@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Local append-only evidence ledger and `scripts/qk.py`: `show`, aggregate `stats`,
+  model `log claim`, read-only PR `sync` with run backfill, and an offline `brief`
+  that marks evidence stale when a PR head changes.
+- `qk run …` and `qk eval …` entry points; the original scripts remain supported.
+  The runner records stopped runs and review history; evals record every attempt.
+  Ledger failures warn without failing the underlying task.
+- Optional `qk-run start --task-kind` history labels; model-authored findings retain
+  their provenance rather than being presented as code-verified facts.
+- Behavioral eval cases for independent test failure triage and handoff drift.
+
+### Fixed
+
+- Run history selects source revisions rather than import order, so a delayed
+  backfill cannot hide a resumed run or its PR.
+- The triage eval accepts observed immediate exit-status capture but rejects
+  short-circuited shell chains that print a result without running the check.
+
 ## [0.7.0] - 2026-11-15
 
 ### Added

@@ -63,6 +63,10 @@ class RunnerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
+        from unittest import mock
+        environment = mock.patch.dict(os.environ, {"QK_STATE_DIR": str(root / "ledger")})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.remote = root / "remote.git"
         run(root, "git", "init", "-q", "--bare", "-b", "main", str(self.remote))
         seed = self.seed = root / "seed"
@@ -155,6 +159,21 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(len(creates), 1)
         self.assertNotIn("--draft", creates[0])
         self.assertEqual(creates[0][creates[0].index("--title") + 1], "Add greeting")
+
+    def test_ledger_failure_does_not_change_published_run(self):
+        from unittest import mock
+        invalid_directory = Path(self.tmp.name) / "not-a-directory"
+        invalid_directory.write_text("keep this file")
+        with mock.patch.dict(os.environ, {"QK_STATE_DIR": str(invalid_directory)}), \
+                contextlib.redirect_stderr(io.StringIO()) as warnings:
+            state = self.start(Agent())
+            self.assertEqual(self.cli("approve", state["id"]), 0)
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertEqual(state["pr_url"], "https://github.com/example/repo/pull/7")
+        self.assertIn("ledger warning", warnings.getvalue())
+        self.assertIn("ledger warning", (qk_run.run_dir(state["id"]) / "run.log").read_text())
+        self.assertEqual(invalid_directory.read_text(), "keep this file")
 
     def test_turns_in_the_same_second_keep_separate_records(self):
         from unittest import mock

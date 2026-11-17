@@ -47,10 +47,11 @@ Read the [philosophy](docs/en/philosophy.md) for what each principle does and do
 | [qk/dogfood](docs/en/skills/qk-dogfood.md) | Evidence-based proposals to improve instructions, never applied |
 | [qk/prefs](docs/en/skills/qk-prefs.md) | Recorded preference proposals reviewed one by one; only approved ones are written |
 
-Two opt-in tools sit beside the skills:
+Opt-in tools sit beside the skills:
 
 - **[qk-run](docs/en/runner.md)** drives one task from request to a ready-for-review pull request: one plan-approval gate, the plan's own checks, a review by a different model family, and never a merge.
 - **[The preference hook](docs/en/preference-hook.md)** turns "from now on…" requests into proposals you review with `qk/prefs`.
+- **[The evidence ledger and `qk` CLI](docs/en/ledger.md)** keep local run/eval evidence and model claims together, sync PR state and show a read-only decision brief.
 
 Pull-request review and scoring live in the companion project [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 

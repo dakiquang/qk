@@ -15,6 +15,8 @@ python3 scripts/qk_run.py resume <id>             # chạy lại bước bị ch
 python3 scripts/qk_run.py abort <id>
 ```
 
+[CLI chung](ledger.md) có cùng lệnh qua `qk run …`. `start --task-kind LABEL` thêm nhãn lịch sử tuỳ chọn, không trao quyền. Run đã dừng đóng góp tóm tắt vào sổ cục bộ; lỗi ghi sổ chỉ cảnh báo, không đổi kết quả run.
+
 Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:anthropic/claude-opus-5-5`, review `codex:` (model mặc định của Codex). Đổi bằng `--impl runtime:model` và `--review runtime:model`; runtime gồm `omp`, `claude`, `codex`. Người triển khai và người review phải khác họ model; spec omp cần model ghi rõ, nhận ra được họ (ví dụ `omp:anthropic/claude-opus-5-5`), nếu không `start` từ chối. Đặt `QK_RUN_OMP_PROFILE` để chạy omp với profile riêng. `--timeout` giới hạn mỗi lượt agent và mỗi lệnh kiểm (mặc định 1800 giây). `--read-only-mcp NAME` (lặp được, chỉ Claude và omp) cho bước chỉ đọc gọi MCP server `NAME`; xem mục [Cô lập](#cô-lập). `start` từ chối cờ này khi Codex chạy bước lập plan (`--impl`) hoặc review (`--review`).
 
 ## Các bước

@@ -98,6 +98,20 @@
       "seconds": 40,
       "tokens": 88481
     },
+    "handoff-drift": {
+      "criteria": {
+        "await-confirmation": true,
+        "checkout-state": true,
+        "clean": true,
+        "concrete-drift": true,
+        "fresh-authority": true,
+        "read-only": true,
+        "verification-honesty": true
+      },
+      "date": "2026-11-16",
+      "seconds": 27,
+      "tokens": 56622
+    },
     "pagination-empty-page": {
       "criteria": {
         "clean": true,
@@ -123,6 +137,20 @@
       "date": "2026-11-15",
       "seconds": 118,
       "tokens": 149308
+    },
+    "test-failure-triage": {
+      "criteria": {
+        "actual-values": true,
+        "baseline-failure": true,
+        "clean": true,
+        "failed-result": true,
+        "new-failure": true,
+        "observed-check": true,
+        "read-only": true
+      },
+      "date": "2026-11-16",
+      "seconds": 21,
+      "tokens": 57108
     },
     "waf-bundle-review": {
       "criteria": {
