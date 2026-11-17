@@ -271,8 +271,6 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
         identifier = secrets.token_hex(6)
         while identifier in ids:
             identifier = secrets.token_hex(6)
-        if kind == "lesson":
-            data = _lesson(data, existing, identifier)
         if key is not None:
             for record in existing:
                 if record.get("key") == key:
@@ -289,6 +287,8 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
                     finally:
                         os.close(fd)
                     return record
+        if kind == "lesson":
+            data = _lesson(data, existing, identifier)
         record = {
             "v": 1, "id": identifier, "kind": kind,
             "at": datetime.now(timezone.utc).isoformat(timespec="microseconds"),

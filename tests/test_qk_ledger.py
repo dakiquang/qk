@@ -513,6 +513,13 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "retired -> active"):
             ledger.append("lesson", decision)
 
+    def test_lesson_decision_retry_with_the_same_key_returns_the_first_record(self):
+        proposal = ledger.append("lesson", self.lesson_data(), source="model")
+        decision = {"lesson_id": proposal["id"], "status": "dismissed"}
+        first = ledger.append("lesson", decision, key="dismiss-once", source="user")
+        self.assertEqual(ledger.append("lesson", decision, key="dismiss-once", source="user"), first)
+        self.assertEqual(sum(record["kind"] == "lesson" for record in ledger.records()), 2)
+
     def test_existing_source_conventions_cannot_be_overridden(self):
         parent = ledger.append("eval", {})
         for kind, source, recorder, data in (
