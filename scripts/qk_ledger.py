@@ -26,6 +26,8 @@ LESSON_FIELDS = ("class", "rule", "scope", "evidence", "case", "measured")
 LESSON_STATUSES = ("proposed", "active", "dismissed", "retired", "promoted")
 LESSON_LIMIT = 5
 LESSON_CHARS = 3200
+LESSON_FRESH_DAYS = 60
+MEASUREMENT_FIELDS = ("at", "runtime", "criteria", "with", "without", "controls", "helps", "reasons")
 
 
 def state_dir() -> Path:
@@ -179,18 +181,62 @@ def latest_lessons(existing: list) -> list:
     return list(latest.values())
 
 
+def measured_helps(data: dict) -> bool:
+    """True when the latest measurement is recent and showed that the lesson helps."""
+    measured = data.get("measured")
+    if not isinstance(measured, list) or not measured or not isinstance(measured[-1], dict):
+        return False
+    try:
+        at = datetime.fromisoformat(measured[-1]["at"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    if at.tzinfo is None:
+        return False
+    return measured[-1].get("helps") is True and (
+        datetime.now(timezone.utc) - at).days < LESSON_FRESH_DAYS
+
+
+def _measurement(data: dict, existing: list) -> dict:
+    lesson_id = _text(data["lesson_id"], "lesson_id", empty=False)
+    previous = next((record["data"] for record in latest_lessons(existing)
+                     if record["data"]["lesson_id"] == lesson_id), None)
+    if previous is None:
+        raise ValueError(f"missing lesson {lesson_id}")
+    if previous["status"] not in ("proposed", "active"):
+        raise ValueError(f"cannot measure a {previous['status']} lesson")
+    item = data["measurement"]
+    if not isinstance(item, dict) or set(item) != set(MEASUREMENT_FIELDS):
+        raise ValueError("measurement requires " + ", ".join(MEASUREMENT_FIELDS))
+    _text(item["at"], "at", empty=False)
+    _text(item["runtime"], "runtime", empty=False)
+    if type(item["helps"]) is not bool:
+        raise ValueError("measurement helps must be a boolean")
+    kinds = {record["id"]: record["kind"] for record in existing}
+    for field in ("criteria", "with", "without", "controls", "reasons"):
+        values = item[field]
+        if not isinstance(values, list) or any(not isinstance(value, str) or not value for value in values):
+            raise ValueError(f"measurement {field} must be a list of nonempty strings")
+        if field in ("with", "without", "controls") and any(kinds.get(value) != "eval" for value in values):
+            raise ValueError(f"measurement {field} must name existing eval records")
+    if not item["criteria"] or len(item["with"]) < 2 or len(item["without"]) < 2:
+        raise ValueError("measurement needs target criteria and at least 2 runs with and without the lesson")
+    return dict({field: previous[field] for field in LESSON_FIELDS}, lesson_id=lesson_id,
+                status=previous["status"], measured=previous["measured"] + [item])
+
+
 def lessons_for(stage: str, repo: str = "") -> list:
     """Active lessons scoped to one stage (and this repo, when a lesson names one), newest proposal first.
 
     Returns (lesson_id, rule) pairs within LESSON_LIMIT lessons and LESSON_CHARS characters (about 800
-    tokens). A lesson whose eval case no longer exists is skipped: it can no longer be re-measured."""
+    tokens). A lesson is skipped when its eval case no longer exists or its latest measurement is older
+    than LESSON_FRESH_DAYS or did not show that it helps."""
     cases = Path(__file__).resolve().parents[1] / "evals" / "cases"
     chosen, size = [], 0
     for record in reversed(latest_lessons(records())):
         data = record["data"]
         scope = data["scope"]
         repos = [item[len("repo:"):] for item in scope if item.startswith("repo:")]
-        if (data["status"] != "active" or f"stage:{stage}" not in scope
+        if (data["status"] != "active" or not measured_helps(data) or f"stage:{stage}" not in scope
                 or (repos and repo not in repos) or not (cases / data["case"]).is_dir()):
             continue
         if len(chosen) == LESSON_LIMIT or size + len(data["rule"]) > LESSON_CHARS:
@@ -253,6 +299,8 @@ def _lesson(data: dict, existing: list, identifier: str) -> dict:
         if data["measured"] != []:
             raise ValueError("lesson proposals require an empty measured list")
         return dict(data, lesson_id=identifier)
+    if set(data) == {"lesson_id", "measurement"}:
+        return _measurement(data, existing)
     if (set(data) - {"reason"} != {"lesson_id", "status"}
             or data.get("status") not in LESSON_STATUSES[1:]):
         raise ValueError("lesson decision requires lesson_id, status (active/dismissed/retired/promoted), and optional reason")
@@ -267,9 +315,9 @@ def _lesson(data: dict, existing: list, identifier: str) -> dict:
     if new not in {"proposed": ("dismissed", "active"),
                   "active": ("retired", "promoted")}.get(old, ()):
         raise ValueError(f"invalid lesson transition: {old} -> {new}")
-    if (new == "active"
-            and (not isinstance(previous["measured"], list) or not previous["measured"])):
-        raise ValueError("measure the lesson before activating it")
+    if new == "active" and not measured_helps(previous):
+        raise ValueError("measure the lesson before activating it: the latest measurement within "
+                         f"{LESSON_FRESH_DAYS} days must show that it helps")
     return dict({field: previous[field] for field in LESSON_FIELDS}, **data)
 
 
@@ -280,8 +328,8 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
     _text(kind, "kind", empty=False)
     _text(repo, "repo")
     _text(task_kind, "task_kind")
-    if source is not None and (kind != "lesson" or source not in ("model", "user")):
-        raise ValueError("explicit source is only supported for lessons (model or user)")
+    if source is not None and (kind != "lesson" or source not in ("model", "user", "code")):
+        raise ValueError("explicit source is only supported for lessons (model, user or code)")
     if not isinstance(data, dict):
         raise ValueError("data must be an object")
     if not isinstance(refs, (tuple, list)) or any(not isinstance(ref, str) for ref in refs):

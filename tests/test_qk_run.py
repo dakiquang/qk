@@ -455,7 +455,7 @@ Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the
         proposal = ledger.append("lesson", {"status": "proposed", "class": "test", "rule": rule, "scope": scope,
                                             "evidence": evidence, "case": "csv-export", "measured": []},
                                  source="model")
-        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=["fixture"]))
+        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=[{"at": qk_run.qk_ledger.datetime.now(qk_run.qk_ledger.timezone.utc).isoformat(), "helps": True}]))
         with ledger.store_path().open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(measured) + "\n")
         ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"}, source="user")

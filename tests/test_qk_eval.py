@@ -701,7 +701,7 @@ class HarnessTest(unittest.TestCase):
         proposal = ledger.append("lesson", {"status": "proposed", "class": "test", "rule": rule, "scope": scope,
                                             "evidence": evidence, "case": "csv-export", "measured": []},
                                  source="model")
-        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=["fixture"]))
+        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=[{"at": qk_ledger.datetime.now(qk_ledger.timezone.utc).isoformat(), "helps": True}]))
         with ledger.store_path().open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(measured) + "\n")
         ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"}, source="user")
@@ -725,6 +725,65 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual((evals["beta"]["lessons"], evals["gamma"]["lessons"]), ([review], [plan]))
         results = json.loads((self.results_root() / "results.json").read_text())
         self.assertEqual(results["cases"]["beta"]["lessons"], [review])
+
+    def proposed_lesson(self, rule="Check where each value is stored."):
+        failed = [qk_ledger.append("eval", {"case": "csv-export", "criteria": [
+            {"name": "a", "passed": True}, {"name": "b", "passed": False}]})["id"] for _ in range(2)]
+        return qk_ledger.append("lesson", {
+            "status": "proposed", "class": "wrong key", "rule": rule, "scope": ["stage:review"],
+            "evidence": failed, "case": "csv-export", "measured": []}, source="model")["id"]
+
+    def measure(self, lesson_id, reply):
+        agent = Agent(reply)
+        qk_run.call_agent = agent
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = qk_eval.measure_lesson(lesson_id, SPEC, 30)
+        state = qk_ledger.latest_lessons(qk_ledger.records())[-1]["data"]
+        return code, out.getvalue(), agent, state
+
+    def test_measure_records_a_helping_lesson_with_target_runs_and_controls(self):
+        self.case("csv-export", skill=qk_eval.REVIEW)
+        self.case("beta", skill=qk_eval.REVIEW)
+        self.case("gamma", skill="qk-plan", write=False)
+        lesson_id = self.proposed_lesson()
+        code, out, agent, state = self.measure(
+            lesson_id, lambda cwd, prompt: ("<a><b>" if "Check where each value" in prompt else "<a>", None))
+        self.assertEqual(code, 0)
+        measurement, = state["measured"]
+        self.assertEqual((measurement["helps"], measurement["criteria"], measurement["runtime"]),
+                         (True, ["b"], SPEC))
+        self.assertEqual((len(measurement["with"]), len(measurement["without"]), len(measurement["controls"])),
+                         (2, 2, 2))
+        self.assertEqual(len(agent.calls), 6)
+        self.assertEqual(sum("Check where each value" in call["prompt"] for call in agent.calls), 3)
+        self.assertIn("helps", out)
+        evals = {record["id"]: record["data"] for record in qk_ledger.records() if record["kind"] == "eval"}
+        self.assertEqual([evals[item].get("lessons") for item in measurement["with"]], [[lesson_id]] * 2)
+        self.assertEqual([evals[item].get("lessons") for item in measurement["without"]], [None] * 2)
+        active = qk_ledger.append("lesson", {"lesson_id": lesson_id, "status": "active"}, source="user")
+        self.assertEqual(active["data"]["status"], "active")
+
+    def test_measure_records_no_help_when_the_case_passes_without_the_lesson(self):
+        self.case("csv-export", skill=qk_eval.REVIEW)
+        self.case("beta", skill=qk_eval.REVIEW)
+        self.baseline({SPEC: {"beta": self.entry(tokens=1000)}})
+        lesson_id = self.proposed_lesson()
+        code, out, agent, state = self.measure(lesson_id, lambda cwd, prompt: ("<a><b>", None))
+        self.assertEqual(code, 0)
+        self.assertEqual(len(agent.calls), 5)
+        self.assertFalse(state["measured"][0]["helps"])
+        self.assertEqual(state["measured"][0]["reasons"], ["without the lesson every target criterion passed"])
+        with self.assertRaisesRegex(ValueError, "must show that it helps"):
+            qk_ledger.append("lesson", {"lesson_id": lesson_id, "status": "active"}, source="user")
+
+    def test_measure_refuses_unknown_or_out_of_scope_lessons_without_running(self):
+        self.case("csv-export", skill="qk-plan", write=False)
+        lesson_id = self.proposed_lesson()
+        for target in ("missing", lesson_id):
+            with self.subTest(target=target):
+                code, _, agent, _ = self.measure(target, lambda cwd, prompt: ("<a><b>", None))
+                self.assertEqual((code, agent.calls), (2, []))
 
     def test_lessons_flag_never_updates_the_baseline(self):
         self.case("alpha")

@@ -34,7 +34,8 @@ Lesson là quy tắc dạng mệnh lệnh rút từ sai sót AI có bằng chứ
 `qk lesson suggest` liệt kê tiêu chí eval thất bại và lớp finding lặp lại mà không ghi bản ghi.
 Dùng `qk lesson propose` với class, rule, 1–3 scope (có stage), ít nhất 2 ID bằng chứng eval/finding khác nhau và một eval case đã có.
 `qk lesson list` hiển thị trạng thái mới nhất; đề xuất chưa đo mang nhãn `needs-measure`.
-Lesson không thể active trước khi được đo; chức năng đo thuộc bước sau.
+`qk lesson measure ID --runtime SPEC` chạy eval case của lesson 2 lần không có và 2 lần có lesson, rồi mỗi case khác cùng bước 1 lần có lesson, so với baseline của runtime đó (hoặc 1 lần không có lesson khi baseline chưa có mục cho case). Tiêu chí đích là các tiêu chí mà bằng chứng của lesson đã trượt trên case đó. Lesson được coi là có ích khi cả 2 lần có lesson đều đạt mọi tiêu chí đích, ít nhất 1 lần không có lesson trượt, và không case đối chứng nào mất tiêu chí hay vượt luật token. Kết quả, ID các lượt eval và lý do được ghi nối tiếp thành bản ghi `source: code`. Một hai lần chạy mỗi ô là bằng chứng mỏng.
+Lesson chỉ được active khi lần đo mới nhất chưa quá 60 ngày và cho thấy có ích; `list` gắn nhãn `needs-remeasure` cho lesson active thiếu lần đo như vậy, và `--lessons` bỏ qua nó.
 `qk lesson decide ID STATUS` cho phép proposed → dismissed hoặc active sau khi đo, rồi active → retired/promoted.
 Đề xuất ghi `source: model`; quyết định ghi `source: user`, nhưng CLI không thể chứng minh ai đã chạy lệnh.
 Lesson active chỉ đến được agent qua cờ `--lessons` của `qk-run` và `qk_eval`; lesson có eval case đã bị xoá thì bị bỏ qua.

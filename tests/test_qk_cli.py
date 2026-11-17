@@ -93,7 +93,8 @@ class CliTests(unittest.TestCase):
         _, output, _ = self.cli("lesson", "list", "--json", "--status", "proposed")
         self.assertEqual(json.loads(output), [{"id": identifier, "status": "proposed",
             "case": "csv-export", "scope": ["stage:review", "repo:example"],
-            "evidence_count": 2, "measured_count": 0, "needs_measure": True}])
+            "evidence_count": 2, "measured_count": 0, "needs_measure": True,
+            "needs_remeasure": False}])
         before = ledger.store_path().read_bytes()
         status, _, errors = self.cli("lesson", "decide", identifier, "active")
         self.assertEqual(status, 1)
@@ -144,7 +145,7 @@ class CliTests(unittest.TestCase):
         self.cli(*self.lesson_args())
         proposal = ledger.records()[-1]
         active = dict(proposal, id="active-state", source="user", data=dict(
-            proposal["data"], status="active", measured=[proposal["data"]["evidence"][0]]))
+            proposal["data"], status="active", measured=[{"at": ledger.datetime.now(ledger.timezone.utc).isoformat(), "helps": True}]))
         with ledger.store_path().open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(active) + "\n")
         status, _, errors = self.cli("lesson", "decide", proposal["id"], "retired")
