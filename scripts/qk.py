@@ -67,7 +67,7 @@ def _parser():
     claim.add_argument("--about", required=True)
     claim.add_argument("--text", required=True)
     sync = commands.add_parser("sync", help="read PR state using gh; never change PRs")
-    sync.add_argument("--backfill", action="store_true", help="first import stopped run states")
+    sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
     brief = commands.add_parser("brief", help="summarize open/unknown PRs offline")
     brief.add_argument("--repo")
     commands.add_parser("run", help="existing runner (argv passed unchanged)")
@@ -175,6 +175,39 @@ def _backfill(ledger):
         except (OSError, ValueError, TypeError) as error:
             print("qk sync: backfill %s: %s" % (_text(state_file), _text(error)), file=sys.stderr)
             failures += 1
+    evaluator = importlib.import_module("qk_eval")
+    for directory in sorted(Path(evaluator.state_root()).glob("*")):
+        if not directory.is_dir():
+            continue
+        results_file = directory / "results.json"
+        try:
+            results = json.loads(results_file.read_text(encoding="utf-8"))
+            if (not isinstance(results, dict) or not isinstance(results.get("runtime"), str)
+                    or not results["runtime"].strip() or not isinstance(results.get("cases"), dict)):
+                raise ValueError("eval results require a runtime and cases object")
+            attempts = []
+            for case, result in results["cases"].items():
+                if not case or Path(case).name != case or case in {".", ".."}:
+                    raise ValueError("invalid eval case name")
+                if not isinstance(result, dict):
+                    raise ValueError("eval case result must be an object")
+                runs = result.get("runs", 1)
+                if type(runs) is not int or runs not in (1, 2):
+                    raise ValueError("eval case runs must be 1 or 2")
+                for index in range(1, runs + 1):
+                    attempt = directory / case / ("run-%d" % index)
+                    if index == runs:
+                        observed = result
+                    else:
+                        # results.json retains only the final attempt; earlier grades survive on disk.
+                        criteria = json.loads((attempt / "check.json").read_text(encoding="utf-8"))
+                        observed = {"criteria": criteria, "tokens": None, "seconds": None}
+                    attempts.append((case, observed, attempt))
+            for case, observed, attempt in attempts:
+                ledger.record_eval(results["runtime"], case, observed, attempt, results.get("kit"))
+        except (OSError, ValueError, TypeError) as error:
+            print("qk sync: backfill %s: %s" % (_text(results_file), _text(error)), file=sys.stderr)
+            failures += 1
     return failures
 
 
@@ -227,12 +260,15 @@ def _remote_snapshot(payload, expected_url):
 
 def _sync(args, ledger):
     failures = _backfill(ledger) if args.backfill else 0
-    runs = _latest_runs(ledger.records())
+    records = ledger.records()
+    runs = _latest_runs(records)
+    decisions = {_decision_key(record): _data(record) for record in records
+                 if record.get("kind") == "decision"}
     by_url = defaultdict(list)
     for run in runs:
         if _data(run).get("pr_url"):
             by_url[_data(run)["pr_url"]].append(run)
-    written = 0
+    written = unchanged = 0
     for url, linked_runs in by_url.items():
         try:
             _pr_url(url)
@@ -249,13 +285,18 @@ def _sync(args, ledger):
             snapshot = _remote_snapshot(json.loads(reply.stdout), url)
             for run in linked_runs:
                 data = dict(snapshot, run_id=_data(run).get("run_id"), run_key=_run_key(run))
+                previous = decisions.get((_run_key(run), snapshot["pr_url"]))
+                if previous is not None and all(key in previous and previous[key] == value
+                                                for key, value in snapshot.items() if key != "checked_at"):
+                    unchanged += 1
+                    continue
                 ledger.append("decision", data, repo=run.get("repo", ""),
                               task_kind=run.get("task_kind", ""), refs=[run["id"]])
                 written += 1
         except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
             print("qk sync: %s: %s" % (_text(url), _text(error)), file=sys.stderr)
             failures += 1
-    print("Synced %d decision snapshots; %d failures." % (written, failures))
+    print("Decision snapshots: %d recorded; %d unchanged; %d failures." % (written, unchanged, failures))
     return 1 if failures else 0
 
 

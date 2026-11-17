@@ -19,6 +19,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 qk = importlib.import_module("qk")
 ledger = importlib.import_module("qk_ledger")
+evaluator = importlib.import_module("qk_eval")
 
 
 SHA = "a" * 40
@@ -31,7 +32,8 @@ class CliTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        environment = mock.patch.dict(os.environ, {"QK_STATE_DIR": str(self.root / "ledger")})
+        environment = mock.patch.dict(os.environ, {"QK_STATE_DIR": str(self.root / "ledger"),
+                                                  "XDG_STATE_HOME": str(self.root / "state")})
         environment.start()
         self.addCleanup(environment.stop)
 
@@ -354,6 +356,52 @@ class CliTests(unittest.TestCase):
             linked = first if item["data"]["run_id"] == first["data"]["run_id"] else second
             self.assertEqual(item["refs"], [linked["id"]])
             self.assertEqual((item["source"], item["recorded_by"]), ("code", "code"))
+        with mock.patch.object(subprocess, "run", return_value=self.remote()):
+            status, output, errors = self.cli("sync")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("0 recorded; 2 unchanged", output)
+        self.assertEqual(sum(item["kind"] == "decision" for item in ledger.records()), 2)
+
+    def test_sync_unchanged_state_preserves_ledger_and_observation_timestamp(self):
+        self.run_record()
+        with mock.patch.object(subprocess, "run", return_value=self.remote()):
+            with mock.patch.object(qk, "_now", return_value="2026-11-16T00:00:00+00:00"):
+                status, output, errors = self.cli("sync")
+            self.assertEqual((status, errors), (0, ""))
+            self.assertIn("1 recorded; 0 unchanged", output)
+            before = ledger.store_path().read_bytes()
+            with mock.patch.object(qk, "_now", return_value="2026-11-17T00:00:00+00:00"):
+                status, output, errors = self.cli("sync")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("0 recorded; 1 unchanged", output)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+        _, brief, _ = self.cli("brief")
+        self.assertIn("synced=2026-11-16T00:00:00+00:00", brief)
+
+    def test_sync_records_each_meaningful_change_once_using_latest_decision(self):
+        self.run_record()
+        changes = [{}, {"title": "Changed title"}, {"headRefOid": OTHER_SHA},
+                   {"state": "CLOSED", "closedAt": "2026-11-16T01:00:00Z"},
+                   {"state": "MERGED", "mergedAt": "2026-11-16T01:00:00Z",
+                    "mergedBy": {"login": "reviewer"}},
+                   {"mergedAt": "2026-11-16T02:00:00Z"},
+                   {"closedAt": "2026-11-16T02:00:00Z"},
+                   {"mergedBy": {"login": "another-reviewer"}},
+                   {"state": "OPEN", "mergedAt": None, "closedAt": None, "mergedBy": None}]
+        payload = {}
+        for count, change in enumerate(changes, 1):
+            payload.update(change)
+            with self.subTest(change=change), mock.patch.object(
+                    subprocess, "run", return_value=self.remote(**payload)):
+                status, output, errors = self.cli("sync")
+                self.assertEqual((status, errors), (0, ""))
+                self.assertIn("1 recorded; 0 unchanged", output)
+                before = ledger.store_path().read_bytes()
+                status, output, errors = self.cli("sync")
+                self.assertEqual((status, errors), (0, ""))
+                self.assertIn("0 recorded; 1 unchanged", output)
+                self.assertEqual(ledger.store_path().read_bytes(), before)
+                self.assertEqual(sum(r["kind"] == "decision" for r in ledger.records()), count)
 
     def test_sync_remote_merged_and_closed_decisions_remove_pending_items(self):
         for state in ("MERGED", "CLOSED"):
@@ -482,6 +530,70 @@ class CliTests(unittest.TestCase):
         runs = [item for item in ledger.records() if item["kind"] == "run"]
         self.assertEqual(len(runs), 1)
         self.assertEqual(runs[0]["data"]["status"], "done")
+
+    def eval_fixture(self):
+        root = self.root / "state" / "qk-eval" / "20261116-100000-abcd"
+        first = {"criteria": [{"name": "works", "passed": False}],
+                 "tokens": 10, "seconds": 1.5, "error": None}
+        final = {"criteria": [{"name": "works", "passed": True}],
+                 "tokens": 20, "seconds": 2.5, "error": None, "runs": 2}
+        single = dict(final, runs=1)
+        for case, attempts in (("flipped", [first, final]), ("single", [single])):
+            for index, result in enumerate(attempts, 1):
+                attempt = root / case / ("run-%d" % index)
+                attempt.mkdir(parents=True)
+                (attempt / "check.json").write_text(json.dumps(result["criteria"]), encoding="utf-8")
+        (root / "results.json").write_text(json.dumps({
+            "runtime": "claude:opus", "kit": "none", "started": "20261116-100000",
+            "cases": {"flipped": final, "single": single}, "regression": False}), encoding="utf-8")
+        return root.resolve(), final, single
+
+    def test_eval_backfill_imports_all_attempts_with_live_keys_and_is_idempotent(self):
+        root, final, single = self.eval_fixture()
+        # An attempt already collected live must deduplicate against the import.
+        existing = ledger.record_eval("claude:opus", "flipped", final, root / "flipped" / "run-2", "none")
+        status, _, errors = self.cli("sync", "--backfill")
+        self.assertEqual((status, errors), (0, ""))
+        records = ledger.records()
+        self.assertEqual(len(records), 3)
+        self.assertTrue(all(record["kind"] == "eval" for record in records))
+        self.assertIn(existing, records)
+        by_attempt = {record["refs"][0]: record for record in records}
+        first = by_attempt[str(root / "flipped" / "run-1")]["data"]
+        self.assertFalse(first["passed"])
+        self.assertIsNone(first["tokens"])
+        self.assertIsNone(first["seconds"])
+        self.assertEqual(first["kit"], "none")
+        single_data = by_attempt[str(root / "single" / "run-1")]["data"]
+        self.assertEqual((single_data["runtime"], single_data["kit"], single_data["tokens"],
+                          single_data["seconds"], single_data["passed"]),
+                         ("claude:opus", "none", 20, 2.5, True))
+        self.assertEqual(ledger.record_eval("claude:opus", "single", single,
+                                          root / "single" / "run-1", "none"),
+                         by_attempt[str(root / "single" / "run-1")])
+        before = ledger.store_path().read_bytes()
+        status, _, errors = self.cli("sync", "--backfill")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_eval_backfill_warns_once_per_missing_or_malformed_results_and_continues(self):
+        self.eval_fixture()
+        base = self.root / "state" / "qk-eval"
+        invalid = {"missing": None, "broken": "{", "array": "[]",
+                   "bad-cases": json.dumps({"runtime": "codex:", "cases": []}),
+                   "bad-attempt": json.dumps({"runtime": "codex:", "cases": {"case": {"runs": "two"}}})}
+        for name, content in invalid.items():
+            directory = base / name
+            directory.mkdir()
+            if content is not None:
+                (directory / "results.json").write_text(content, encoding="utf-8")
+        status, output, errors = self.cli("sync", "--backfill")
+        self.assertEqual(status, 1)
+        self.assertIn("5 failures", output)
+        self.assertEqual(len(errors.splitlines()), 5)
+        for name in invalid:
+            self.assertIn(str(base / name / "results.json"), errors)
+        self.assertEqual(len(ledger.records()), 3)
 
     def test_stored_and_remote_text_cannot_inject_terminal_lines(self):
         run = self.run_record(repo="project\x1b[31m\nspoof", impl="model\rspoof")

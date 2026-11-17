@@ -267,7 +267,8 @@ def record_eval(spec: str, case: str, result: dict, directory: object,
         "passed": all(item["passed"] for item in criteria) and not agent_error,
         "tokens": (None if result.get("tokens") is None
                    else _number(result["tokens"], "tokens")),
-        "seconds": _number(result.get("seconds", 0), "seconds"),
+        "seconds": (None if "seconds" in result and result["seconds"] is None
+                    else _number(result.get("seconds", 0), "seconds")),
         "agent_error": agent_error,
     }
     return append("eval", data, refs=[str(attempt), str(attempt / "check.json"),

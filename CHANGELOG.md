@@ -22,7 +22,10 @@ All notable changes to this project are documented here. The format follows
 
 - New claims inherit the referenced event's repository and task-kind labels,
   including claims about claims, so repository/task filters retain the observations.
-
+- PR sync skips unchanged decision snapshots and reports recorded/unchanged counts;
+  the brief timestamp reflects the last observed change.
+- Sync backfill imports saved eval attempts using the live evaluator’s ledger keys,
+  including earlier rerun grades, and reports missing or malformed eval results.
 - Run history selects source revisions rather than import order, so a delayed
   backfill cannot hide a resumed run or its PR.
 - The triage eval accepts observed immediate exit-status capture but rejects
