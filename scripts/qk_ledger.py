@@ -3,11 +3,14 @@
 
 Writers and readers share a side-file lock. A failed append may leave a torn
 last line: subsequent operations fail explicitly rather than deleting evidence.
+Like claims, lesson source labels are an interface boundary, not proof of who
+ran the command.
 """
 import hashlib
 import json
 import math
 import os
+import re
 import secrets
 import stat
 import unicodedata
@@ -19,6 +22,8 @@ from typing import Iterator, Optional
 STORE_NAME = "ledger.jsonl"
 LOCK_NAME = "ledger.lock"
 MAX_CLAIM_TEXT = 1000
+LESSON_FIELDS = ("class", "rule", "scope", "evidence", "case", "measured")
+LESSON_STATUSES = ("proposed", "active", "dismissed", "retired", "promoted")
 
 
 def state_dir() -> Path:
@@ -161,12 +166,89 @@ def _claim(data: dict, existing: list) -> None:
         raise ValueError(f"claim refers to missing record {about}")
 
 
+def latest_lessons(existing: list) -> list:
+    """Select lesson states by ledger order, retaining the proposal identity."""
+    latest = {}
+    for record in existing:
+        if record["kind"] == "lesson":
+            latest[record["data"]["lesson_id"]] = record
+    return list(latest.values())
+
+
+def _lesson_line(value: object, name: str, limit: int) -> str:
+    value = _text(value, name, empty=False)
+    if len(value) > limit or any(
+        unicodedata.category(char).startswith("C") or char in "\n\r\u2028\u2029"
+        for char in value
+    ):
+        raise ValueError(f"{name} must be a single line of at most {limit} characters")
+    return value
+
+
+def _lesson(data: dict, existing: list, identifier: str) -> dict:
+    if data.get("status") == "proposed":
+        if set(data) - {"lesson_id"} != {"status", *LESSON_FIELDS}:
+            raise ValueError("lesson proposal requires status, class, rule, scope, evidence, case and measured")
+        if data.get("lesson_id", identifier) != identifier:
+            raise ValueError("lesson proposal id must equal its record id")
+        _lesson_line(data["class"], "class", 200)
+        _lesson_line(data["rule"], "rule", 300)
+        scope = data["scope"]
+        if (not isinstance(scope, list) or not 1 <= len(scope) <= 3
+                or any(not isinstance(item, str) or not re.fullmatch(
+                    r"stage:(?:review|impl|plan)|repo:[A-Za-z0-9][A-Za-z0-9._-]*", item)
+                       for item in scope)
+                or not any(item.startswith("stage:") for item in scope)):
+            raise ValueError("scope requires 1-3 safe stage/repo strings and at least one stage")
+        evidence = data["evidence"]
+        if (not isinstance(evidence, list) or any(not isinstance(item, str) for item in evidence)
+                or len(evidence) < 2 or len(set(evidence)) != len(evidence)):
+            raise ValueError("evidence requires at least 2 distinct eval or finding ids")
+        by_id = {record["id"]: record for record in existing}
+        for item in evidence:
+            if item not in by_id:
+                raise ValueError(f"evidence refers to missing record {item}")
+            if by_id[item]["kind"] not in ("eval", "finding"):
+                raise ValueError(f"evidence {item} must be an eval or finding record")
+        case = _text(data["case"], "case", empty=False)
+        cases = Path(__file__).resolve().parents[1] / "evals" / "cases"
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", case):
+            raise ValueError("case must be a directory name under evals/cases")
+        target = (cases / case).resolve()
+        if target.parent != cases.resolve() or not target.is_dir():
+            raise ValueError("case must be an existing directory under evals/cases")
+        if data["measured"] != []:
+            raise ValueError("lesson proposals require an empty measured list")
+        return dict(data, lesson_id=identifier)
+    if (set(data) - {"reason"} != {"lesson_id", "status"}
+            or data.get("status") not in LESSON_STATUSES[1:]):
+        raise ValueError("lesson decision requires lesson_id, status (active/dismissed/retired/promoted), and optional reason")
+    lesson_id = _text(data["lesson_id"], "lesson_id", empty=False)
+    if "reason" in data:
+        _lesson_line(data["reason"], "reason", 300)
+    previous = next((record["data"] for record in latest_lessons(existing)
+                     if record["data"]["lesson_id"] == lesson_id), None)
+    if previous is None:
+        raise ValueError(f"missing lesson {lesson_id}")
+    old, new = previous["status"], data["status"]
+    if new not in {"proposed": ("dismissed", "active"),
+                  "active": ("retired", "promoted")}.get(old, ()):
+        raise ValueError(f"invalid lesson transition: {old} -> {new}")
+    if (new == "active"
+            and (not isinstance(previous["measured"], list) or not previous["measured"])):
+        raise ValueError("measure the lesson before activating it")
+    return dict({field: previous[field] for field in LESSON_FIELDS}, **data)
+
+
 def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
-           refs: tuple = (), key: Optional[str] = None) -> dict:
-    """Append durably; key lookup and claim reference validation share one lock."""
+           refs: tuple = (), key: Optional[str] = None,
+           source: Optional[str] = None) -> dict:
+    """Append durably; key lookup and claim/lesson validation share one lock."""
     _text(kind, "kind", empty=False)
     _text(repo, "repo")
     _text(task_kind, "task_kind")
+    if source is not None and (kind != "lesson" or source not in ("model", "user")):
+        raise ValueError("explicit source is only supported for lessons (model or user)")
     if not isinstance(data, dict):
         raise ValueError("data must be an object")
     if not isinstance(refs, (tuple, list)) or any(not isinstance(ref, str) for ref in refs):
@@ -182,6 +264,12 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
         existing = _read_records(directory)
         if kind == "claim":
             _claim(data, existing)
+        ids = {record["id"] for record in existing}
+        identifier = secrets.token_hex(6)
+        while identifier in ids:
+            identifier = secrets.token_hex(6)
+        if kind == "lesson":
+            data = _lesson(data, existing, identifier)
         if key is not None:
             for record in existing:
                 if record.get("key") == key:
@@ -198,14 +286,11 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
                     finally:
                         os.close(fd)
                     return record
-        ids = {record["id"] for record in existing}
-        identifier = secrets.token_hex(6)
-        while identifier in ids:
-            identifier = secrets.token_hex(6)
         record = {
             "v": 1, "id": identifier, "kind": kind,
             "at": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
-            "source": "model" if kind in ("finding", "claim") else "code",
+            "source": (source or "model") if kind == "lesson" else (
+                "model" if kind in ("finding", "claim") else "code"),
             "recorded_by": "model" if kind == "claim" else "code",
             "repo": repo, "task_kind": task_kind, "refs": list(refs), "data": data,
         }

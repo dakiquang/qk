@@ -26,7 +26,17 @@ Sổ chỉ giữ tóm tắt và tham chiếu, không chép code, diff, prompt ha
 
 Dòng cuối bị ghi dở do crash hoặc đầy đĩa sẽ khiến các lần đọc và ghi sau cố ý báo lỗi; `qk-run` và `qk_eval` chỉ ghi cảnh báo ledger. Để khôi phục, bảo đảm không có lệnh `qk-run`, `qk_eval` hay `qk` nào đang chạy, sao chép `ledger.jsonl` thành bản sao lưu, chỉ xoá dòng cuối chưa hoàn chỉnh, rồi chạy `qk show` để xác nhận file đọc được trở lại.
 
-`source` cho biết ai tạo nội dung; `recorded_by` cho biết ai thu nhận. Finding vẫn do model tạo dù runner ghi lại. `claim` là kết luận chưa được kiểm của model về sự kiện đã có, không phải quan sát mới. CLI công khai chỉ nhận claim; đây là ranh giới giao diện, không chống tiến trình khác có cùng quyền user sửa sổ. Code thu nhận một nhận định không chứng minh nhận định đó đúng.
+`source` cho biết ai tạo nội dung; `recorded_by` cho biết ai thu nhận. Finding vẫn do model tạo dù runner ghi lại. `claim` là kết luận chưa được kiểm của model về sự kiện đã có, không phải quan sát mới. Giao diện `log` chỉ nhận claim; đây là ranh giới giao diện, không chống tiến trình khác có cùng quyền user sửa sổ. Code thu nhận một nhận định không chứng minh nhận định đó đúng.
+
+## Lessons
+
+Lesson là quy tắc dạng mệnh lệnh rút từ sai sót AI có bằng chứng, nằm trong cùng sổ chỉ ghi nối tiếp.
+`qk lesson suggest` liệt kê tiêu chí eval thất bại và lớp finding lặp lại mà không ghi bản ghi.
+Dùng `qk lesson propose` với class, rule, 1–3 scope (có stage), ít nhất 2 ID bằng chứng eval/finding khác nhau và một eval case đã có.
+`qk lesson list` hiển thị trạng thái mới nhất; đề xuất chưa đo mang nhãn `needs-measure`.
+Lesson không thể active trước khi được đo; chức năng đo thuộc bước sau.
+`qk lesson decide ID STATUS` cho phép proposed → dismissed hoặc active sau khi đo, rồi active → retired/promoted.
+Đề xuất ghi `source: model`; quyết định ghi `source: user`, nhưng CLI không thể chứng minh ai đã chạy lệnh.
 
 ## Dùng bằng chứng để quyết
 

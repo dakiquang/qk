@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Evidence-backed lesson records and `qk lesson suggest/propose/list/decide`;
+  activation requires prior measurement, which is reserved for a later step.
+
 - Local append-only evidence ledger and `scripts/qk.py`: `show`, aggregate `stats`,
   model `log claim`, read-only PR `sync` with run backfill, and an offline `brief`
   that marks evidence stale when a PR head changes.

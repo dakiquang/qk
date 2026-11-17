@@ -26,7 +26,17 @@ The store keeps summaries and references, not copies of code, diffs, prompts or 
 
 A torn final line from an append interrupted by a crash or a full disk deliberately makes later reads and writes fail; `qk-run` and `qk_eval` only log a ledger warning. To recover, make sure no `qk-run`, `qk_eval` or `qk` command is running, copy `ledger.jsonl` to a backup, remove only the incomplete final line, then run `qk show` to confirm the file reads again.
 
-`source` identifies who supplied the content; `recorded_by` identifies who collected it. A finding is model-authored even when the runner records it. A `claim` is an unverified model conclusion about an existing record, not a new observation. The public CLI only accepts claims; this is an interface boundary, not tamper protection against another process with your user permissions. Code collecting a statement does not establish that the statement is true.
+`source` identifies who supplied the content; `recorded_by` identifies who collected it. A finding is model-authored even when the runner records it. A `claim` is an unverified model conclusion about an existing record, not a new observation. The `log` interface only accepts claims; this is an interface boundary, not tamper protection against another process with your user permissions. Code collecting a statement does not establish that the statement is true.
+
+## Lessons
+
+A lesson is an evidence-backed imperative rule about an AI mistake, stored in the same append-only ledger.
+`qk lesson suggest` lists repeated eval failures and finding classes without writing records.
+Use `qk lesson propose` with a class, rule, 1–3 scopes (including a stage), at least 2 distinct eval/finding evidence IDs and an existing eval case.
+`qk lesson list` shows the latest state; unmeasured proposals carry `needs-measure`.
+A lesson cannot become active before measurement; measurement is a later step.
+`qk lesson decide ID STATUS` allows proposed → dismissed or measured active, then active → retired/promoted.
+Proposals record `source: model`; decisions record `source: user`, but the CLI cannot prove who ran it.
 
 ## Use the evidence to decide
 

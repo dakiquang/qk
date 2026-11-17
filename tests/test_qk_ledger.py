@@ -411,6 +411,108 @@ class LedgerTests(unittest.TestCase):
                 "usage": {"raw": "PRIVATE USAGE"}, "tokens": 125, "seconds": 1.25,
                 "error": error, "final": "PRIVATE FINAL OUTPUT"}
 
+    def lesson_data(self):
+        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        return {"status": "proposed", "class": "missing validation",
+                "rule": "Validate external input before using it.",
+                "scope": ["stage:review", "repo:example-project"],
+                "evidence": evidence, "case": "csv-export", "measured": []}
+
+    def test_lesson_proposal_identity_and_append_only_decision(self):
+        data = self.lesson_data()
+        proposal = ledger.append("lesson", data, source="model")
+        self.assertNotIn("lesson_id", data)
+        self.assertEqual(proposal["data"], dict(data, lesson_id=proposal["id"]))
+        self.assertEqual((proposal["source"], proposal["recorded_by"]), ("model", "code"))
+        before = ledger.store_path().read_bytes()
+        dismissed = ledger.append("lesson", {"lesson_id": proposal["id"],
+                                  "status": "dismissed", "reason": "Too narrow."}, source="user")
+        self.assertEqual((dismissed["source"], dismissed["recorded_by"]), ("user", "code"))
+        self.assertEqual(dismissed["data"], dict(proposal["data"], status="dismissed", reason="Too narrow."))
+        self.assertTrue(ledger.store_path().read_bytes().startswith(before))
+        self.assertEqual(ledger.latest_lessons(ledger.records()), [dismissed])
+        with self.assertRaisesRegex(ValueError, "dismissed -> active"):
+            ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"})
+
+    def test_invalid_lesson_proposals_never_append(self):
+        data = self.lesson_data()
+        wrong = ledger.append("run", {})["id"]
+        invalid = [
+            {"evidence": data["evidence"][:1]},
+            {"evidence": [data["evidence"][0]] * 2},
+            {"evidence": [data["evidence"][0], "missing"]},
+            {"evidence": [data["evidence"][0], wrong]},
+            {"case": "missing-case"}, {"case": "../cases/csv-export"},
+            {"case": "/csv-export"}, {"case": "csv-export/"}, {"case": ".."},
+            {"case": "csv-export\\other"},
+            {"scope": []}, {"scope": ["repo:example"]}, {"scope": ["stage:verify"]},
+            {"scope": ["stage:impl", "repo:../example"]},
+            {"scope": ["stage:plan"] * 4}, {"scope": "stage:review"},
+            {"rule": "Check input.\nCheck output."}, {"rule": "x" * 301},
+            {"rule": "Check\u2028input."}, {"rule": "Check\x1binput."}, {"rule": " "},
+            {"class": "x" * 201}, {"class": "two\nlines"},
+            {"measured": ["invented"]}, {"lesson_id": "invented"},
+        ]
+        before = ledger.store_path().read_bytes()
+        for changes in invalid:
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                ledger.append("lesson", dict(data, **changes), source="model")
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_lesson_case_resolution_rejects_symlink_escape(self):
+        data = self.lesson_data()
+        repo = self.root / "checkout"
+        cases = repo / "evals" / "cases"
+        cases.mkdir(parents=True)
+        (cases / "csv-export").symlink_to(self.root, target_is_directory=True)
+        with patch.object(ledger, "__file__", str(repo / "scripts" / "qk_ledger.py")):
+            with self.assertRaisesRegex(ValueError, "under evals/cases"):
+                ledger.append("lesson", data)
+
+    def test_lesson_activation_requires_latest_measurement_and_valid_transition(self):
+        proposal = ledger.append("lesson", self.lesson_data())
+        decision = {"lesson_id": proposal["id"], "status": "active"}
+        before = ledger.store_path().read_bytes()
+        with self.assertRaisesRegex(ValueError, "measure the lesson before activating it"):
+            ledger.append("lesson", decision, source="user")
+        for changes in ({"status": "retired"}, {"status": "promoted"},
+                        {"status": "unknown"}, {"lesson_id": "missing"},
+                        {"measured": ["invented"]}, {"reason": "x" * 301},
+                        {"reason": "two\nlines"}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                ledger.append("lesson", dict(decision, **changes))
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+        # Simulate a future measurement status record without exposing a write API.
+        for index, value in enumerate(("unverified", {"claim": "measured"}, True)):
+            malformed = dict(proposal, id="bad-measurement-%d" % index,
+                             data=dict(proposal["data"], measured=value))
+            with ledger.store_path().open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(malformed) + "\n")
+            with self.assertRaisesRegex(ValueError, "measure the lesson before activating it"):
+                ledger.append("lesson", decision)
+        measured = dict(proposal, id="measured-state", data=dict(
+            proposal["data"], measured=[proposal["data"]["evidence"][0]]))
+        with ledger.store_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(measured) + "\n")
+        active = ledger.append("lesson", decision, source="user")
+        self.assertEqual(active["data"]["measured"], measured["data"]["measured"])
+        retired = ledger.append("lesson", dict(decision, status="retired"), source="user")
+        self.assertEqual(retired["data"], dict(active["data"], status="retired"))
+        with self.assertRaisesRegex(ValueError, "retired -> active"):
+            ledger.append("lesson", decision)
+
+    def test_existing_source_conventions_cannot_be_overridden(self):
+        parent = ledger.append("eval", {})
+        for kind, source, recorder, data in (
+                ("run", "code", "code", {}), ("eval", "code", "code", {}),
+                ("decision", "code", "code", {}), ("finding", "model", "code", {}),
+                ("claim", "model", "model", {"about": parent["id"], "text": "Observation"})):
+            with self.subTest(kind=kind):
+                record = ledger.append(kind, data)
+                self.assertEqual((record["source"], record["recorded_by"]), (source, recorder))
+                with self.assertRaisesRegex(ValueError, "only supported for lessons"):
+                    ledger.append(kind, data, source="user")
+
     def test_eval_projection_retains_only_outcomes_and_artifact_references(self):
         attempt = self.root / "eval" / "attempt-1"
         record = ledger.record_eval("omp:model", "case-name", self.eval_result(), attempt)
