@@ -147,7 +147,7 @@ def records() -> list:
         return _read_records(directory)
 
 
-def _claim(data: dict, existing: list) -> None:
+def _claim(data: dict, existing: list) -> dict:
     if set(data) != {"about", "text"}:
         raise ValueError("claim requires only about and text")
     about = _text(data["about"], "about", empty=False)
@@ -157,8 +157,10 @@ def _claim(data: dict, existing: list) -> None:
         for char in text
     ):
         raise ValueError(f"claim text must be a single line of at most {MAX_CLAIM_TEXT} characters")
-    if not any(record["id"] == about for record in existing):
-        raise ValueError(f"claim refers to missing record {about}")
+    for record in existing:
+        if record["id"] == about:
+            return record
+    raise ValueError(f"claim refers to missing record {about}")
 
 
 def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
@@ -181,7 +183,8 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
     with _locked(True) as directory:
         existing = _read_records(directory)
         if kind == "claim":
-            _claim(data, existing)
+            parent = _claim(data, existing)
+            repo, task_kind = parent["repo"], parent["task_kind"]
         if key is not None:
             for record in existing:
                 if record.get("key") == key:

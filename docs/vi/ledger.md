@@ -35,6 +35,8 @@ Dòng cuối bị ghi dở do crash hoặc đầy đĩa sẽ khiến các lần 
 - `qk brief` chỉ đọc bằng chứng cục bộ, không gọi mạng. Đọc thời điểm sync. Bằng chứng đã cũ khi HEAD của PR khác commit đã ghi; thiếu sync hoặc commit không có nghĩa là an toàn.
 - `qk log claim --about ID --text "Một kết luận"` gắn kết luận model vào sự kiện có sẵn. Lấy ID từ `qk show --json`, không tự đặt. Ghi qua skill vẫn phải nằm trong quyền ghi của phiên hiện tại.
 
+Claim mới kế thừa nhãn repo và loại việc của sự kiện được tham chiếu, kể cả khi sự kiện đó là claim khác. Vì vậy bộ lọc repo/loại việc giữ các quan sát liên quan cùng nhau. Không ghi lại bản ghi cũ trong sổ chỉ-thêm; claim cũ có nhãn trống vẫn chưa được phân loại.
+
 Brief gọn tổng hợp mã thoát thành zero/nonzero/unknown và chỉ xem trước một phần claim. Dùng ID bản ghi với `qk show` để đọc đủ bằng chứng; `queued-for-fix` không có nghĩa là đã sửa đúng.
 
 Lịch sử đếm run `done`, không đếm thay đổi đã chứng minh đúng. PR đã merge là hành động của người được quan sát, không chứng minh hết lỗi. Run cũ thiếu lịch sử review đầy đủ; finding không xuất hiện ở vòng sau chưa chứng minh đã sửa đúng. Bản ghi eval giữ mọi lượt thử, kể cả lượt đầu làm phát sinh lần chạy lại.

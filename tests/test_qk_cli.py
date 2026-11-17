@@ -297,6 +297,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("source=model recorded_by=code", output)
         self.assertNotIn(run["id"] + " ", output)
 
+    def test_claims_remain_visible_in_repository_and_task_kind_filters(self):
+        run = self.run_record(kind="bugfix")
+        expected = []
+        about = run["id"]
+        for text in ("first observation", "follow-up observation"):
+            status, _, errors = self.cli("log", "claim", "--about", about, "--text", text)
+            self.assertEqual((status, errors), (0, ""))
+            about = ledger.records()[-1]["id"]
+            expected.append(about)
+        foreign = self.run_record("other", repo="other-project", kind="other-task")
+        self.cli("log", "claim", "--about", foreign["id"], "--text", "unrelated observation")
+        status, output, errors = self.cli("show", "--repo", "project", "--kind", "claim", "--json")
+        self.assertEqual((status, errors), (0, ""))
+        claims = json.loads(output)
+        self.assertEqual([claim["id"] for claim in claims], expected)
+        self.assertTrue(all(claim["source"] == "model" and claim["recorded_by"] == "model"
+                            for claim in claims))
+        status, output, errors = self.cli("stats", "--task-kind", "bugfix", "--by", "kind")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(self.counts(output), {"total": 3, "run": 1, "claim": 2})
+
     def test_claim_validation_never_leaves_dangling_or_multiline_records(self):
         run = self.run_record()
         before = ledger.records()
