@@ -71,6 +71,124 @@ class CliTests(unittest.TestCase):
         return {line.split("\t")[0]: int(line.split("\t")[1])
                 for line in text.splitlines()}
 
+    def lesson_args(self):
+        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        return ["lesson", "propose", "--class", "missing validation", "--rule",
+                "Validate external input before using it.", "--scope", "stage:review",
+                "--scope", "repo:example", "--evidence", evidence[0],
+                "--evidence", evidence[1], "--case", "csv-export"]
+
+    def test_lesson_propose_list_and_decide_preserve_identity_and_sources(self):
+        status, output, errors = self.cli(*self.lesson_args())
+        self.assertEqual((status, errors), (0, ""))
+        identifier = output.strip()
+        proposal = ledger.records()[-1]
+        self.assertEqual(proposal["id"], identifier)
+        self.assertEqual(proposal["data"]["lesson_id"], identifier)
+        self.assertEqual((proposal["source"], proposal["recorded_by"]), ("model", "code"))
+        status, output, errors = self.cli("lesson", "list")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("needs-measure", output)
+        self.assertIn("evidence=2 measured=0", output)
+        _, output, _ = self.cli("lesson", "list", "--json", "--status", "proposed")
+        self.assertEqual(json.loads(output), [{"id": identifier, "status": "proposed",
+            "case": "csv-export", "scope": ["stage:review", "repo:example"],
+            "evidence_count": 2, "measured_count": 0, "needs_measure": True}])
+        before = ledger.store_path().read_bytes()
+        status, _, errors = self.cli("lesson", "decide", identifier, "active")
+        self.assertEqual(status, 1)
+        self.assertIn("measure the lesson before activating it", errors)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+        status, output, errors = self.cli("lesson", "decide", identifier, "dismissed",
+                                          "--reason", "Too narrow.")
+        self.assertEqual((status, errors), (0, ""))
+        dismissed = ledger.records()[-1]
+        self.assertEqual(output.strip(), dismissed["id"])
+        self.assertEqual((dismissed["source"], dismissed["recorded_by"]), ("user", "code"))
+        self.assertEqual(dismissed["data"], dict(proposal["data"], status="dismissed", reason="Too narrow."))
+        status, _, errors = self.cli("lesson", "decide", identifier, "active")
+        self.assertEqual(status, 1)
+        self.assertIn("dismissed -> active", errors)
+        _, output, _ = self.cli("lesson", "list", "--json")
+        rows = json.loads(output)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["id"], rows[0]["status"]), (identifier, "dismissed"))
+        self.assertFalse(rows[0]["needs_measure"])
+        _, output, _ = self.cli("lesson", "list", "--status", "proposed", "--json")
+        self.assertEqual(json.loads(output), [])
+
+    def test_lesson_invalid_proposals_return_errors_without_writing(self):
+        args = self.lesson_args()
+        wrong = ledger.append("run", {})["id"]
+        invalid = [("--rule", "two\nlines"), ("--rule", "x" * 301),
+                   ("--class", "x" * 201), ("--scope", "stage:verify"),
+                   ("--case", "missing-case"), ("--case", "../cases/csv-export"),
+                   ("--evidence", "missing"), ("--evidence", wrong)]
+        before = ledger.store_path().read_bytes()
+        for option, value in invalid:
+            changed = list(args)
+            changed[changed.index(option) + 1] = value
+            with self.subTest(option=option, value=value):
+                status, _, errors = self.cli(*changed)
+                self.assertEqual(status, 1)
+                self.assertTrue(errors)
+        missing = list(args)
+        index = missing.index("--evidence")
+        del missing[index:index + 2]
+        status, _, errors = self.cli(*missing)
+        self.assertEqual(status, 1)
+        self.assertIn("at least 2 distinct", errors)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_lesson_decide_retires_measured_active_fixture(self):
+        self.cli(*self.lesson_args())
+        proposal = ledger.records()[-1]
+        active = dict(proposal, id="active-state", source="user", data=dict(
+            proposal["data"], status="active", measured=[proposal["data"]["evidence"][0]]))
+        with ledger.store_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(active) + "\n")
+        status, _, errors = self.cli("lesson", "decide", proposal["id"], "retired")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(ledger.records()[-1]["data"], dict(active["data"], status="retired"))
+
+    def test_lesson_suggest_groups_repeated_failures_and_never_writes(self):
+        failed = {"name": "validate input", "passed": False}
+        first = ledger.append("eval", {"case": "csv-export", "criteria": [failed, failed,
+            {"name": "one failure", "passed": False}]})
+        second = ledger.append("eval", {"case": "csv-export", "criteria": [failed]})
+        other = ledger.append("eval", {"case": "other-case", "criteria": [failed]})
+        passed = ledger.append("eval", {"case": "csv-export", "criteria": [dict(failed, passed=True)]})
+        findings = [ledger.append("finding", {"class": "correctness"}) for _ in range(2)]
+        ledger.append("finding", {"class": ""})
+        ledger.append("finding", {"class": " "})
+        ledger.append("finding", {"class": "single"})
+        for data in ({}, {"case": "csv-export", "criteria": None},
+                     {"case": [], "criteria": [failed]}, {"case": "csv-export", "criteria": [None]}):
+            ledger.append("eval", data)
+        before = ledger.store_path().read_bytes()
+        status, output, errors = self.cli("lesson", "suggest")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(len(output.splitlines()), 2)
+        for record in [first, second] + findings:
+            self.assertIn(record["id"], output)
+        for value in ("one failure", "other-case", other["id"], passed["id"], "single"):
+            self.assertNotIn(value, output)
+        _, output, _ = self.cli("lesson", "suggest", "--min", "3")
+        self.assertEqual(output.strip(), "No repeated failures in the ledger (need >= 3).")
+        status, _, errors = self.cli("lesson", "suggest", "--min", "0")
+        self.assertEqual(status, 1)
+        self.assertIn("--min", errors)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_lesson_help_is_short(self):
+        for command in ("suggest", "propose", "list", "decide"):
+            with self.subTest(command=command):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as error:
+                    qk.main(["lesson", command, "--help"])
+                self.assertEqual(error.exception.code, 0)
+                self.assertLessEqual(len(output.getvalue().splitlines()), 12)
+
 
     def test_late_backfill_cannot_hide_a_newer_resumed_run(self):
         runner = importlib.import_module("qk_run")

@@ -49,7 +49,7 @@ def _since(value):
 
 
 def _parser():
-    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,run,eval} ...")
+    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,lesson,run,eval} ...")
     commands = parser.add_subparsers(dest="command", required=True)
     show = commands.add_parser("show", help="read recorded evidence")
     show.add_argument("--kind")
@@ -70,6 +70,24 @@ def _parser():
     sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
     brief = commands.add_parser("brief", help="summarize open/unknown PRs offline")
     brief.add_argument("--repo")
+    lesson = commands.add_parser("lesson", help="propose and decide evidence-backed lessons")
+    lessons = lesson.add_subparsers(dest="lesson_command", required=True)
+    suggest = lessons.add_parser("suggest", help="find repeated failures without writing")
+    suggest.add_argument("--min", type=int, default=2, metavar="N")
+    propose = lessons.add_parser("propose", help="propose an imperative rule with evidence")
+    propose.add_argument("--class", dest="lesson_class", required=True, metavar="TEXT")
+    propose.add_argument("--rule", required=True, metavar="TEXT",
+                         help="caller-supplied imperative rule")
+    propose.add_argument("--scope", action="append", required=True, metavar="SCOPE")
+    propose.add_argument("--evidence", action="append", required=True, metavar="ID")
+    propose.add_argument("--case", required=True, metavar="NAME")
+    listing = lessons.add_parser("list", help="show the latest state of each lesson")
+    listing.add_argument("--status", choices=("proposed", "active", "dismissed", "retired", "promoted"), metavar="S")
+    listing.add_argument("--json", action="store_true")
+    decide = lessons.add_parser("decide", help="record a lesson status decision")
+    decide.add_argument("id", metavar="ID")
+    decide.add_argument("status", choices=("active", "dismissed", "retired", "promoted"), metavar="STATUS")
+    decide.add_argument("--reason", metavar="TEXT")
     commands.add_parser("run", help="existing runner (argv passed unchanged)")
     commands.add_parser("eval", help="existing evaluator (argv passed unchanged)")
     return parser
@@ -78,6 +96,74 @@ def _parser():
 def _data(record):
     data = record.get("data", {})
     return data if isinstance(data, dict) else {}
+
+
+def _lesson_suggest(args, records):
+    if args.min < 1:
+        raise ValueError("--min must be at least 1")
+    candidates = defaultdict(list)
+    for record in records:
+        data = _data(record)
+        if record["kind"] == "eval":
+            case = data.get("case")
+            criteria = data.get("criteria")
+            if (not isinstance(case, str) or not case.strip()
+                    or not isinstance(criteria, list)):
+                continue
+            # Count each criterion at most once per eval record.
+            failed = {item["name"] for item in criteria
+                      if isinstance(item, dict) and item.get("passed") is False
+                      and isinstance(item.get("name"), str) and item["name"].strip()}
+            for criterion in sorted(failed):
+                candidates[("eval", case, criterion)].append(record["id"])
+        elif record["kind"] == "finding":
+            label = data.get("class")
+            if isinstance(label, str) and label.strip():
+                candidates[("finding", label)].append(record["id"])
+    shown = 0
+    for candidate, ids in sorted(candidates.items()):
+        if len(ids) >= args.min:
+            print("%s\tids=%s" % ("\t".join(_text(value) for value in candidate), ",".join(ids)))
+            shown += 1
+    if not shown:
+        print("No repeated failures in the ledger (need >= %d)." % args.min)
+    return 0
+
+
+def _lesson(args, ledger):
+    if args.lesson_command == "propose":
+        data = {"status": "proposed", "class": args.lesson_class, "rule": args.rule,
+                "scope": args.scope, "evidence": args.evidence, "case": args.case,
+                "measured": []}
+        print(ledger.append("lesson", data, source="model")["id"])
+        return 0
+    if args.lesson_command == "decide":
+        data = {"lesson_id": args.id, "status": args.status}
+        if args.reason is not None:
+            data["reason"] = args.reason
+        print(ledger.append("lesson", data, source="user")["id"])
+        return 0
+    records = ledger.records()
+    if args.lesson_command == "suggest":
+        return _lesson_suggest(args, records)
+    rows = []
+    for record in ledger.latest_lessons(records):
+        data = record["data"]
+        if args.status and data["status"] != args.status:
+            continue
+        rows.append({"id": data["lesson_id"], "status": data["status"],
+                     "case": data["case"], "scope": data["scope"],
+                     "evidence_count": len(data["evidence"]),
+                     "measured_count": len(data["measured"]),
+                     "needs_measure": data["status"] == "proposed" and not data["measured"]})
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=True))
+    else:
+        for row in rows:
+            print(_text("{id} {status} case={case} scope={scope} evidence={evidence_count} "
+                        "measured={measured_count}{marker}".format(
+                            **row, marker=" needs-measure" if row["needs_measure"] else "")))
+    return 0
 
 
 def _run_key(record):
@@ -448,6 +534,8 @@ def main(argv=None):
     args = _parser().parse_args(argv)
     try:
         ledger = importlib.import_module("qk_ledger")
+        if args.command == "lesson":
+            return _lesson(args, ledger)
         if args.command == "sync":
             return _sync(args, ledger)
         if args.command == "log":
