@@ -29,4 +29,6 @@ Write mode may write only the handoff file. Resume mode is read-only until you c
 
 Write is done when a new session need not rediscover settled decisions. Resume is done when drift has been exposed—not when the remaining implementation has silently started. You choose the next command.
 
+If the [`qk` CLI](../ledger.md) is installed, a relevant ledger ID is known and writes are authorised, the skill saves one conclusion with `qk log claim`, recorded as a model claim; otherwise it skips this. It never invents an ID.
+
 All higher-priority, runtime and repository rules still apply. This skill does not change models, permissions, hooks or configuration, and never invokes another qk skill automatically.

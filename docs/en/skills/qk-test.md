@@ -24,4 +24,6 @@ Run repository checks only. Do not edit product code, change test configuration,
 
 Done means results and classifications have evidence and blocked checks have reasons. Take a discovered failure to `qk/debug` explicitly; do not make tests green by weakening assertions or changing configuration.
 
+If the [`qk` CLI](../ledger.md) is installed, a relevant ledger ID is known and writes are authorised, the skill saves one conclusion with `qk log claim`, recorded as a model claim; otherwise it skips this. It never invents an ID.
+
 All higher-priority, runtime and repository rules still apply. This skill does not change models, permissions, hooks or configuration, and never invokes another qk skill automatically.
