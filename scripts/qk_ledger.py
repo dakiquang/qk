@@ -24,6 +24,8 @@ LOCK_NAME = "ledger.lock"
 MAX_CLAIM_TEXT = 1000
 LESSON_FIELDS = ("class", "rule", "scope", "evidence", "case", "measured")
 LESSON_STATUSES = ("proposed", "active", "dismissed", "retired", "promoted")
+LESSON_LIMIT = 5
+LESSON_CHARS = 3200
 
 
 def state_dir() -> Path:
@@ -175,6 +177,35 @@ def latest_lessons(existing: list) -> list:
         if record["kind"] == "lesson":
             latest[record["data"]["lesson_id"]] = record
     return list(latest.values())
+
+
+def lessons_for(stage: str, repo: str = "") -> list:
+    """Active lessons scoped to one stage (and this repo, when a lesson names one), newest proposal first.
+
+    Returns (lesson_id, rule) pairs within LESSON_LIMIT lessons and LESSON_CHARS characters (about 800
+    tokens). A lesson whose eval case no longer exists is skipped: it can no longer be re-measured."""
+    cases = Path(__file__).resolve().parents[1] / "evals" / "cases"
+    chosen, size = [], 0
+    for record in reversed(latest_lessons(records())):
+        data = record["data"]
+        scope = data["scope"]
+        repos = [item[len("repo:"):] for item in scope if item.startswith("repo:")]
+        if (data["status"] != "active" or f"stage:{stage}" not in scope
+                or (repos and repo not in repos) or not (cases / data["case"]).is_dir()):
+            continue
+        if len(chosen) == LESSON_LIMIT or size + len(data["rule"]) > LESSON_CHARS:
+            break
+        chosen.append((data["lesson_id"], data["rule"]))
+        size += len(data["rule"])
+    return chosen
+
+
+def lessons_block(lessons: list) -> str:
+    """Prompt block for chosen lessons; empty when there are none, so prompts stay unchanged."""
+    if not lessons:
+        return ""
+    return ("Verified lessons (measured on earlier mistakes); apply each one only where it is relevant:\n"
+            + "".join(f"- {rule}\n" for _, rule in lessons))
 
 
 def _lesson_line(value: object, name: str, limit: int) -> str:
@@ -356,6 +387,8 @@ def record_eval(spec: str, case: str, result: dict, directory: object,
                     else _number(result.get("seconds", 0), "seconds")),
         "agent_error": agent_error,
     }
+    if result.get("lessons"):
+        data["lessons"] = [_text(item, "lesson id", empty=False) for item in result["lessons"]]
     return append("eval", data, refs=[str(attempt), str(attempt / "check.json"),
                                       str(attempt / "final.md")],
                   key="eval:" + _digest(str(attempt)))

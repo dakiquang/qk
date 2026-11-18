@@ -19,6 +19,8 @@ The [unified CLI](ledger.md) exposes the same commands as `qk run …`. `start -
 
 Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:anthropic/claude-opus-5-5`, reviewer `codex:` (Codex's own default model). Override with `--impl runtime:model` and `--review runtime:model`; runtimes are `omp`, `claude`, `codex`. Implementer and reviewer must be different model families; an omp spec needs an explicit model whose family can be recognised (for example `omp:anthropic/claude-opus-5-5`), otherwise `start` refuses it. Set `QK_RUN_OMP_PROFILE` to run omp under a named profile. `--timeout` limits each agent turn and each verify command (default 1800 s). `--read-only-mcp NAME` (repeatable, Claude and omp only) lets read-only stages call the MCP server `NAME`; see [Isolation](#isolation). `start` refuses it when Codex would run planning (`--impl`) or review (`--review`).
 
+`--lessons` adds, to each planning, implementation, fix and review turn, the active [lessons](ledger.md#lessons) scoped to that stage (and to this repository, when a lesson names one): at most 5 per turn, about 800 tokens. Without the flag the prompts are unchanged. The chosen lesson IDs are kept in `state.json` under `lessons_used`, by stage, from every turn of that stage.
+
 ## Stages
 
 1. **preflight** — refuses a dirty primary checkout (never stashes), checks push permission for the active `gh` account on GitHub origin, discovers the base branch, creates a worktree on a new branch `qk/<slug>-<id>`.

@@ -448,6 +448,67 @@ Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the
         expected = qk_run.review_prompt(Path(state["worktree"]), directory / "approved-plan.md", directory / "review.diff")
         self.assertEqual([p for p in prompts if p.startswith("Independent read-only review")], [expected])
 
+    @staticmethod
+    def active_lesson(scope, rule):
+        ledger = qk_run.qk_ledger
+        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        proposal = ledger.append("lesson", {"status": "proposed", "class": "test", "rule": rule, "scope": scope,
+                                            "evidence": evidence, "case": "csv-export", "measured": []},
+                                 source="model")
+        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=["fixture"]))
+        with ledger.store_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(measured) + "\n")
+        ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"}, source="user")
+        return proposal["id"]
+
+    def test_lessons_flag_adds_stage_scoped_lessons_and_records_their_ids(self):
+        lessons = {stage: self.active_lesson([f"stage:{stage}", "repo:repo"], f"{stage} rule.")
+                   for stage in ("plan", "impl", "review")}
+        self.active_lesson(["stage:review", "repo:other"], "other repo rule.")
+        prompts, agent = [], Agent()
+
+        def recording(spec, prompt, *args, **kwargs):
+            prompts.append(prompt)
+            return agent(spec, prompt, *args, **kwargs)
+        state = self.start(recording, extra=["--lessons"])
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertEqual(state["lessons_used"], {stage: [lesson] for stage, lesson in lessons.items()})
+        directory = Path(os.environ["QK_RUN_STATE_DIR"]) / state["id"]
+        block = qk_run.qk_ledger.lessons_block([(lessons["review"], "review rule.")])
+        expected = qk_run.review_prompt(Path(state["worktree"]), directory / "approved-plan.md",
+                                        directory / "review.diff", block)
+        self.assertEqual([p for p in prompts if p.startswith("Independent read-only review")], [expected])
+        plan, impl = prompts[0], prompts[1]
+        self.assertIn("- plan rule.\n", plan)
+        self.assertIn("- impl rule.\n", impl)
+        self.assertNotIn("other repo rule.", "".join(prompts))
+        self.assertEqual(sum("Verified lessons" in p for p in prompts), 3)
+
+    def test_repeated_stage_turns_keep_every_lesson_id_used(self):
+        from unittest import mock
+        state = {"lessons": True, "repo": "/tmp/repo"}
+        selections = iter([[("a", "rule a.")], [], [("b", "rule b."), ("a", "rule a.")]])
+        with mock.patch.object(qk_run.qk_ledger, "lessons_for", lambda stage, repo: next(selections)):
+            for _ in range(3):
+                qk_run.stage_lessons(state, "impl")
+        self.assertEqual(state["lessons_used"], {"impl": ["a", "b"]})
+
+    def test_without_lessons_flag_prompts_ignore_active_lessons(self):
+        for stage in ("plan", "impl", "review"):
+            self.active_lesson([f"stage:{stage}"], f"{stage} rule.")
+        prompts, agent = [], Agent()
+
+        def recording(spec, prompt, *args, **kwargs):
+            prompts.append(prompt)
+            return agent(spec, prompt, *args, **kwargs)
+        state = self.start(recording)
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertNotIn("lessons_used", state)
+        self.assertFalse(any("Verified lessons" in p for p in prompts))
+
     def test_reviewer_editing_files_is_blocked(self):
         def review(cwd, state_dir):
             (cwd / "greeting.txt").write_text("changed by reviewer\n")

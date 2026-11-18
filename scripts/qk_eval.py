@@ -129,11 +129,17 @@ def touched_case_files(events):
     return [line[:200] for line in text.splitlines() if any(root in line for root in roots)]
 
 
-def kit_prompt(case, kit, workdir, plan=None, diff=None):
-    """Prompt and write flag of one turn. Without a kit (None) this is the runner's own wording, unchanged."""
+def lesson_stage(case):
+    """Runner stage whose lessons apply to a case."""
+    return "review" if case["skill"] == REVIEW else "plan" if case["skill"] == "qk-plan" else "impl"
+
+
+def kit_prompt(case, kit, workdir, plan=None, diff=None, lessons=""):
+    """Prompt and write flag of one turn. Without a kit (None) this is the runner's own wording, unchanged.
+    `lessons` is a verified-lessons block (qk prompts only); empty leaves the prompt unchanged."""
     if case["skill"] == REVIEW:
         if kit in (None, "qk"):
-            prompt = qk_run.review_prompt(workdir, plan, diff)
+            prompt = qk_run.review_prompt(workdir, plan, diff, lessons)
         else:
             prompt = (f"Review the uncommitted change in {workdir} (full diff: {diff}) against the approved plan "
                       f"{plan}. Report only problems introduced by this change. Do not edit files.\n"
@@ -142,6 +148,8 @@ def kit_prompt(case, kit, workdir, plan=None, diff=None):
     if kit in (None, "qk"):
         prompt = (f"Read {qk_run.skill(case['skill'])} and follow it for the task in task.md in {workdir}. "
                   f"Work only inside {workdir}.\n{qk_run.NO_GIT}")
+        if lessons:
+            prompt += "\n" + lessons.rstrip("\n")
     else:
         prompt = f"Do the task in task.md in {workdir}. Work only inside {workdir}.\n{qk_run.NO_GIT}"
     if kit is not None:
@@ -158,7 +166,7 @@ def claude_skills(kit, superpowers_dir):
     return flags
 
 
-def run_case(case, spec, timeout, out_dir, scratch, kit=None, superpowers_dir=None):
+def run_case(case, spec, timeout, out_dir, scratch, kit=None, superpowers_dir=None, lessons=()):
     """One agent turn on a fresh copy of the case, graded; artifacts go to `out_dir`.
 
     The graders (check.py, hidden tests) are copied to a private directory before the turn and run from there,
@@ -177,7 +185,7 @@ def run_case(case, spec, timeout, out_dir, scratch, kit=None, superpowers_dir=No
             plan, diff = out_dir / "plan.md", out_dir / "review.diff"
             shutil.copy2(case["dir"] / "plan.md", plan)
             shutil.copy2(case["dir"] / "review.diff", diff)
-        prompt, write = kit_prompt(case, kit, workdir, plan, diff)
+        prompt, write = kit_prompt(case, kit, workdir, plan, diff, qk_ledger.lessons_block(list(lessons)))
         text, usage, error = "", None, None
         start = time.monotonic()
         try:
@@ -196,7 +204,10 @@ def run_case(case, spec, timeout, out_dir, scratch, kit=None, superpowers_dir=No
                          "detail": f"events name the case directory: {touched[0]}" if touched else ""})
     (out_dir / "check.json").write_text(json.dumps(criteria, indent=2) + "\n", encoding="utf-8")
     tokens = usage["input"] + usage["output"] if usage else None
-    return {"criteria": criteria, "usage": usage, "tokens": tokens, "seconds": seconds, "error": error}
+    result = {"criteria": criteria, "usage": usage, "tokens": tokens, "seconds": seconds, "error": error}
+    if lessons:
+        result["lessons"] = [lesson_id for lesson_id, _ in lessons]
+    return result
 
 
 def passing(criteria):
@@ -332,7 +343,12 @@ def main(argv=None):
     parser.add_argument("--kit", choices=KITS,
                         help="compare kits on one Claude Code base (no baseline comparison or update)")
     parser.add_argument("--superpowers-dir", type=Path, help="a Superpowers checkout, for --kit superpowers")
+    parser.add_argument("--lessons", action="store_true",
+                        help="add active verified lessons for each case's stage (never updates the baseline)")
     args = parser.parse_args(argv)
+    if args.lessons and (args.update_baseline or args.kit not in (None, "qk")):
+        print("qk-eval: --lessons runs qk prompts only and never updates the baseline", file=sys.stderr)
+        return 2
     qk_run.parse_spec(args.runtime)
     if args.kit:
         problem = None
@@ -357,14 +373,19 @@ def main(argv=None):
     root.mkdir(parents=True)
     results = {}
     for case in cases:
+        try:
+            lessons = qk_ledger.lessons_for(lesson_stage(case)) if args.lessons else []
+        except (OSError, RuntimeError, ValueError) as error:
+            print(f"qk-eval: --lessons: cannot read lessons from the ledger: {error}", file=sys.stderr)
+            return 2
         result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-1", root,
-                          args.kit, args.superpowers_dir)
+                          args.kit, args.superpowers_dir, lessons)
         record_ledger(args.runtime, case["name"], result, root / case["name"] / "run-1", args.kit)
         result["runs"] = 1
         base = entries.get(case["name"])
         if base is not None and compare(result, base)["flipped"]:
             result = run_case(case, args.runtime, args.timeout, root / case["name"] / "run-2", root,
-                              args.kit, args.superpowers_dir)
+                              args.kit, args.superpowers_dir, lessons)
             record_ledger(args.runtime, case["name"], result, root / case["name"] / "run-2", args.kit)
             result["runs"] = 2
         results[case["name"]] = result

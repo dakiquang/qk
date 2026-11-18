@@ -520,6 +520,47 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(ledger.append("lesson", decision, key="dismiss-once", source="user"), first)
         self.assertEqual(sum(record["kind"] == "lesson" for record in ledger.records()), 2)
 
+    def active_lesson(self, scope, rule="Check the destination key.", case="csv-export"):
+        proposal = ledger.append("lesson", dict(self.lesson_data(), scope=scope, rule=rule, case=case),
+                                 source="model")
+        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=["fixture"]))
+        with ledger.store_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(measured) + "\n")
+        ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"}, source="user")
+        return proposal["id"]
+
+    def test_lessons_for_selects_active_lessons_by_stage_and_repo_newest_first(self):
+        scoped = self.active_lesson(["stage:review", "repo:example-project"], "Scoped rule.")
+        general = self.active_lesson(["stage:review"], "General rule.")
+        impl = self.active_lesson(["stage:impl"], "Impl rule.")
+        ledger.append("lesson", dict(self.lesson_data(), scope=["stage:review"]), source="model")
+        self.assertEqual(ledger.lessons_for("review", "example-project"),
+                         [(general, "General rule."), (scoped, "Scoped rule.")])
+        self.assertEqual(ledger.lessons_for("review", "other-project"), [(general, "General rule.")])
+        self.assertEqual(ledger.lessons_for("impl"), [(impl, "Impl rule.")])
+        self.assertEqual(ledger.lessons_for("plan"), [])
+        self.assertEqual(ledger.lessons_block([]), "")
+        self.assertEqual(ledger.lessons_block([(general, "General rule.")]),
+                         "Verified lessons (measured on earlier mistakes); apply each one only where it is "
+                         "relevant:\n- General rule.\n")
+
+    def test_lessons_for_caps_count_and_size_and_skips_missing_cases(self):
+        ids = [self.active_lesson(["stage:review"], f"Rule {index}.") for index in range(7)]
+        self.assertEqual([item for item, _ in ledger.lessons_for("review")], ids[:1:-1])
+        with patch.object(ledger, "LESSON_CHARS", len("Rule 6.") * 2):
+            self.assertEqual([item for item, _ in ledger.lessons_for("review")], [ids[6], ids[5]])
+        latest = ledger.records()[-1]
+        gone = dict(latest, id="gone-case", data=dict(latest["data"], lesson_id="gone-case", case="no-such-case"))
+        with ledger.store_path().open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(gone) + "\n")
+        self.assertNotIn("gone-case", [item for item, _ in ledger.lessons_for("review")])
+
+    def test_eval_records_keep_lesson_ids_only_when_lessons_were_used(self):
+        plain = ledger.record_eval("codex:", "case", self.eval_result(), self.root / "a")
+        used = ledger.record_eval("codex:", "case", dict(self.eval_result(), lessons=["abc"]), self.root / "b")
+        self.assertNotIn("lessons", plain["data"])
+        self.assertEqual(used["data"]["lessons"], ["abc"])
+
     def test_existing_source_conventions_cannot_be_overridden(self):
         parent = ledger.append("eval", {})
         for kind, source, recorder, data in (
