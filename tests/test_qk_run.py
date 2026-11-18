@@ -362,6 +362,37 @@ class RunnerTest(unittest.TestCase):
         self.assertIn("TimeoutExpired", first["reason"])
         self.assertEqual(second["stage"], "done")
 
+    def test_drain_continues_when_recording_a_block_cannot_snapshot_the_tree(self):
+        from unittest import mock
+        ids = []
+        qk_run.call_agent = Agent(plan=lambda cwd, state_dir: (ids.append(state_dir.name) or planned()))
+        for _ in range(2):
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            self.cli("approve", ids[-1], "--later")
+        verifying, snapshot = qk_run.verifying, qk_run.tree_snapshot
+        failures = {"stage": 1, "snapshot": 1}
+
+        def flaky_verifying(state):
+            if failures["stage"]:
+                failures["stage"] = 0
+                raise subprocess.TimeoutExpired("git add", 600)
+            return verifying(state)
+
+        def flaky_snapshot(worktree):
+            if not failures["stage"] and failures["snapshot"]:
+                failures["snapshot"] = 0
+                raise subprocess.TimeoutExpired("git add", 600)
+            return snapshot(worktree)
+
+        with mock.patch.dict(qk_run.STAGES, verifying=flaky_verifying), \
+                mock.patch.object(qk_run, "tree_snapshot", flaky_snapshot):
+            self.assertEqual(self.cli("drain"), 1)
+        first, second = (qk_run.load(run_id) for run_id in ids)
+        self.assertEqual(first["stage"], "blocked")
+        self.assertEqual(first["blocked_at"], "verifying")
+        self.assertNotIn("blocked_tree", first)
+        self.assertEqual(second["stage"], "done")
+
     def test_notify_escapes_message_and_warns_on_failure(self):
         from unittest import mock
         with mock.patch.object(qk_run.subprocess, "run") as command:

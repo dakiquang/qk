@@ -10,7 +10,6 @@ Agents only edit files in an isolated worktree. Only this runner commits, pushes
 and opens the PR. It never merges, releases, deletes branches or switches models.
 """
 import argparse
-import fcntl
 import json
 import math
 import os
@@ -984,8 +983,8 @@ def block(state, stage, error):
     if stage in RESUMABLE_BY_HAND:
         try:
             state["blocked_tree"] = tree_snapshot(Path(state["worktree"]))
-        except Blocked:
-            pass
+        except (Blocked, OSError, subprocess.SubprocessError):
+            pass  # best effort: the block itself must still be saved
     save(state)
     log(state, f"BLOCKED at {stage}: {error}")
     print(f"Resume after fixing the cause: qk-run resume {state['id']}")
@@ -1115,6 +1114,7 @@ def cmd_drain(args):
         deadline = drain_deadline(args.until, datetime.now()) if args.until is not None else None
     except ValueError as error:
         sys.exit(str(error))
+    import fcntl  # POSIX only, like the process-group handling above
     state_root().mkdir(parents=True, exist_ok=True)
     with (state_root() / "drain.lock").open("a") as lock:
         try:
