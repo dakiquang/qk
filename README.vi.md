@@ -42,6 +42,7 @@ Các công cụ tuỳ chọn đi kèm:
 - **[qk-run](docs/vi/runner.md)** đưa một việc từ yêu cầu tới pull request ready-for-review: một cổng duyệt plan, chạy lệnh kiểm của chính plan, review bởi một họ model khác, và không bao giờ merge.
 - **[Hook ghi nhận sở thích](docs/vi/preference-hook.md)** biến câu "từ nay…" thành đề xuất để bạn duyệt bằng `qk/prefs`.
 - **[Sổ bằng chứng và CLI `qk`](docs/vi/ledger.md)** gom bằng chứng run/eval và kết luận model trên máy, sync trạng thái PR và hiện hồ sơ quyết định chỉ đọc.
+- **[Lesson](docs/vi/lessons.md)** ghi lỗi AI lặp lại thành quy tắc một dòng; chỉ bật được khi lần đo cho thấy có ích, và chỉ nạp khi có `--lessons`.
 
 Review và chấm điểm pull request nằm ở dự án đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 

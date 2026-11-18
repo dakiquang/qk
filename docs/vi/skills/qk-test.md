@@ -24,4 +24,6 @@ Chỉ chạy kiểm của repo; không sửa code, cấu hình test, cài depend
 
 Xong khi kết quả/phân loại có bằng chứng và kiểm bị chặn có lý do. Muốn đào nguyên nhân lỗi thì tự gọi `qk/debug`; không nới assertion hoặc đổi cấu hình cho xanh.
 
+Nếu có [CLI `qk`](../ledger.md), biết ID liên quan trong sổ và được phép ghi, skill lưu một kết luận bằng `qk log claim`, ghi nhận là lời khẳng định của model; không thì bỏ qua. Không bao giờ bịa ID.
+
 Chỉ dẫn cấp cao hơn, luật runtime và repo luôn thắng. Skill không đổi model, quyền, hook hay cấu hình và không tự gọi skill qk khác.

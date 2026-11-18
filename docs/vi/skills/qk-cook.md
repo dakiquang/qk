@@ -32,4 +32,6 @@ Báo hành vi đã làm, file và lý do, lệnh/kết quả thật, phần chư
 
 Xong khi mọi tiêu chí đã có bằng chứng quan sát và lỗi do thay đổi gây ra đã sửa. Muốn góc nhìn độc lập: tự gọi dự án riêng `pr-orchestrator` cho PR, hoặc `qk/agent-coord` với reviewer/model chỉ định. `qk/test` là kiểm độc lập hoặc rộng hơn nếu cần, không phải bước bắt buộc.
 
+Nếu có [CLI `qk`](../ledger.md), biết ID liên quan trong sổ và được phép ghi, skill lưu một kết luận bằng `qk log claim`, ghi nhận là lời khẳng định của model; không thì bỏ qua. Không bao giờ bịa ID.
+
 Chỉ dẫn cấp cao hơn, luật runtime và repo luôn thắng. Skill không đổi model, quyền, hook hay cấu hình và không tự gọi skill qk khác.

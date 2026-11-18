@@ -32,4 +32,6 @@ May edit in-scope files and run repository checks. No commit, push, merge, tag, 
 
 Done means all agreed criteria have observed evidence and introduced failures are fixed. For an independent view, explicitly request the separate `pr-orchestrator` for a PR review, or `qk/agent-coord` with a named reviewer/model. `qk/test` is optional independent or broader verification, not a mandatory next stage.
 
+If the [`qk` CLI](../ledger.md) is installed, a relevant ledger ID is known and writes are authorised, the skill saves one conclusion with `qk log claim`, recorded as a model claim; otherwise it skips this. It never invents an ID.
+
 All higher-priority, runtime and repository rules still apply. This skill does not change models, permissions, hooks or configuration, and never invokes another qk skill automatically.
