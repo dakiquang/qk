@@ -349,7 +349,7 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(state["verify_results"][1]["cmd"], "PRIVATE COMMAND")
         self.assertNotIn("raw", record["data"]["usage"]["reviewing"][0])
 
-    def test_run_records_scope_task_and_blocked_reason(self):
+    def test_run_records_scope_task_and_blocked_stage_without_reason(self):
         state = self.run_state()
         state.update(stage="blocked", blocked_at="reviewing", reason="  cause\n" + "word " * 80,
                      task="  task\n" + "word " * 40,
@@ -358,7 +358,8 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(data["changed_files"], ["src/main.py", "image.png"])
         self.assertEqual((data["lines_added"], data["lines_deleted"]), (4, 2))
         self.assertEqual(data["blocked_at"], "reviewing")
-        self.assertEqual(data["reason"], " ".join(state["reason"].split())[:240])
+        self.assertNotIn("reason", data)
+        self.assertNotIn("cause", json.dumps(data))
         self.assertEqual(data["task"], " ".join(state["task"].split())[:120])
         state["stage"] = "done"
         data = ledger.record_run(state, self.root / "run")["data"]
@@ -370,7 +371,7 @@ class LedgerTests(unittest.TestCase):
             self.assertNotIn(key, minimal)
 
     def test_run_rejects_wrong_scope_task_and_blocked_types(self):
-        bad = [{"task": None}, {"task": 4}, {"blocked_at": []}, {"reason": 4},
+        bad = [{"task": None}, {"task": 4}, {"blocked_at": []},
                {"diff_stat": None}, {"diff_stat": []}]
         for key, value in (("files", "a.py"), ("files", [1]), ("added", True),
                            ("deleted", "1"), ("added", -1), ("deleted", None)):

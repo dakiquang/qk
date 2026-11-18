@@ -225,8 +225,8 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(self.counts(stats), {"total": 1, "current": 1})
     def test_brief_risk_rules(self):
         cases = [
-            ({"status": "blocked", "blocked_at": "reviewing", "reason": "needs help", "pr_url": ""},
-             {}, "high — blocked at reviewing: needs help"),
+            ({"status": "blocked", "blocked_at": "reviewing", "pr_url": ""},
+             {}, "high — blocked at reviewing: reason unknown"),
             ({"remaining_count": 2}, {}, "high — 2 findings remain"),
             ({"verify_results": [{"exit": 1}, {"exit": 0}]}, {}, "high — verify failed (1 nonzero)"),
             *[({"changed_files": [path]}, {}, "high — sensitive file " + path) for path in (
@@ -267,6 +267,23 @@ class CliTests(unittest.TestCase):
                     self.assertIn("qk run abort risk0", output)
                 elif snapshot is None:
                     self.assertIn("Make a change", output)
+
+    def test_brief_reads_blocked_reason_from_state_not_ledger(self):
+        state = self.root / "run" / "state.json"
+        state.parent.mkdir()
+        state.write_text(json.dumps({"reason": "verification failed after the single fix round:\n"
+                                               "`make test --token=PRIVATE` exited 1:\nPRIVATE_LOG"}))
+        run = self.run_record("blocked", status="blocked", blocked_at="verifying", pr_url="",
+                              refs=[str(state)])
+        self.assertNotIn("PRIVATE", json.dumps(ledger.records()))
+        _, output, _ = self.cli("brief")
+        self.assertIn("RISK: high — blocked at verifying: verification failed after the single fix round:",
+                      output.splitlines()[0])
+        self.assertNotIn("PRIVATE", output)
+        state.unlink()
+        _, output, _ = self.cli("brief")
+        self.assertIn("blocked at verifying: reason unknown", output.splitlines()[0])
+        self.assertIn(run["id"], output)
 
     def test_brief_long_title_keeps_risk_visible(self):
         run = self.run_record(changed_files=["package.json"], lines_added=1, lines_deleted=0)

@@ -586,8 +586,8 @@ def record_run(state: dict, directory: object) -> dict:
         data["lines_added"] = _count(stat.get("added"), "lines_added")
         data["lines_deleted"] = _count(stat.get("deleted"), "lines_deleted")
     if state["stage"] == "blocked":
+        # Only the stage: a reason can quote verify commands and raw output, which stay in state.json.
         data["blocked_at"] = _text(state.get("blocked_at", ""), "blocked_at")
-        data["reason"] = " ".join(_text(state.get("reason", ""), "reason").split())[:240]
     projected = _findings(state, data["fix_rounds"])
     snapshot = _digest({"repo": repo, "task_kind": task_kind,
                         "data": data, "findings": projected})

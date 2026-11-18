@@ -480,10 +480,23 @@ BRIEF_SENSITIVE_FILES = re.compile(
     re.IGNORECASE)
 
 
-def _brief_risk(data, snapshot):
+def _blocked_reason(run):
+    """First line of why a run stopped, read from its local state.json; the ledger keeps no reason text."""
+    for ref in run.get("refs", []):
+        if not ref.endswith("state.json"):
+            continue
+        try:
+            reason = json.loads(Path(ref).read_text(encoding="utf-8")).get("reason")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(reason, str) and reason.strip():
+            return reason.strip().splitlines()[0]
+    return "reason unknown"
+
+
+def _brief_risk(data, snapshot, reason="reason unknown"):
     if data.get("status") == "blocked":
-        return "high", "blocked at %s: %s" % (
-            data.get("blocked_at") or "unknown", data.get("reason") or "reason unknown")
+        return "high", "blocked at %s: %s" % (data.get("blocked_at") or "unknown", reason)
     remaining = data.get("remaining_count") or 0
     if remaining > 0:
         return "high", "%d findings remain" % remaining
@@ -533,7 +546,8 @@ def _brief(args, records):
         snapshot = _data(matched[-1]) if matched else {}
         if data.get("status") != "blocked" and snapshot.get("state") in {"MERGED", "CLOSED"}:
             continue
-        level, rule = _brief_risk(data, snapshot)
+        reason = _blocked_reason(run) if data.get("status") == "blocked" else "reason unknown"
+        level, rule = _brief_risk(data, snapshot, reason)
         cards.append((run, snapshot, level, rule))
     cards.sort(key=lambda card: ({"high": 0, "medium": 1, "low": 2}[card[2]],
                                  _data(card[0]).get("status") != "blocked"))

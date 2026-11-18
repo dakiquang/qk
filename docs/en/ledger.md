@@ -37,7 +37,7 @@ Lessons are evidence-backed rules about AI mistakes, stored here as `lesson` rec
 - `qk sync --backfill` imports stopped runs and every saved eval attempt from their state roots without duplicates (earlier reruns recover grades from `check.json`, with unavailable timing and token totals left unknown), and warns once per missing or malformed eval result directory.
 - `qk sync` records only changed PR snapshots, reports recorded and unchanged counts, and leaves the `qk brief` sync timestamp at the last observed change. It only reads GitHub; it never merges, closes or comments. Select the correct account per command with `GH_TOKEN` where necessary; the CLI does not switch your active account.
 - `qk brief` reads local evidence without a network call. Read its sync timestamp. Evidence is stale when the PR head differs from the recorded commit; missing sync or commit data is not a clean bill of health.
-  Blocked runs are included, with resume and abort commands; cards are ordered high, medium, then low.
+  Blocked runs are included, with resume and abort commands; the reason line is read from the run's local `state.json`, because the ledger stores only the blocked stage. Cards are ordered high, medium, then low.
   - High: blocked, remaining findings, nonzero verification exits, or sensitive files (CI, dependencies, infrastructure, migrations, auth, secrets, permissions or policy).
   - Medium: a fix round, more than 300 changed lines or 10 files, a differing PR head, never synced, or unknown scope.
   - Low: no rule matched; the matched rule is printed beside the level. These rules do not grant approval.

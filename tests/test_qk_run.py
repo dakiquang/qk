@@ -195,6 +195,23 @@ class RunnerTest(unittest.TestCase):
             "files": ["README", "greeting.txt", "image.bin"], "added": 4, "deleted": 1})
         self.assertEqual([call[0] for call in agent.calls].count("review"), 2)
 
+    def test_diff_stat_keeps_both_sides_of_a_rename(self):
+        (self.seed / "auth.py").write_text("token = 1\n")
+        run(self.seed, "git", "add", "auth.py")
+        run(self.seed, "git", "commit", "-q", "-m", "auth")
+        run(self.seed, "git", "push", "-q", "origin", "HEAD:main")
+        run(self.repo, "git", "pull", "-q", "origin", "main")
+
+        def cook(cwd, state_dir):
+            run(cwd, "git", "mv", "auth.py", "helper.py")
+            return result()
+
+        state = self.start(Agent(cook=cook))
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertTrue({"auth.py", "helper.py"} <= set(state["diff_stat"]["files"]))
+
     def test_approve_later_freezes_plan_without_running_agent(self):
         import hashlib
         agent = Agent()

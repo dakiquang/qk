@@ -37,7 +37,7 @@ Lesson là quy tắc về sai sót AI có bằng chứng, lưu ở đây dưới
 - `qk sync --backfill` nạp run đã dừng và mọi lượt eval đã lưu từ các thư mục state mà không ghi trùng (lượt chạy lại trước đó lấy điểm từ `check.json`, để thời gian và tổng token không còn dữ liệu ở trạng thái chưa biết), đồng thời cảnh báo một dòng cho mỗi thư mục eval thiếu hoặc sai kết quả.
 - `qk sync` chỉ ghi snapshot PR có thay đổi, báo số đã ghi và không đổi, đồng thời giữ thời điểm sync trong `qk brief` ở lần quan sát thấy thay đổi gần nhất. Lệnh chỉ đọc GitHub, không merge, đóng hay comment. Chọn đúng tài khoản qua `GH_TOKEN` cho từng lệnh nếu cần; CLI không đổi tài khoản đang active.
 - `qk brief` chỉ đọc bằng chứng cục bộ, không gọi mạng. Đọc thời điểm sync. Bằng chứng đã cũ khi HEAD của PR khác commit đã ghi; thiếu sync hoặc commit không có nghĩa là an toàn.
-  Bao gồm run bị chặn, kèm lệnh resume và abort; thẻ được xếp theo mức high, medium rồi low.
+  Bao gồm run bị chặn, kèm lệnh resume và abort; dòng lý do được đọc từ `state.json` cục bộ của run, vì sổ chỉ lưu bước bị chặn. Thẻ được xếp theo mức high, medium rồi low.
   - High: bị chặn, còn finding, mã thoát kiểm tra khác 0, hoặc file nhạy cảm (CI, dependency, hạ tầng, migration, xác thực, bí mật, phân quyền hay chính sách).
   - Medium: có vòng sửa, hơn 300 dòng thay đổi hoặc 10 file, HEAD của PR khác commit đã ghi, chưa sync, hoặc chưa biết phạm vi.
   - Low: không khớp quy tắc nào; quy tắc khớp được in cạnh mức. Các quy tắc này không cấp quyền phê duyệt.
