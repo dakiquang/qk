@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-18
+
 ### Added
 
 - Evidence-backed lesson records and `qk lesson suggest/propose/list/decide`;
@@ -13,7 +15,9 @@ All notable changes to this project are documented here. The format follows
 - `--lessons` for `qk-run` and `qk_eval`: adds active lessons scoped to each stage (at most 5,
   about 800 tokens) and records which were used; prompts are unchanged without it.
 - `qk lesson measure ID --runtime SPEC`: runs the lesson's case with and without it plus same-stage
-  controls and records the result; activation needs a helping measurement under 60 days old.
+  controls and records the result; activation needs a helping measurement under 60 days old. A run
+  that fails `clean` voids the measurement, and a proposal needs an eval of its case that failed a
+  criterion other than `clean`.
 - Lessons guide (`docs/{en,vi}/lessons.md`) and the first lesson's measurement in the test evidence.
 - Local append-only evidence ledger and `scripts/qk.py`: `show`, aggregate `stats`,
   model `log claim`, read-only PR `sync` with run backfill, and an offline `brief`
@@ -24,6 +28,8 @@ All notable changes to this project are documented here. The format follows
 - Optional `qk-run start --task-kind` history labels; model-authored findings retain
   their provenance rather than being presented as code-verified facts.
 - Behavioral eval cases for independent test failure triage and handoff drift.
+- `pip-config-review` eval case from a public pip pull request, and the kit comparison results
+  (no kit, Superpowers, qk) in the test evidence.
 
 ### Fixed
 
