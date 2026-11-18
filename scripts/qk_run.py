@@ -789,14 +789,15 @@ def repo_path(path, worktree):
 
 def stage_lessons(state, stage):
     """Verified-lessons block for one stage of a run started with --lessons; empty otherwise.
-    The chosen lesson ids are kept in the run state."""
+    Every lesson id chosen for the stage is kept in the run state, across repeated turns."""
     if not state.get("lessons"):
         return ""
     try:
         chosen = qk_ledger.lessons_for(stage, Path(state["repo"]).name)
     except (OSError, RuntimeError, ValueError) as error:
         raise Blocked(f"--lessons: cannot read lessons from the ledger: {error}")
-    state.setdefault("lessons_used", {})[stage] = [lesson_id for lesson_id, _ in chosen]
+    used = state.setdefault("lessons_used", {}).setdefault(stage, [])
+    used += [lesson_id for lesson_id, _ in chosen if lesson_id not in used]
     return qk_ledger.lessons_block(chosen)
 
 
