@@ -27,6 +27,8 @@ All notable changes to this project are documented here. The format follows
   Ledger failures warn without failing the underlying task.
 - Optional `qk-run start --task-kind` history labels; model-authored findings retain
   their provenance rather than being presented as code-verified facts.
+- `qk-cook`, `qk-test` and `qk-handoff` may save one conclusion with `qk log claim` when the
+  `qk` CLI is installed, a ledger ID is known and writes are authorised.
 - Behavioral eval cases for independent test failure triage and handoff drift.
 - `pip-config-review` eval case from a public pip pull request, and the kit comparison results
   (no kit, Superpowers, qk) in the test evidence.
