@@ -486,6 +486,15 @@ Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the
         self.assertNotIn("other repo rule.", "".join(prompts))
         self.assertEqual(sum("Verified lessons" in p for p in prompts), 3)
 
+    def test_repeated_stage_turns_keep_every_lesson_id_used(self):
+        from unittest import mock
+        state = {"lessons": True, "repo": "/tmp/repo"}
+        selections = iter([[("a", "rule a.")], [], [("b", "rule b."), ("a", "rule a.")]])
+        with mock.patch.object(qk_run.qk_ledger, "lessons_for", lambda stage, repo: next(selections)):
+            for _ in range(3):
+                qk_run.stage_lessons(state, "impl")
+        self.assertEqual(state["lessons_used"], {"impl": ["a", "b"]})
+
     def test_without_lessons_flag_prompts_ignore_active_lessons(self):
         for stage in ("plan", "impl", "review"):
             self.active_lesson([f"stage:{stage}"], f"{stage} rule.")
