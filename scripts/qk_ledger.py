@@ -181,6 +181,20 @@ def latest_lessons(existing: list) -> list:
     return list(latest.values())
 
 
+def lesson_targets(existing: list, evidence: list, case: str) -> list:
+    """Criteria other than `clean` that the lesson's eval evidence failed on its case."""
+    by_id = {record["id"]: record for record in existing if record.get("kind") == "eval"}
+    targets = set()
+    for item in evidence:
+        data = by_id.get(item, {}).get("data")
+        if not isinstance(data, dict) or data.get("case") != case or not isinstance(data.get("criteria"), list):
+            continue
+        targets.update(criterion["name"] for criterion in data["criteria"]
+                       if isinstance(criterion, dict) and isinstance(criterion.get("name"), str)
+                       and criterion.get("passed") is False and criterion["name"] != "clean")
+    return sorted(targets)
+
+
 def measured_helps(data: dict) -> bool:
     """True when the latest measurement is recent and showed that the lesson helps."""
     measured = data.get("measured")
@@ -296,6 +310,8 @@ def _lesson(data: dict, existing: list, identifier: str) -> dict:
         target = (cases / case).resolve()
         if target.parent != cases.resolve() or not target.is_dir():
             raise ValueError("case must be an existing directory under evals/cases")
+        if not lesson_targets(existing, evidence, case):
+            raise ValueError(f"evidence needs an eval of case {case} that failed a criterion other than clean")
         if data["measured"] != []:
             raise ValueError("lesson proposals require an empty measured list")
         return dict(data, lesson_id=identifier)

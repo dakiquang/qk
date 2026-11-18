@@ -28,7 +28,7 @@ A proposal needs:
 
 - `rule`: one line, at most 300 characters, saying what the agent must do. Write the general habit, not the answer to the eval case, or the measurement only shows that the agent can copy a hint.
 - `scope`: 1–3 entries, at least one of `stage:review`, `stage:impl`, `stage:plan`; add `repo:NAME` to limit it to one repository.
-- `evidence`: at least two distinct existing `eval` or `finding` IDs where the mistake happened.
+- `evidence`: at least two distinct existing `eval` or `finding` IDs where the mistake happened; at least one must be an eval of `case` that failed a criterion other than `clean`, because measurement targets those criteria.
 - `case`: an existing directory under `evals/cases/` that reproduces the mistake.
 
 ## How measurement decides
@@ -37,6 +37,7 @@ A proposal needs:
 
 The lesson helps only when:
 
+- every run is `clean` (an agent that may have read the graders voids the measurement);
 - both runs with the lesson pass every target criterion;
 - at least one run without the lesson misses one;
 - no control loses a criterion or breaks the token rule (more than both 10% and 25,000 tokens).
@@ -52,7 +53,7 @@ An active lesson is still loaded only when you ask: `--lessons` adds at most 5 a
 ## Remove or re-measure
 
 - `qk lesson decide ID retired` stops a lesson from being loaded. Records are never deleted; the history stays.
-- An active lesson whose latest helping measurement is older than 60 days is marked `needs-remeasure` in `qk lesson list` and is skipped by `--lessons` until you measure it again.
+- An active lesson whose latest measurement is older than 60 days, or says that it does not help, is marked `needs-remeasure` in `qk lesson list` and is skipped by `--lessons` until a new measurement helps. If a fresh measurement says it does not help, retire it.
 - A lesson whose eval case was deleted is skipped.
 - `promoted` records that the rule now lives somewhere enforced (a test, a runner check or a skill line); you make that change in a normal PR.
 

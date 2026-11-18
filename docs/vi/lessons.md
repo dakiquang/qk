@@ -28,7 +28,7 @@ Một đề xuất cần:
 
 - `rule`: một dòng, tối đa 300 ký tự, nói agent phải làm gì. Viết thói quen chung, đừng viết đáp án của eval case, nếu không lần đo chỉ chứng minh agent biết chép gợi ý.
 - `scope`: 1–3 mục, ít nhất một trong `stage:review`, `stage:impl`, `stage:plan`; thêm `repo:TÊN` để giới hạn trong một repo.
-- `evidence`: ít nhất hai ID `eval` hoặc `finding` khác nhau đã có trong sổ, nơi lỗi xảy ra.
+- `evidence`: ít nhất hai ID `eval` hoặc `finding` khác nhau đã có trong sổ, nơi lỗi xảy ra; ít nhất một ID phải là eval của `case` đã trượt một tiêu chí khác `clean`, vì lần đo lấy các tiêu chí đó làm đích.
 - `case`: một thư mục có sẵn trong `evals/cases/` tái hiện lỗi.
 
 ## Lần đo quyết định thế nào
@@ -37,6 +37,7 @@ Một đề xuất cần:
 
 Lesson chỉ được coi là có ích khi:
 
+- mọi lần chạy đều `clean` (agent có thể đã đọc bộ chấm thì lần đo không dùng được);
 - cả 2 lần có lesson đều đạt mọi tiêu chí đích;
 - ít nhất 1 lần không có lesson trượt một tiêu chí đích;
 - không case đối chứng nào mất tiêu chí hay vượt luật token (vượt cả 10% lẫn 25.000 token).
@@ -52,7 +53,7 @@ Lesson active vẫn chỉ được nạp khi bạn yêu cầu: `--lessons` thêm
 ## Gỡ hoặc đo lại
 
 - `qk lesson decide ID retired` dừng nạp lesson. Bản ghi không bao giờ bị xoá; lịch sử còn nguyên.
-- Lesson active có lần đo có ích gần nhất quá 60 ngày được gắn nhãn `needs-remeasure` trong `qk lesson list` và bị `--lessons` bỏ qua cho tới khi đo lại.
+- Lesson active có lần đo gần nhất quá 60 ngày, hoặc lần đo đó nói lesson không có ích, được gắn nhãn `needs-remeasure` trong `qk lesson list` và bị `--lessons` bỏ qua cho tới khi có lần đo mới cho thấy có ích. Nếu lần đo mới nói không có ích, hãy retire lesson đó.
 - Lesson có eval case đã bị xoá thì bị bỏ qua.
 - `promoted` ghi nhận quy tắc nay đã nằm ở chỗ được ép buộc (test, kiểm tra trong runner hay một dòng skill); bạn làm thay đổi đó trong một PR bình thường.
 

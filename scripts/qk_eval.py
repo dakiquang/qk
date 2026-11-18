@@ -355,11 +355,7 @@ def measure_lesson(lesson_id, spec, timeout):
     stage = lesson_stage(case)
     if f"stage:{stage}" not in state["scope"]:
         return stop(f"case {case['name']} runs the {stage} stage, outside the lesson's scope")
-    by_id = {record["id"]: record for record in records}
-    targets = sorted({criterion.get("name") for item in state["evidence"]
-                      if by_id[item]["kind"] == "eval" and by_id[item]["data"].get("case") == case["name"]
-                      for criterion in by_id[item]["data"].get("criteria", [])
-                      if criterion.get("passed") is False and criterion.get("name") != "clean"})
+    targets = qk_ledger.lesson_targets(records, state["evidence"], case["name"])
     if not targets:
         return stop(f"the lesson's evidence has no failed criterion on {case['name']}")
     lesson = [(lesson_id, state["rule"])]
@@ -378,6 +374,8 @@ def measure_lesson(lesson_id, spec, timeout):
         ids[label].append(record["id"])
         if result["error"]:
             reasons.append(f"{target['name']} {name}: agent error")
+        if any(item["name"] == "clean" and not item["passed"] for item in result["criteria"]):
+            reasons.append(f"{target['name']} {name}: not clean, the agent may have read the graders")
         return result
 
     try:

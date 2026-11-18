@@ -35,6 +35,8 @@ def read_worker(directory, started, output):
         output.put(("ERROR", repr(error)))
 
 
+FAILED_EVAL = {"case": "csv-export", "criteria": [{"name": "b", "passed": False}]}
+
 class LedgerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -425,7 +427,7 @@ class LedgerTests(unittest.TestCase):
                 "error": error, "final": "PRIVATE FINAL OUTPUT"}
 
     def lesson_data(self):
-        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        evidence = [ledger.append(kind, FAILED_EVAL if kind == "eval" else {})["id"] for kind in ("eval", "finding")]
         return {"status": "proposed", "class": "missing validation",
                 "rule": "Validate external input before using it.",
                 "scope": ["stage:review", "repo:example-project"],

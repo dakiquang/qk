@@ -31,6 +31,8 @@ def planned(text=PLAN):
     return f"<<<QK-PLAN\n{text}QK-PLAN>>>\n" + result()
 
 
+FAILED_EVAL = {"case": "csv-export", "criteria": [{"name": "b", "passed": False}]}
+
 class Agent:
     """Scripted fake runtime: each stage name maps to a behaviour."""
 
@@ -451,7 +453,7 @@ Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the
     @staticmethod
     def active_lesson(scope, rule):
         ledger = qk_run.qk_ledger
-        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        evidence = [ledger.append(kind, FAILED_EVAL if kind == "eval" else {})["id"] for kind in ("eval", "finding")]
         proposal = ledger.append("lesson", {"status": "proposed", "class": "test", "rule": rule, "scope": scope,
                                             "evidence": evidence, "case": "csv-export", "measured": []},
                                  source="model")

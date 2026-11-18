@@ -66,6 +66,8 @@ def graded_detail(case, workdir, test, name):
     return next(c["detail"] for c in json.loads(out) if c["name"] == name)
 
 
+FAILED_EVAL = {"case": "csv-export", "criteria": [{"name": "b", "passed": False}]}
+
 class CaseSanityTest(unittest.TestCase):
     """The shipped cases: their repositories pass, and their graders do not pass an untouched copy."""
 
@@ -697,7 +699,7 @@ class HarnessTest(unittest.TestCase):
     @staticmethod
     def active_lesson(scope, rule):
         ledger = qk_ledger
-        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        evidence = [ledger.append(kind, FAILED_EVAL if kind == "eval" else {})["id"] for kind in ("eval", "finding")]
         proposal = ledger.append("lesson", {"status": "proposed", "class": "test", "rule": rule, "scope": scope,
                                             "evidence": evidence, "case": "csv-export", "measured": []},
                                  source="model")
@@ -776,6 +778,17 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(state["measured"][0]["reasons"], ["without the lesson every target criterion passed"])
         with self.assertRaisesRegex(ValueError, "must show that it helps"):
             qk_ledger.append("lesson", {"lesson_id": lesson_id, "status": "active"}, source="user")
+
+    def test_measure_never_counts_runs_that_may_have_read_the_graders(self):
+        self.case("csv-export", skill=qk_eval.REVIEW)
+        lesson_id = self.proposed_lesson()
+        with mock.patch.object(qk_eval, "touched_case_files", return_value=["evals/cases/csv-export/check.py"]):
+            code, _, _, state = self.measure(
+                lesson_id, lambda cwd, prompt: ("<a><b>" if "Check where each value" in prompt else "<a>", None))
+        self.assertEqual(code, 0)
+        measurement, = state["measured"]
+        self.assertFalse(measurement["helps"])
+        self.assertEqual(len([r for r in measurement["reasons"] if "not clean" in r]), 4)
 
     def test_measure_refuses_unknown_or_out_of_scope_lessons_without_running(self):
         self.case("csv-export", skill="qk-plan", write=False)
