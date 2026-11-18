@@ -14,6 +14,7 @@ All notable changes to this project are documented here. The format follows
   about 800 tokens) and records which were used; prompts are unchanged without it.
 - `qk lesson measure ID --runtime SPEC`: runs the lesson's case with and without it plus same-stage
   controls and records the result; activation needs a helping measurement under 60 days old.
+- Lessons guide (`docs/{en,vi}/lessons.md`) and the first lesson's measurement in the test evidence.
 - Local append-only evidence ledger and `scripts/qk.py`: `show`, aggregate `stats`,
   model `log claim`, read-only PR `sync` with run backfill, and an offline `brief`
   that marks evidence stale when a PR head changes.

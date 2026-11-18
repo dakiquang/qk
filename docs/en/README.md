@@ -16,6 +16,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 - [qk-run runner](runner.md): opt-in automation from a request to a ready-for-review PR, with one plan-approval gate.
 - [qk-eval](evals.md): code-graded before/after checks when you change a skill or the runner's review step.
 - [Evidence ledger and CLI](ledger.md): local evidence, model claims and a read-only PR decision brief.
+- [Lessons](lessons.md): measured rules about repeated AI mistakes, used only with `--lessons`.
 - [Preference hook](preference-hook.md): an opt-in hook that turns "from now on…" requests into proposals you approve.
 - [Lean setup](lean-setup.md): measure and trim what your runtimes load into every session, alongside other kits.
 
