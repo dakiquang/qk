@@ -340,11 +340,47 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(finding["data"]["verdict"], "reported")
         self.assertNotIn("repo_path", finding["data"])
         encoded = json.dumps(records)
-        for sensitive in ("PRIVATE", "private claim", "claim\":", "fix\":", "tail\":"):
+        self.assertEqual(record["data"]["task"], "PRIVATE TASK")
+        for sensitive in ("PRIVATE PROMPT", "PRIVATE CODE", "PRIVATE VERIFY", "PRIVATE COMMAND",
+                          "PRIVATE USAGE", "PRIVATE FINDING", "PRIVATE FIX", "private claim",
+                          "claim\":", "fix\":", "tail\":"):
             self.assertNotIn(sensitive, encoded)
         self.assertNotIn("python3 -m unittest", encoded)
         self.assertEqual(state["verify_results"][1]["cmd"], "PRIVATE COMMAND")
         self.assertNotIn("raw", record["data"]["usage"]["reviewing"][0])
+
+    def test_run_records_scope_task_and_blocked_stage_without_reason(self):
+        state = self.run_state()
+        state.update(stage="blocked", blocked_at="reviewing", reason="  cause\n" + "word " * 80,
+                     task="  task\n" + "word " * 40,
+                     diff_stat={"files": ["src/main.py", "image.png"], "added": 4, "deleted": 2})
+        data = ledger.record_run(state, self.root / "run")["data"]
+        self.assertEqual(data["changed_files"], ["src/main.py", "image.png"])
+        self.assertEqual((data["lines_added"], data["lines_deleted"]), (4, 2))
+        self.assertEqual(data["blocked_at"], "reviewing")
+        self.assertNotIn("reason", data)
+        self.assertNotIn("cause", json.dumps(data))
+        self.assertEqual(data["task"], " ".join(state["task"].split())[:120])
+        state["stage"] = "done"
+        data = ledger.record_run(state, self.root / "run")["data"]
+        self.assertNotIn("blocked_at", data)
+        self.assertNotIn("reason", data)
+        minimal = ledger.record_run({"id": "minimal", "stage": "blocked"}, self.root / "minimal")["data"]
+        self.assertEqual(minimal["task"], "")
+        for key in ("changed_files", "lines_added", "lines_deleted"):
+            self.assertNotIn(key, minimal)
+
+    def test_run_rejects_wrong_scope_task_and_blocked_types(self):
+        bad = [{"task": None}, {"task": 4}, {"blocked_at": []},
+               {"diff_stat": None}, {"diff_stat": []}]
+        for key, value in (("files", "a.py"), ("files", [1]), ("added", True),
+                           ("deleted", "1"), ("added", -1), ("deleted", None)):
+            stat = {"files": ["a.py"], "added": 1, "deleted": 0}
+            stat[key] = value
+            bad.append({"diff_stat": stat})
+        for fields in bad:
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                ledger.record_run(dict(id="bad", stage="blocked", **fields), self.root / "bad")
 
     def test_run_rejects_active_stages_and_projects_minimal_aborted_state(self):
         for stage in ("planning", "implementing", "reviewing", "awaiting_approval"):

@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `qk brief` includes blocked runs and orders decision cards by fixed, printed risk rules using recorded diff scope.
 - `qk-run approve ID --later` queues an approved plan without running it, and `qk-run drain
   [--until HH:MM] [--notify]` runs queued runs one at a time; a run that crashes is blocked and the
   queue continues.

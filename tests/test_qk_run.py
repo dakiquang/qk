@@ -155,6 +155,12 @@ class RunnerTest(unittest.TestCase):
         state = self.latest()
         self.assertEqual(state["stage"], "done")
         self.assertEqual(state["pr_url"], "https://github.com/example/repo/pull/7")
+        self.assertEqual(state["diff_stat"], {"files": ["greeting.txt"], "added": 1, "deleted": 0})
+        import qk_ledger
+        data = [record["data"] for record in qk_ledger.records() if record["kind"] == "run"][-1]
+        self.assertEqual(data["changed_files"], ["greeting.txt"])
+        self.assertEqual((data["lines_added"], data["lines_deleted"]), (1, 0))
+        self.assertEqual(data["task"], "add a greeting file")
         self.assertIn(state["branch"], self.remote_branches())
         log = run(Path(state["worktree"]), "git", "log", "-1", "--format=%B")
         self.assertEqual(log.strip(), "Add greeting")
@@ -163,6 +169,48 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(len(creates), 1)
         self.assertNotIn("--draft", creates[0])
         self.assertEqual(creates[0][creates[0].index("--title") + 1], "Add greeting")
+
+    def test_diff_stat_counts_binary_and_uses_latest_review(self):
+        def cook(cwd, state_dir):
+            (cwd / "greeting.txt").write_text("hello\n")
+            (cwd / "image.bin").write_bytes(b"\0binary")
+            (cwd / "README").write_text("new\nlines\n")
+            return result()
+
+        def fix(cwd, state_dir):
+            (cwd / "greeting.txt").write_text("hello\nfixed\n")
+            return result()
+
+        reviews = iter([
+            result(findings=[{"severity": "important", "file": "greeting.txt", "line": 1,
+                              "claim": "needs fix", "fix": "fix it"}]),
+            result(),
+        ])
+        agent = Agent(cook=cook, fix=fix, review=lambda cwd, state_dir: next(reviews))
+        state = self.start(agent)
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertEqual(state["diff_stat"], {
+            "files": ["README", "greeting.txt", "image.bin"], "added": 4, "deleted": 1})
+        self.assertEqual([call[0] for call in agent.calls].count("review"), 2)
+
+    def test_diff_stat_keeps_both_sides_of_a_rename(self):
+        (self.seed / "auth.py").write_text("token = 1\n")
+        run(self.seed, "git", "add", "auth.py")
+        run(self.seed, "git", "commit", "-q", "-m", "auth")
+        run(self.seed, "git", "push", "-q", "origin", "HEAD:main")
+        run(self.repo, "git", "pull", "-q", "origin", "main")
+
+        def cook(cwd, state_dir):
+            run(cwd, "git", "mv", "auth.py", "helper.py")
+            return result()
+
+        state = self.start(Agent(cook=cook))
+        self.cli("approve", state["id"])
+        state = self.latest()
+        self.assertEqual(state["stage"], "done")
+        self.assertTrue({"auth.py", "helper.py"} <= set(state["diff_stat"]["files"]))
 
     def test_approve_later_freezes_plan_without_running_agent(self):
         import hashlib

@@ -838,6 +838,17 @@ def reviewing(state):
     diff_file = run_dir(state["id"]) / "review.diff"
     git(worktree, "add", "-A")
     diff_file.write_text(git(worktree, "diff", "--cached", state["base_sha"]), encoding="utf-8")
+    # --no-renames lists both sides of a rename, so a file moved out of a sensitive path is still seen.
+    numstat = git(worktree, "diff", "--cached", "--numstat", "-z", "--no-renames", state["base_sha"])
+    files, added, deleted = [], 0, 0
+    for entry in numstat.split("\0"):
+        if not entry:
+            continue
+        plus, minus, path = entry.split("\t", 2)
+        files.append(path)
+        added += int(plus) if plus != "-" else 0
+        deleted += int(minus) if minus != "-" else 0
+    state["diff_stat"] = {"files": files, "added": added, "deleted": deleted}
     git(worktree, "reset", "-q")
     prompt = review_prompt(worktree, plan, diff_file, stage_lessons(state, "review"))
     _, result = run_agent(state, "review", prompt)
