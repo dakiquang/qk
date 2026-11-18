@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """qk-run: drive one task from request to an opened pull request.
 
-Stages: preflight -> planning -> awaiting_approval (human gate) -> implementing ->
+Stages: preflight -> planning -> awaiting_approval (human gate) -> [queued] -> implementing ->
 verifying -> reviewing -> [fixing -> verifying -> reviewing, at most once] ->
 publishing -> done. Any failed gate ends in `blocked` with a reason; `resume`
 retries the blocked stage.
@@ -10,7 +10,9 @@ Agents only edit files in an isolated worktree. Only this runner commits, pushes
 and opens the PR. It never merges, releases, deletes branches or switches models.
 """
 import argparse
+import fcntl
 import json
+import math
 import os
 import queue
 import re
@@ -21,6 +23,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import qk_ledger
@@ -1045,9 +1048,8 @@ def cmd_start(args):
     return advance(state)
 
 
-def cmd_approve(args):
+def approve_plan(state):
     import hashlib
-    state = load(args.id)
     if state["stage"] != "awaiting_approval":
         sys.exit(f"qk-run: run is {state['stage']}, not awaiting_approval")
     text = (run_dir(state["id"]) / "plan.md").read_text(encoding="utf-8")
@@ -1055,11 +1057,98 @@ def cmd_approve(args):
     if not commands:
         sys.exit("qk-run: plan.md has no non-empty ```qk-verify``` block; edit it or use revise")
     (run_dir(state["id"]) / "approved-plan.md").write_text(text, encoding="utf-8")
-    state.update(stage="implementing", verify=commands,
+    state.update(verify=commands,
                  approved_plan_sha=hashlib.sha256(text.encode("utf-8")).hexdigest())
+    return commands
+
+
+def cmd_approve(args):
+    state = load(args.id)
+    commands = approve_plan(state)
+    state["stage"] = "queued" if args.later else "implementing"
+    if args.later:
+        state["queued_at"] = time.time()
     save(state)
     print("Approved. Verification commands that will run:\n" + "\n".join(f"  $ {c}" for c in commands))
+    if args.later:
+        print(f"Run {state['id']} is queued for qk-run drain.")
+        return 0
     return advance(state)
+
+
+def next_queued():
+    """Return the next queued state and the number queued, scanning afresh each time."""
+    queued = []
+    for path in state_root().glob("*/state.json"):
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+            if (isinstance(state, dict) and state.get("stage") == "queued"
+                    and state.get("id") == path.parent.name
+                    and isinstance(state.get("queued_at"), (int, float))
+                    and math.isfinite(state["queued_at"])):
+                queued.append(state)
+        except (OSError, ValueError):
+            pass
+    return (min(queued, key=lambda state: (state["queued_at"], state["id"])) if queued else None, len(queued))
+
+
+def drain_deadline(until, now):
+    """The next local HH:MM strictly after now."""
+    if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", until):
+        raise ValueError("qk-run: --until must be HH:MM (00:00 through 23:59)")
+    hour, minute = map(int, until.split(":"))
+    deadline = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return deadline if deadline > now else deadline + timedelta(days=1)
+
+
+def notify(message):
+    escaped = message.replace("\\", "\\\\").replace('"', '\\"')
+    try:
+        subprocess.run(["osascript", "-e", f'display notification "{escaped}" with title "qk-run"'],
+                       check=True, capture_output=True, text=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        print(f"qk-run: notification warning: {error}", file=sys.stderr)
+
+
+def cmd_drain(args):
+    try:
+        deadline = drain_deadline(args.until, datetime.now()) if args.until is not None else None
+    except ValueError as error:
+        sys.exit(str(error))
+    state_root().mkdir(parents=True, exist_ok=True)
+    with (state_root() / "drain.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            sys.exit("qk-run: another drain is already running (drain.lock is held)")
+        done = blocked = 0
+        while True:
+            state, left = next_queued()
+            if state is None:
+                if done == blocked == 0:
+                    print("Nothing is queued.")
+                break
+            if deadline is not None and datetime.now() >= deadline:
+                print(f"Deadline reached; {left} queued runs left.")
+                break
+            state["stage"] = "implementing"
+            save(state)
+            try:
+                advance(state)
+            except Exception as error:  # one broken run must not stop the rest of the queue
+                block(state, state["stage"], f"{type(error).__name__}: {error}")
+            if state["stage"] == "done":
+                done += 1
+            elif state["stage"] == "blocked":
+                blocked += 1
+                if args.notify:
+                    reason = " ".join(state.get("reason", "").split())[:DISPLAY_LIMIT]
+                    notify(f"{state['id']} blocked: {reason}")
+        summary = f"Drain: {done} done, {blocked} blocked, {left} left queued."
+        print(summary)
+        if args.notify:
+            notify(summary)
+        return 1 if blocked else 0
 
 
 def cmd_revise(args):
@@ -1127,7 +1216,13 @@ def main(argv=None):
     for name, func in (("approve", cmd_approve), ("resume", cmd_resume), ("status", cmd_status), ("abort", cmd_abort)):
         command = sub.add_parser(name)
         command.add_argument("id")
+        if name == "approve":
+            command.add_argument("--later", action="store_true", help="queue the approved run for drain")
         command.set_defaults(func=func)
+    drain = sub.add_parser("drain", help="run queued approvals one at a time")
+    drain.add_argument("--until", metavar="HH:MM", help="stop starting runs at the next local HH:MM")
+    drain.add_argument("--notify", action="store_true", help="send macOS notifications")
+    drain.set_defaults(func=cmd_drain)
     revise = sub.add_parser("revise")
     revise.add_argument("id")
     revise.add_argument("feedback")

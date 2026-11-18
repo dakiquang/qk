@@ -15,6 +15,12 @@ python3 scripts/qk_run.py resume <id>             # chạy lại bước bị ch
 python3 scripts/qk_run.py abort <id>
 ```
 
+Duyệt plan vào buổi tối, rồi chạy lần lượt qua đêm (trên macOS, dùng `caffeinate -i` để máy không ngủ):
+```bash
+python3 scripts/qk_run.py approve <id> --later
+caffeinate -i python3 scripts/qk_run.py drain --until 07:00 --notify
+```
+
 [CLI chung](ledger.md) có cùng lệnh qua `qk run …`. `start --task-kind LABEL` thêm nhãn lịch sử tuỳ chọn, không trao quyền. Run đã dừng đóng góp tóm tắt vào sổ cục bộ; lỗi ghi sổ chỉ cảnh báo, không đổi kết quả run.
 
 Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:anthropic/claude-opus-5-5`, review `codex:` (model mặc định của Codex). Đổi bằng `--impl runtime:model` và `--review runtime:model`; runtime gồm `omp`, `claude`, `codex`. Người triển khai và người review phải khác họ model; spec omp cần model ghi rõ, nhận ra được họ (ví dụ `omp:anthropic/claude-opus-5-5`), nếu không `start` từ chối. Đặt `QK_RUN_OMP_PROFILE` để chạy omp với profile riêng. `--timeout` giới hạn mỗi lượt agent và mỗi lệnh kiểm (mặc định 1800 giây). `--read-only-mcp NAME` (lặp được, chỉ Claude và omp) cho bước chỉ đọc gọi MCP server `NAME`; xem mục [Cô lập](#cô-lập). `start` từ chối cờ này khi Codex chạy bước lập plan (`--impl`) hoặc review (`--review`).
@@ -60,7 +66,7 @@ Chốt chặn bước chỉ đọc: ở bước chỉ đọc, lời gọi công 
 - Worktree không phải sandbox. Agent triển khai chạy ở chế độ ghi của runtime (`claude --permission-mode acceptEdits` cho phép Bash, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), nên vẫn có thể chạm file và mạng ngoài repo.
 - Thành công được định nghĩa bằng lệnh `qk-verify` của plan và một lần review chéo model; lệnh kiểm yếu thì bằng chứng yếu.
 - Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Với repo theo Conventional Commits, type lấy từ từ đầu tiên của tiêu đề plan (`fix`, `docs`, `test`, `refactor` và các biến thể), còn lại mặc định là `feat`; tiêu đề plan đã đúng quy ước thì giữ nguyên; tiền tố `<từ>: ` không theo quy ước (tên dự án, cả tiền tố ticket như `ABC-123: ` hay `Fix: ` viết hoa) bị bỏ trước khi thêm type; commit merge không được tính. Tiêu đề dài hơn 72 ký tự được cắt ở ranh giới từ. Các quy ước khác (scope, quy tắc viết hoa khác) không được nhận diện, nên hãy sửa tiêu đề plan trước khi `approve` hoặc chỉnh tiêu đề khi merge.
-- Mỗi lần chạy một việc; không có queue, daemon hay chạy song song.
+- Mỗi run một việc. `drain` chạy lần lượt các run trong hàng đợi; không có daemon hay chạy song song.
 - MCP của omp chỉ bị dừng sau lần gọi đầu tiên ở bước chỉ đọc: lần gọi đó đã chạy xong khi chốt chặn dừng agent.
 - `--read-only-mcp` khớp theo tiền tố, nên `aws` cũng cho qua `aws-mcp`; hãy ghi đủ tên server.
 - Trong home riêng của Codex, công cụ mà Codex chạy không thấy `~/.gitconfig`, đăng nhập `gh` hay cấu hình khác trong thư mục home của bạn.
