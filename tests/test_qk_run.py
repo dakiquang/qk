@@ -723,6 +723,7 @@ Report only verified problems introduced by this diff. Put them in "findings" as
 {"severity": "blocker|important|nit", "class": "...", "file": "<repo-relative path>", "line": N, "claim": "...",
 "fix": "..."}.
 Use status "done" when the review itself completed, even if there are findings.
+This is one non-interactive turn that ends with your reply: run every command in the foreground and wait for it to finish; do not start background jobs or say you will report later.
 End your reply with exactly one fenced block:
 ```qk-result
 {"status": "done|blocked|needs_input", "summary": "...", "files": [], "evidence": [], "reason": "", "findings": []}
