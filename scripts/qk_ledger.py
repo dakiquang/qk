@@ -577,6 +577,17 @@ def record_run(state: dict, directory: object) -> dict:
         "fix_rounds": _count(state.get("fix_rounds", 0), "fix_rounds"),
         "remaining_count": len(findings), "addressed_count": len(addressed),
     }
+    data["task"] = " ".join(_text(state.get("task", ""), "task").split())[:120]
+    if "diff_stat" in state:
+        stat = state["diff_stat"]
+        if not isinstance(stat, dict) or not isinstance(stat.get("files"), list):
+            raise ValueError("diff_stat requires a files list")
+        data["changed_files"] = [_text(path, "changed file") for path in stat["files"]]
+        data["lines_added"] = _count(stat.get("added"), "lines_added")
+        data["lines_deleted"] = _count(stat.get("deleted"), "lines_deleted")
+    if state["stage"] == "blocked":
+        data["blocked_at"] = _text(state.get("blocked_at", ""), "blocked_at")
+        data["reason"] = " ".join(_text(state.get("reason", ""), "reason").split())[:240]
     projected = _findings(state, data["fix_rounds"])
     snapshot = _digest({"repo": repo, "task_kind": task_kind,
                         "data": data, "findings": projected})

@@ -223,6 +223,86 @@ class CliTests(unittest.TestCase):
                 self.assertIn("1/1 done/total", brief)
                 _, stats, _ = self.cli("stats", "--by", "task_kind")
                 self.assertEqual(self.counts(stats), {"total": 1, "current": 1})
+    def test_brief_risk_rules(self):
+        cases = [
+            ({"status": "blocked", "blocked_at": "reviewing", "reason": "needs help", "pr_url": ""},
+             {}, "high — blocked at reviewing: needs help"),
+            ({"remaining_count": 2}, {}, "high — 2 findings remain"),
+            ({"verify_results": [{"exit": 1}, {"exit": 0}]}, {}, "high — verify failed (1 nonzero)"),
+            *[({"changed_files": [path]}, {}, "high — sensitive file " + path) for path in (
+                ".github/workflows/ci.yml", "nested/PNPM-lock.yaml", "db/migrations/001.sql", "src/Author.py",
+                "requirements-dev.txt", "infra/main.TF", "custom.lock", "Gemfile", "src/policy.py")],
+            ({"changed_files": ["package.json", "go.mod"]}, {}, "high — sensitive file package.json +1 more"),
+            ({"fix_rounds": 1}, {}, "medium — fix round used"),
+            ({"lines_added": 301, "lines_deleted": 111}, {}, "medium — 412 lines changed"),
+            ({"changed_files": ["file%d.py" % n for n in range(14)]}, {}, "medium — 14 files changed"),
+            ({}, {"head_sha": OTHER_SHA}, "medium — PR head differs from recorded commit"),
+            ({}, None, "medium — never synced"),
+            ({"changed_files": None}, {}, "medium — scope unknown"),
+            ({"lines_added": 150, "lines_deleted": 150,
+              "changed_files": ["src/file%d.py" % n for n in range(10)]}, {}, "low — no rule matched"),
+        ]
+        for index, (overrides, snapshot, expected) in enumerate(cases):
+            with self.subTest(expected=expected):
+                values = {"changed_files": ["src/main.py"], "lines_added": 1, "lines_deleted": 0,
+                          "task": "Make a change", "fix_rounds": 0}
+                values.update(overrides)
+                if values.get("changed_files") is None:
+                    del values["changed_files"]
+                run = self.run_record("risk%d" % index, repo="risk%d" % index, **values)
+                if snapshot is not None:
+                    self.decision(run, **snapshot)
+                with mock.patch.object(subprocess, "run", side_effect=AssertionError("brief must be offline")):
+                    status, output, errors = self.cli("brief", "--repo", run["repo"])
+                self.assertEqual((status, errors), (0, ""))
+                self.assertIn("RISK: " + expected, output.splitlines()[0])
+                self.assertIn("scope unknown" if "changed_files" not in values else
+                              "%d files, +%d/-%d" % (len(values["changed_files"]), values["lines_added"], values["lines_deleted"]), output)
+                self.assertEqual(len(output.splitlines()), 4 if values.get("status") == "blocked" else 6)
+                self.assertTrue(all(len(line) <= (320 if line.startswith("  Evidence:") else 240)
+                                    for line in output.splitlines()))
+                if values.get("status") == "blocked":
+                    self.assertIn("(no PR)", output)
+                    self.assertIn("qk run resume risk0", output)
+                    self.assertIn("qk run abort risk0", output)
+                elif snapshot is None:
+                    self.assertIn("Make a change", output)
+
+    def test_brief_long_title_keeps_risk_visible(self):
+        run = self.run_record(changed_files=["package.json"], lines_added=1, lines_deleted=0)
+        self.decision(run, title="A detailed change " * 30)
+        _, output, _ = self.cli("brief")
+        header = output.splitlines()[0]
+        self.assertLessEqual(len(header), 240)
+        self.assertIn(URL, header)
+        self.assertIn("RISK: high — sensitive file package.json", header)
+        self.assertIn("full: qk show --id " + run["id"], header)
+
+    def test_brief_orders_cards_and_filters_blocked_runs(self):
+        low = self.run_record("low", changed_files=[], lines_added=0, lines_deleted=0)
+        self.decision(low)
+        self.run_record("medium")
+        high = self.run_record("high", remaining_count=2)
+        self.decision(high)
+        self.run_record("blocked", status="blocked", pr_url="", task="Repair run")
+        self.run_record("other-blocked", repo="other", status="blocked", pr_url="")
+        self.run_record("aborted", status="aborted", pr_url=URL + "99")
+        self.run_record("no-pr", pr_url="")
+        _, output, _ = self.cli("brief", "--repo", "project")
+        headers = [line for line in output.splitlines() if line.startswith("#")]
+        self.assertEqual(len(headers), 4)
+        self.assertIn("#1 project: Repair run (no PR)  RISK: high — blocked at unknown: reason unknown", headers[0])
+        self.assertIn("RISK: high — 2 findings remain", headers[1])
+        self.assertIn("RISK: medium — never synced", headers[2])
+        self.assertIn("RISK: low — no rule matched", headers[3])
+        for index, header in enumerate(headers, 1):
+            self.assertTrue(header.startswith("#%d " % index))
+        self.assertNotIn("other-blocked", output)
+        self.assertNotIn("status=aborted", output)
+        self.assertNotIn(URL + "99", output)
+        _, output, _ = self.cli("brief", "--repo", "missing")
+        self.assertEqual(output.strip(), "No open, unknown or blocked runs recorded.")
+
     def test_brief_excludes_merged_and_closed_but_retains_unsynced(self):
         merged = self.run_record("merged", pr_url=URL + "1")
         closed = self.run_record("closed", pr_url=URL + "2")
@@ -387,7 +467,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(self.counts(output), {"total": 3, "run": 2, "decision": 1})
         _, brief, _ = self.cli("brief")
         self.assertEqual(brief.count("#1 project:"), 1)
-        self.assertNotIn("#2", brief)
+        self.assertEqual(brief.count("#2 project:"), 1)
+        self.assertNotIn("#3", brief)
+        self.assertEqual(brief.count("  Done: run one "), 1)
+        self.assertEqual(brief.count("  Done: run two "), 1)
         self.assertIn("feature 1/2 done/total", brief)
         self.assertIn("status=done", brief)
 

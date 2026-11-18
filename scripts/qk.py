@@ -471,14 +471,57 @@ def _verify_summary(verifies):
         len(verifies), passed, failed, len(verifies) - passed - failed)
 
 
+# Sensitive repo-relative paths, matched case-insensitively.
+BRIEF_SENSITIVE_FILES = re.compile(
+    r"^\.github/|(?:^|/)(?:package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|"
+    r"composer\.json|composer\.lock|pyproject\.toml|poetry\.lock|pipfile|pipfile\.lock|"
+    r"go\.mod|go\.sum|cargo\.toml|cargo\.lock|gemfile|gemfile\.lock|dockerfile|"
+    r"requirements[^/]*\.txt|[^/]*\.lock)$|\.tf$|(?:^|/)migrations(?:/|$)|auth|secret|permission|policy",
+    re.IGNORECASE)
+
+
+def _brief_risk(data, snapshot):
+    if data.get("status") == "blocked":
+        return "high", "blocked at %s: %s" % (
+            data.get("blocked_at") or "unknown", data.get("reason") or "reason unknown")
+    remaining = data.get("remaining_count") or 0
+    if remaining > 0:
+        return "high", "%d findings remain" % remaining
+    failed = sum(isinstance(item, dict) and type(item.get("exit")) is int and item["exit"] != 0
+                 for item in data.get("verify_results") or [])
+    if failed:
+        return "high", "verify failed (%d nonzero)" % failed
+    files = data.get("changed_files")
+    sensitive = [path for path in files or [] if BRIEF_SENSITIVE_FILES.search(path)]
+    if sensitive:
+        return "high", "sensitive file " + sensitive[0] + (
+            " +%d more" % (len(sensitive) - 1) if len(sensitive) > 1 else "")
+    if data.get("fix_rounds", 0) > 0:
+        return "medium", "fix round used"
+    if files is not None:
+        lines = (data.get("lines_added") or 0) + (data.get("lines_deleted") or 0)
+        if lines > 300:
+            return "medium", "%d lines changed" % lines
+        if len(files) > 10:
+            return "medium", "%d files changed" % len(files)
+    if data.get("commit") and snapshot.get("head_sha") and data["commit"] != snapshot["head_sha"]:
+        return "medium", "PR head differs from recorded commit"
+    if not snapshot:
+        return "medium", "never synced"
+    if files is None:
+        return "medium", "scope unknown"
+    return "low", "no rule matched"
+
+
 def _brief(args, records):
     runs = _latest_runs(records)
     decisions = [record for record in records if record.get("kind") == "decision"]
-    shown = 0
+    cards = []
     for run in runs:
         data = _data(run)
         url = data.get("pr_url")
-        if not url or (args.repo and run.get("repo") != args.repo):
+        if (data.get("status") == "aborted" or (not url and data.get("status") != "blocked")
+                or (args.repo and run.get("repo") != args.repo)):
             continue
         matched = [decision for decision in decisions
                    if _data(decision).get("pr_url") == url
@@ -488,18 +531,41 @@ def _brief(args, records):
                                   and _data(decision).get("run_id") == data.get("run_id"))
                                  or run["id"] in decision.get("refs", []))))]
         snapshot = _data(matched[-1]) if matched else {}
-        if snapshot.get("state") in {"MERGED", "CLOSED"}:
+        if data.get("status") != "blocked" and snapshot.get("state") in {"MERGED", "CLOSED"}:
             continue
-        shown += 1
+        level, rule = _brief_risk(data, snapshot)
+        cards.append((run, snapshot, level, rule))
+    cards.sort(key=lambda card: ({"high": 0, "medium": 1, "low": 2}[card[2]],
+                                 _data(card[0]).get("status") != "blocked"))
+    for shown, (run, snapshot, level, rule) in enumerate(cards, 1):
+        data = _data(run)
+        blocked = data.get("status") == "blocked"
         status = snapshot.get("state", "UNKNOWN")
-        title = snapshot.get("title") or "PR title unknown"
-        _brief_line("#%d %s: %s (%s)" % (shown, run.get("repo", ""), title, url),
-                    "--id " + run["id"])
-        _brief_line("  Done: run %s status=%s; impl=%s review=%s; PR=%s; synced=%s" % (
-            _short_text(data.get("run_id", run["id"]), 24), data.get("status", "unknown"),
+        title = snapshot.get("title") or data.get("task") or "PR title unknown"
+        prefix = "#%d %s: " % (shown, run.get("repo", ""))
+        tail = " (%s)  RISK: %s — %s" % (
+            data.get("pr_url") or "no PR", level, _short_text(rule, 100))
+        title_limit = max(3, 240 - len(_text(prefix + tail)) - len("; full: qk show --id " + run["id"]))
+        _brief_line(prefix + _short_text(title, title_limit) + tail, "--id " + run["id"])
+        scope = "scope unknown" if "changed_files" not in data else "%d files, +%s/-%s" % (
+            len(data["changed_files"]), data.get("lines_added", 0), data.get("lines_deleted", 0))
+        done_line = "  Done: run %s status=%s; %s; impl=%s review=%s" % (
+            _short_text(data.get("run_id", run["id"]), 24), data.get("status", "unknown"), scope,
             _short_text(data.get("impl") or "unknown", 24),
-            _short_text(data.get("review") or "unknown", 24), status,
-            snapshot.get("checked_at") or "never / unknown"), "--id " + run["id"])
+            _short_text(data.get("review") or "unknown", 24))
+        if not blocked:
+            done_line += "; PR=%s; synced=%s" % (status, snapshot.get("checked_at") or "never / unknown")
+        _brief_line(done_line, "--id " + run["id"])
+        kind = run.get("task_kind") or "unclassified"
+        history = [item for item in runs if (item.get("task_kind") or "unclassified") == kind
+                   and item.get("repo") == run.get("repo")]
+        done = sum(_data(item).get("status") == "done" for item in history)
+        history_line = "  History: %s %d/%d done/total (informational)" % (kind, done, len(history))
+        if blocked:
+            _brief_line("  Next: qk run resume %s after fixing the cause, or qk run abort %s" % (
+                data.get("run_id", run["id"]), data.get("run_id", run["id"])), "--id " + run["id"])
+            _brief_line(history_line)
+            continue
         commit, head = data.get("commit"), snapshot.get("head_sha")
         if not commit or not head:
             freshness = "UNKNOWN commit comparison / not verified"
@@ -525,14 +591,10 @@ def _brief(args, records):
         _brief_line("  Unchecked: remaining findings=%s; claims (not independent verification): %s" % (
             remaining if remaining is not None else "unknown", claim_text),
             "--kind claim" if claims else "")
-        kind = run.get("task_kind") or "unclassified"
-        history = [item for item in runs if (item.get("task_kind") or "unclassified") == kind
-                   and item.get("repo") == run.get("repo")]
-        done = sum(_data(item).get("status") == "done" for item in history)
-        _brief_line("  History: %s %d/%d done/total (informational)" % (kind, done, len(history)))
-        print("  Decision: human decision required; sync state is a recorded observation, not approval.")
-    if not shown:
-        print("No open or unknown PRs recorded.")
+        _brief_line(history_line)
+        _brief_line("  Decision: human decision required; sync state is a recorded observation, not approval.")
+    if not cards:
+        print("No open, unknown or blocked runs recorded.")
     return 0
 
 
