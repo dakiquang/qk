@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `qk-run approve ID --later` queues an approved plan without running it, and `qk-run drain
+  [--until HH:MM] [--notify]` runs queued runs one at a time; a run that crashes is blocked and the
+  queue continues.
+
 ## [0.8.0] - 2026-11-18
 
 ### Added

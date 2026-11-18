@@ -15,6 +15,12 @@ python3 scripts/qk_run.py resume <id>             # retry a blocked stage, or ve
 python3 scripts/qk_run.py abort <id>
 ```
 
+Queue plans in the evening, then drain them overnight (on macOS, use `caffeinate -i` to prevent sleep):
+```bash
+python3 scripts/qk_run.py approve <id> --later
+caffeinate -i python3 scripts/qk_run.py drain --until 07:00 --notify
+```
+
 The [unified CLI](ledger.md) exposes the same commands as `qk run …`. `start --task-kind LABEL` adds an optional history label; it grants no authority. Stopped runs contribute summaries to the local ledger; a ledger write failure warns without changing the run outcome.
 
 Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:anthropic/claude-opus-5-5`, reviewer `codex:` (Codex's own default model). Override with `--impl runtime:model` and `--review runtime:model`; runtimes are `omp`, `claude`, `codex`. Implementer and reviewer must be different model families; an omp spec needs an explicit model whose family can be recognised (for example `omp:anthropic/claude-opus-5-5`), otherwise `start` refuses it. Set `QK_RUN_OMP_PROFILE` to run omp under a named profile. `--timeout` limits each agent turn and each verify command (default 1800 s). `--read-only-mcp NAME` (repeatable, Claude and omp only) lets read-only stages call the MCP server `NAME`; see [Isolation](#isolation). `start` refuses it when Codex would run planning (`--impl`) or review (`--review`).
@@ -60,7 +66,7 @@ Read-only guard: in a read-only stage, the first tool call whose name contains `
 - A worktree is not a sandbox. Implementing agents run with their runtime's write mode (`claude --permission-mode acceptEdits` with Bash allowed, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), so they can still reach files and network outside the repository.
 - Success is defined by the plan's `qk-verify` commands and one cross-model review; weak commands mean weak evidence.
 - The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. In a repository that follows Conventional Commits, the type comes from the plan title's first word (`fix`, `docs`, `test`, `refactor` and their variants) and otherwise defaults to `feat`; a plan title that is already conventional is kept as written; a non-conventional `<word>: ` prefix (a project name, but also a ticket prefix such as `ABC-123: ` or a capitalised `Fix: `) is dropped before the type is added; merge commits are not counted. Titles longer than 72 characters are cut at a word boundary. Other conventions (scopes, other casing rules) are not detected, so edit the plan title before `approve` or adjust the title when merging.
-- One task per run; no queue, daemon or parallel runs.
+- One task per run. `drain` runs queued runs one at a time and refuses a second `drain`; there is no daemon. It does not stop you from running `approve` without `--later` or `resume` in another terminal meanwhile, which would run two tasks at once.
 - omp MCP is stopped only after its first call in a read-only stage: that call has already run when the guard stops the agent.
 - `--read-only-mcp` matches by prefix, so `aws` also allows `aws-mcp`; use full server names.
 - Under the private Codex home, tools that Codex runs do not see your `~/.gitconfig`, `gh` login or other configuration in your home directory.

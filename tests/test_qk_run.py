@@ -1,4 +1,5 @@
 import contextlib
+import fcntl
 import io
 import json
 import os
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
@@ -161,6 +163,247 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(len(creates), 1)
         self.assertNotIn("--draft", creates[0])
         self.assertEqual(creates[0][creates[0].index("--title") + 1], "Add greeting")
+
+    def test_approve_later_freezes_plan_without_running_agent(self):
+        import hashlib
+        agent = Agent()
+        state = self.start(agent)
+        self.assertEqual(self.cli("approve", state["id"], "--later"), 0)
+        queued = qk_run.load(state["id"])
+        self.assertEqual(queued["stage"], "queued")
+        self.assertIsInstance(queued["queued_at"], float)
+        self.assertEqual(queued["verify"], ["test -f greeting.txt"])
+        self.assertEqual((qk_run.run_dir(state["id"]) / "approved-plan.md").read_text(), PLAN)
+        self.assertEqual(queued["approved_plan_sha"], hashlib.sha256(PLAN.encode()).hexdigest())
+        self.assertEqual([call[0] for call in agent.calls], ["plan"])
+        with self.assertRaises(SystemExit):
+            self.cli("resume", state["id"])
+
+    def test_approve_later_checks_stage_and_edited_verify_block(self):
+        agent = Agent()
+        state = self.start(agent)
+        plan = qk_run.run_dir(state["id"]) / "plan.md"
+        plan.write_text("# No commands\n```qk-verify\n\n```\n")
+        with self.assertRaises(SystemExit):
+            self.cli("approve", state["id"], "--later")
+        self.assertEqual(qk_run.load(state["id"])["stage"], "awaiting_approval")
+        self.assertFalse((plan.parent / "approved-plan.md").exists())
+        plan.write_text(PLAN)
+        self.cli("approve", state["id"], "--later")
+        with self.assertRaises(SystemExit):
+            self.cli("approve", state["id"], "--later")
+        self.assertEqual([call[0] for call in agent.calls], ["plan"])
+
+    def test_drain_runs_queued_in_timestamp_order_and_creates_both_prs(self):
+        from unittest import mock
+        order = []
+
+        def cook(cwd, state_dir):
+            order.append(state_dir.name)
+            (cwd / "greeting.txt").write_text("hello\n")
+            return result()
+
+        agent = Agent(cook=cook)
+        first = self.start(agent)
+        self.cli("approve", first["id"], "--later")
+        # Discover the second run by its planning turn, independent of random id order.
+        agent.behaviour["plan"] = lambda cwd, state_dir: (order.append(state_dir.name) or planned())
+        self.start(agent)
+        second_id = order.pop()
+        self.cli("approve", second_id, "--later")
+        for run_id, timestamp in ((first["id"], 20.0), (second_id, 10.0)):
+            state = qk_run.load(run_id)
+            state["queued_at"] = timestamp
+            qk_run.save(state)
+        with mock.patch.object(qk_run, "notify") as notification:
+            self.assertEqual(self.cli("drain"), 0)
+        notification.assert_not_called()
+        self.assertEqual(order, [second_id, first["id"]])
+        for run_id in order:
+            self.assertEqual(qk_run.load(run_id)["stage"], "done")
+        self.assertEqual(len([c for c in self.gh_calls if c[:2] == ("pr", "create")]), 2)
+
+    def test_drain_skips_unapproved_aborted_and_invalid_states(self):
+        agent = Agent()
+        unapproved = self.start(agent)
+        self.cli("approve", unapproved["id"], "--later")
+        self.cli("abort", unapproved["id"])
+        aborted_id = unapproved["id"]
+        self.start(agent)
+        root = qk_run.state_root()
+        for name, content in (("invalid", "{bad"), ("not-object", "[]"),
+                              ("bad-time", '{"id":"bad-time","stage":"queued","queued_at":"bad"}')):
+            (root / name).mkdir()
+            (root / name / "state.json").write_text(content)
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(qk_run.main(["drain"]), 0)
+        self.assertIn("Nothing is queued", output.getvalue())
+        self.assertEqual(qk_run.load(aborted_id)["stage"], "aborted")
+        self.assertEqual([c[0] for c in agent.calls], ["plan", "plan"])
+        self.assertFalse([c for c in self.gh_calls if c[:2] == ("pr", "create")])
+
+    def test_drain_rescans_for_runs_queued_and_aborted_while_running(self):
+        from unittest import mock
+        for run_id, timestamp in (("first", 1.0), ("abort-me", 2.0)):
+            qk_run.save({"id": run_id, "stage": "queued", "queued_at": timestamp})
+        order = []
+
+        def advance(state):
+            order.append(state["id"])
+            if state["id"] == "first":
+                self.cli("abort", "abort-me")
+                qk_run.save({"id": "new", "stage": "queued", "queued_at": 3.0})
+            state["stage"] = "done"
+            qk_run.save(state)
+            return 0
+
+        with mock.patch.object(qk_run, "advance", side_effect=advance):
+            self.assertEqual(self.cli("drain"), 0)
+        self.assertEqual(order, ["first", "new"])
+
+    def test_next_queued_breaks_timestamp_ties_by_id(self):
+        for run_id in ("b", "a"):
+            qk_run.save({"id": run_id, "stage": "queued", "queued_at": 1.0})
+        state, count = qk_run.next_queued()
+        self.assertEqual(state["id"], "a")
+        self.assertEqual(count, 2)
+
+    def test_drain_until_leaves_second_run_queued(self):
+        from unittest import mock
+        agent = Agent()
+        first = self.start(agent)
+        self.cli("approve", first["id"], "--later")
+        ids = []
+        agent.behaviour["plan"] = lambda cwd, state_dir: (ids.append(state_dir.name) or planned())
+        self.start(agent)
+        second_id = ids[0]
+        self.cli("approve", second_id, "--later")
+        for run_id, timestamp in ((first["id"], 1.0), (second_id, 2.0)):
+            state = qk_run.load(run_id)
+            state["queued_at"] = timestamp
+            qk_run.save(state)
+        with mock.patch.object(qk_run, "datetime") as clock, \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            clock.now.side_effect = [datetime(2026, 11, 18, 6), datetime(2026, 11, 18, 6, 59),
+                                     datetime(2026, 11, 18, 7)]
+            self.assertEqual(qk_run.main(["drain", "--until", "07:00"]), 0)
+        self.assertEqual(qk_run.load(first["id"])["stage"], "done")
+        self.assertEqual(qk_run.load(second_id)["stage"], "queued")
+        self.assertIn("1 queued runs left", output.getvalue())
+        self.assertIn("1 done, 0 blocked, 1 left queued", output.getvalue())
+
+    def test_drain_deadline(self):
+        cases = [(datetime(2026, 11, 18, 6), datetime(2026, 11, 18, 7)),
+                 (datetime(2026, 11, 18, 22), datetime(2026, 11, 19, 7)),
+                 (datetime(2026, 11, 18, 7), datetime(2026, 11, 19, 7))]
+        for now, expected in cases:
+            self.assertEqual(qk_run.drain_deadline("07:00", now), expected)
+        for value in ("7:00", "24:00", "07:60", "07:00:00", "noon", "07:00\n"):
+            with self.assertRaises(ValueError):
+                qk_run.drain_deadline(value, cases[0][0])
+
+    def test_drain_lock_refuses_second_drain_and_invalid_until_precedes_lock(self):
+        agent = Agent()
+        state = self.start(agent)
+        self.cli("approve", state["id"], "--later")
+        with (qk_run.state_root() / "drain.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(SystemExit) as caught:
+                self.cli("drain")
+            self.assertIn("another drain", str(caught.exception.code))
+            with self.assertRaises(SystemExit) as caught:
+                self.cli("drain", "--until", "bad")
+            self.assertIn("HH:MM", str(caught.exception.code))
+        self.assertEqual(qk_run.load(state["id"])["stage"], "queued")
+        self.assertEqual([c[0] for c in agent.calls], ["plan"])
+        self.assertEqual(self.cli("drain"), 0)
+
+    def test_drain_blocked_exit_and_optional_notifications(self):
+        from unittest import mock
+        for enabled in (False, True):
+            ids = []
+            agent = Agent(plan=lambda cwd, state_dir: (ids.append(state_dir.name) or planned()),
+                          cook=lambda cwd, state_dir: "missing result")
+            qk_run.call_agent = agent
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            state = qk_run.load(ids[0])
+            self.cli("approve", state["id"], "--later")
+            with mock.patch.object(qk_run, "notify") as notification:
+                self.assertEqual(self.cli("drain", *(["--notify"] if enabled else [])), 1)
+            self.assertEqual(qk_run.load(state["id"])["stage"], "blocked")
+            if enabled:
+                self.assertEqual(notification.call_count, 2)
+                self.assertIn(state["id"], notification.call_args_list[0].args[0])
+                self.assertIn("qk-result", notification.call_args_list[0].args[0])
+                self.assertEqual(notification.call_args_list[1].args[0],
+                                 "Drain: 0 done, 1 blocked, 0 left queued.")
+            else:
+                notification.assert_not_called()
+
+    def test_drain_blocks_a_crashing_run_and_continues(self):
+        ids = []
+        agent = Agent(plan=lambda cwd, state_dir: (ids.append(state_dir.name) or planned()))
+        qk_run.call_agent = agent
+        for _ in range(2):
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            self.cli("approve", ids[-1], "--later")
+        crashes = [subprocess.TimeoutExpired("git push", 600)]
+        original = qk_run.call_agent
+
+        def flaky(*args, **kwargs):
+            if crashes:
+                raise crashes.pop()
+            return original(*args, **kwargs)
+
+        qk_run.call_agent = flaky
+        self.assertEqual(self.cli("drain"), 1)
+        first, second = (qk_run.load(run_id) for run_id in ids)
+        self.assertEqual(first["stage"], "blocked")
+        self.assertIn("TimeoutExpired", first["reason"])
+        self.assertEqual(second["stage"], "done")
+
+    def test_drain_continues_when_recording_a_block_cannot_snapshot_the_tree(self):
+        from unittest import mock
+        ids = []
+        qk_run.call_agent = Agent(plan=lambda cwd, state_dir: (ids.append(state_dir.name) or planned()))
+        for _ in range(2):
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            self.cli("approve", ids[-1], "--later")
+        verifying, snapshot = qk_run.verifying, qk_run.tree_snapshot
+        failures = {"stage": 1, "snapshot": 1}
+
+        def flaky_verifying(state):
+            if failures["stage"]:
+                failures["stage"] = 0
+                raise subprocess.TimeoutExpired("git add", 600)
+            return verifying(state)
+
+        def flaky_snapshot(worktree):
+            if not failures["stage"] and failures["snapshot"]:
+                failures["snapshot"] = 0
+                raise subprocess.TimeoutExpired("git add", 600)
+            return snapshot(worktree)
+
+        with mock.patch.dict(qk_run.STAGES, verifying=flaky_verifying), \
+                mock.patch.object(qk_run, "tree_snapshot", flaky_snapshot):
+            self.assertEqual(self.cli("drain"), 1)
+        first, second = (qk_run.load(run_id) for run_id in ids)
+        self.assertEqual(first["stage"], "blocked")
+        self.assertEqual(first["blocked_at"], "verifying")
+        self.assertNotIn("blocked_tree", first)
+        self.assertEqual(second["stage"], "done")
+
+    def test_notify_escapes_message_and_warns_on_failure(self):
+        from unittest import mock
+        with mock.patch.object(qk_run.subprocess, "run") as command:
+            qk_run.notify('a "quote" and \\ path')
+        self.assertEqual(command.call_args.args[0],
+                         ["osascript", "-e", 'display notification "a \\"quote\\" and \\\\ path" with title "qk-run"'])
+        for error in (FileNotFoundError("osascript"), subprocess.CalledProcessError(1, "osascript")):
+            with mock.patch.object(qk_run.subprocess, "run", side_effect=error), \
+                    contextlib.redirect_stderr(io.StringIO()) as warnings:
+                qk_run.notify("summary")
+            self.assertIn("notification warning", warnings.getvalue())
 
     def test_ledger_failure_does_not_change_published_run(self):
         from unittest import mock
