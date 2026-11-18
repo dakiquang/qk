@@ -74,7 +74,7 @@ python3 scripts/qk_eval.py --all --runtime claude:claude-opus-5-5 --kit superpow
 
 `--kit` chỉ chạy trên runtime `claude`, không bao giờ so sánh với hay cập nhật `baseline.json`, và ghi `"kit"` vào `results.json`.
 
-`--lessons` thêm các [lesson](ledger.md#lessons) đang active cho bước của từng case (case review: review; `qk-plan`: plan; skill khác: impl) vào prompt qk. Cờ này không dùng chung với `--update-baseline` hay kit khác `qk`, nên baseline luôn không có lesson; phần so sánh với baseline vẫn chạy. ID lesson đã dùng được ghi vào `results.json` và vào bản ghi eval trong sổ.
+`--lessons` thêm các [lesson](lessons.md) đang active cho bước của từng case (case review: review; `qk-plan`: plan; skill khác: impl) vào prompt qk. Cờ này không dùng chung với `--update-baseline` hay kit khác `qk`, nên baseline luôn không có lesson; phần so sánh với baseline vẫn chạy. ID lesson đã dùng được ghi vào `results.json` và vào bản ghi eval trong sổ.
 
 ## Kết quả trên đĩa
 

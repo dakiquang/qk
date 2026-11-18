@@ -6,6 +6,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,6 +34,8 @@ def read_worker(directory, started, output):
     except Exception as error:
         output.put(("ERROR", repr(error)))
 
+
+FAILED_EVAL = {"case": "csv-export", "criteria": [{"name": "b", "passed": False}]}
 
 class LedgerTests(unittest.TestCase):
     def setUp(self):
@@ -424,7 +427,7 @@ class LedgerTests(unittest.TestCase):
                 "error": error, "final": "PRIVATE FINAL OUTPUT"}
 
     def lesson_data(self):
-        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+        evidence = [ledger.append(kind, FAILED_EVAL if kind == "eval" else {})["id"] for kind in ("eval", "finding")]
         return {"status": "proposed", "class": "missing validation",
                 "rule": "Validate external input before using it.",
                 "scope": ["stage:review", "repo:example-project"],
@@ -503,7 +506,7 @@ class LedgerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "measure the lesson before activating it"):
                 ledger.append("lesson", decision)
         measured = dict(proposal, id="measured-state", data=dict(
-            proposal["data"], measured=[proposal["data"]["evidence"][0]]))
+            proposal["data"], measured=[{"at": ledger.datetime.now(ledger.timezone.utc).isoformat(), "helps": True}]))
         with ledger.store_path().open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(measured) + "\n")
         active = ledger.append("lesson", decision, source="user")
@@ -523,7 +526,7 @@ class LedgerTests(unittest.TestCase):
     def active_lesson(self, scope, rule="Check the destination key.", case="csv-export"):
         proposal = ledger.append("lesson", dict(self.lesson_data(), scope=scope, rule=rule, case=case),
                                  source="model")
-        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=["fixture"]))
+        measured = dict(proposal, id=proposal["id"] + "m", data=dict(proposal["data"], measured=[{"at": ledger.datetime.now(ledger.timezone.utc).isoformat(), "helps": True}]))
         with ledger.store_path().open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(measured) + "\n")
         ledger.append("lesson", {"lesson_id": proposal["id"], "status": "active"}, source="user")
@@ -560,6 +563,49 @@ class LedgerTests(unittest.TestCase):
         used = ledger.record_eval("codex:", "case", dict(self.eval_result(), lessons=["abc"]), self.root / "b")
         self.assertNotIn("lessons", plain["data"])
         self.assertEqual(used["data"]["lessons"], ["abc"])
+
+    def measurement(self, helps=True, days_ago=0):
+        runs = [ledger.append("eval", {})["id"] for _ in range(4)]
+        at = ledger.datetime.now(ledger.timezone.utc) - timedelta(days=days_ago)
+        return {"at": at.isoformat(), "runtime": "codex:", "criteria": ["target"], "with": runs[:2],
+                "without": runs[2:], "controls": [], "helps": helps, "reasons": [] if helps else ["no gain"]}
+
+    def test_measurement_records_extend_state_and_gate_activation(self):
+        proposal = ledger.append("lesson", self.lesson_data(), source="model")
+        lesson_id = proposal["id"]
+        activate = {"lesson_id": lesson_id, "status": "active"}
+        no_gain = ledger.append("lesson", {"lesson_id": lesson_id, "measurement": self.measurement(False)},
+                                source="code")
+        self.assertEqual((no_gain["source"], no_gain["data"]["status"], len(no_gain["data"]["measured"])),
+                         ("code", "proposed", 1))
+        with self.assertRaisesRegex(ValueError, "must show that it helps"):
+            ledger.append("lesson", activate, source="user")
+        ledger.append("lesson", {"lesson_id": lesson_id, "measurement": self.measurement(days_ago=61)},
+                      source="code")
+        with self.assertRaisesRegex(ValueError, "within 60 days"):
+            ledger.append("lesson", activate, source="user")
+        ledger.append("lesson", {"lesson_id": lesson_id, "measurement": self.measurement()}, source="code")
+        active = ledger.append("lesson", activate, source="user")
+        self.assertEqual((active["data"]["status"], len(active["data"]["measured"])), ("active", 3))
+        self.assertEqual(ledger.lessons_for("review", "example-project"), [(lesson_id, proposal["data"]["rule"])])
+        ledger.append("lesson", {"lesson_id": lesson_id, "measurement": self.measurement(False)}, source="code")
+        self.assertEqual(ledger.lessons_for("review", "example-project"), [])
+
+    def test_measurement_records_are_validated(self):
+        proposal = ledger.append("lesson", self.lesson_data(), source="model")
+        good = self.measurement()
+        finding = ledger.append("finding", {})["id"]
+        for change, message in (({"helps": "yes"}, "boolean"), ({"with": good["with"][:1]}, "at least 2"),
+                                ({"without": [finding, finding]}, "existing eval"), ({"criteria": []}, "target")):
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, message):
+                ledger.append("lesson", {"lesson_id": proposal["id"], "measurement": dict(good, **change)},
+                              source="code")
+        incomplete = {key: value for key, value in good.items() if key != "reasons"}
+        with self.assertRaisesRegex(ValueError, "requires"):
+            ledger.append("lesson", {"lesson_id": proposal["id"], "measurement": incomplete}, source="code")
+        ledger.append("lesson", {"lesson_id": proposal["id"], "status": "dismissed"}, source="user")
+        with self.assertRaisesRegex(ValueError, "cannot measure a dismissed lesson"):
+            ledger.append("lesson", {"lesson_id": proposal["id"], "measurement": good}, source="code")
 
     def test_existing_source_conventions_cannot_be_overridden(self):
         parent = ledger.append("eval", {})

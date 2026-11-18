@@ -30,14 +30,7 @@ A torn final line from an append interrupted by a crash or a full disk deliberat
 
 ## Lessons
 
-A lesson is an evidence-backed imperative rule about an AI mistake, stored in the same append-only ledger.
-`qk lesson suggest` lists repeated eval failures and finding classes without writing records.
-Use `qk lesson propose` with a class, rule, 1–3 scopes (including a stage), at least 2 distinct eval/finding evidence IDs and an existing eval case.
-`qk lesson list` shows the latest state; unmeasured proposals carry `needs-measure`.
-A lesson cannot become active before measurement; measurement is a later step.
-`qk lesson decide ID STATUS` allows proposed → dismissed or measured active, then active → retired/promoted.
-Proposals record `source: model`; decisions record `source: user`, but the CLI cannot prove who ran it.
-Active lessons reach agents only through the `--lessons` flag of `qk-run` and `qk_eval`; a lesson whose eval case was deleted is skipped.
+Lessons are evidence-backed rules about AI mistakes, stored here as `lesson` records and turned on only after a measurement shows they help. See [Lessons](lessons.md).
 
 ## Use the evidence to decide
 

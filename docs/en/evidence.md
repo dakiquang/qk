@@ -261,3 +261,26 @@ actual check and validated wrappers count as observations. After repair, Python
 3.12 passed CLI 24, triage 8, ledger 27 and resume 4 tests; Python 3.9 passed the
 late-backfill regression and all eight triage tests. The saved real model replies
 still pass the tightened grader. No additional model run was needed.
+
+## First lesson
+
+18 Nov 2026, Codex `gpt-6.1-sol`, case `pip-config-review`, target criterion
+`parser-reuse`. Lesson `d13e1f58a54b` (class "value written or read under the
+wrong key or scope"); evidence is one miss on Codex (`4db9d7a13ad1`) and one on
+omp (`31b776ca993e`). Of the two evidence runs on Codex, one missed and one
+caught the bug for real (the finding at line 404 asks to reuse the loaded
+parser), so Codex now misses it about half the time, not 3/3 as on 15 Nov.
+
+| Group | Run 1 | Run 2 |
+|---|---|---|
+| Without the lesson | caught | missed |
+| With the lesson | missed | caught |
+
+With the lesson, the `bundle-malformed` and `waf-bundle-review` controls lost no
+criterion. The `bundle-malformed` run without the lesson failed because Codex
+reported the model at capacity; that does not change the verdict.
+
+**Verdict: the lesson does not help** (measurement `18e9d3101a4f`). With the
+lesson the review still missed 1 of 2, the same as without. Two runs per cell is
+thin evidence; the result only says this rule showed no effect, not that the
+mistake cannot be taught.

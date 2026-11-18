@@ -84,6 +84,10 @@ def _parser():
     listing = lessons.add_parser("list", help="show the latest state of each lesson")
     listing.add_argument("--status", choices=("proposed", "active", "dismissed", "retired", "promoted"), metavar="S")
     listing.add_argument("--json", action="store_true")
+    measure = lessons.add_parser("measure", help="run the lesson's case with and without it; record the result")
+    measure.add_argument("id", metavar="ID")
+    measure.add_argument("--runtime", required=True, help="runtime:model, e.g. codex:gpt-6.1-sol")
+    measure.add_argument("--timeout", type=int, help="seconds per agent turn (default: the runner's)")
     decide = lessons.add_parser("decide", help="record a lesson status decision")
     decide.add_argument("id", metavar="ID")
     decide.add_argument("status", choices=("active", "dismissed", "retired", "promoted"), metavar="STATUS")
@@ -137,6 +141,10 @@ def _lesson(args, ledger):
                 "measured": []}
         print(ledger.append("lesson", data, source="model")["id"])
         return 0
+    if args.lesson_command == "measure":
+        evaluator = importlib.import_module("qk_eval")
+        return evaluator.measure_lesson(args.id, args.runtime,
+                                        args.timeout or evaluator.qk_run.DEFAULT_TIMEOUT)
     if args.lesson_command == "decide":
         data = {"lesson_id": args.id, "status": args.status}
         if args.reason is not None:
@@ -155,14 +163,16 @@ def _lesson(args, ledger):
                      "case": data["case"], "scope": data["scope"],
                      "evidence_count": len(data["evidence"]),
                      "measured_count": len(data["measured"]),
-                     "needs_measure": data["status"] == "proposed" and not data["measured"]})
+                     "needs_measure": data["status"] == "proposed" and not data["measured"],
+                     "needs_remeasure": data["status"] == "active" and not ledger.measured_helps(data)})
     if args.json:
         print(json.dumps(rows, indent=2, ensure_ascii=True))
     else:
         for row in rows:
             print(_text("{id} {status} case={case} scope={scope} evidence={evidence_count} "
                         "measured={measured_count}{marker}".format(
-                            **row, marker=" needs-measure" if row["needs_measure"] else "")))
+                            **row, marker=" needs-measure" if row["needs_measure"] else
+                            " needs-remeasure" if row["needs_remeasure"] else "")))
     return 0
 
 

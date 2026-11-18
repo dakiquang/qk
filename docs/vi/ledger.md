@@ -30,14 +30,7 @@ Dòng cuối bị ghi dở do crash hoặc đầy đĩa sẽ khiến các lần 
 
 ## Lessons
 
-Lesson là quy tắc dạng mệnh lệnh rút từ sai sót AI có bằng chứng, nằm trong cùng sổ chỉ ghi nối tiếp.
-`qk lesson suggest` liệt kê tiêu chí eval thất bại và lớp finding lặp lại mà không ghi bản ghi.
-Dùng `qk lesson propose` với class, rule, 1–3 scope (có stage), ít nhất 2 ID bằng chứng eval/finding khác nhau và một eval case đã có.
-`qk lesson list` hiển thị trạng thái mới nhất; đề xuất chưa đo mang nhãn `needs-measure`.
-Lesson không thể active trước khi được đo; chức năng đo thuộc bước sau.
-`qk lesson decide ID STATUS` cho phép proposed → dismissed hoặc active sau khi đo, rồi active → retired/promoted.
-Đề xuất ghi `source: model`; quyết định ghi `source: user`, nhưng CLI không thể chứng minh ai đã chạy lệnh.
-Lesson active chỉ đến được agent qua cờ `--lessons` của `qk-run` và `qk_eval`; lesson có eval case đã bị xoá thì bị bỏ qua.
+Lesson là quy tắc về sai sót AI có bằng chứng, lưu ở đây dưới dạng bản ghi `lesson` và chỉ được bật sau khi lần đo cho thấy có ích. Xem [Lesson](lessons.md).
 
 ## Dùng bằng chứng để quyết
 

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -320,7 +321,7 @@ def update_baseline(baseline, spec, results):
 def record_ledger(spec, case, result, directory, kit):
     """Evidence collection must not change an eval's result."""
     try:
-        qk_ledger.record_eval(spec, case, result, directory, kit)
+        return qk_ledger.record_eval(spec, case, result, directory, kit)
     except Exception as error:
         warning = f"qk-eval: ledger warning: {error}"
         print(warning, file=sys.stderr)
@@ -328,6 +329,92 @@ def record_ledger(spec, case, result, directory, kit):
             (directory / "ledger-warning.log").write_text(warning + "\n", encoding="utf-8")
         except OSError:
             pass
+
+
+def measure_lesson(lesson_id, spec, timeout):
+    """Measure one lesson on one runtime and record the result; the activation decision stays with a person.
+
+    The lesson's case runs twice without and twice with the lesson; every other case of the same stage runs
+    once with it, against the runtime's baseline (or one run without the lesson when there is none). It helps
+    when both runs with it pass every target criterion, at least one run without it misses one, and no control
+    loses a criterion or exceeds the token rule. Target criteria are those the lesson's evidence failed."""
+    def stop(message):
+        print(f"qk lesson measure: {message}", file=sys.stderr)
+        return 2
+    qk_run.parse_spec(spec)
+    records = qk_ledger.records()
+    state = next((record["data"] for record in qk_ledger.latest_lessons(records)
+                  if record["data"]["lesson_id"] == lesson_id), None)
+    if state is None:
+        return stop(f"no lesson {lesson_id}")
+    if state["status"] not in ("proposed", "active"):
+        return stop(f"lesson {lesson_id} is {state['status']}")
+    if not (CASES / state["case"] / "case.json").is_file():
+        return stop(f"unknown case {state['case']!r}")
+    case = load_case(CASES / state["case"])
+    stage = lesson_stage(case)
+    if f"stage:{stage}" not in state["scope"]:
+        return stop(f"case {case['name']} runs the {stage} stage, outside the lesson's scope")
+    targets = qk_ledger.lesson_targets(records, state["evidence"], case["name"])
+    if not targets:
+        return stop(f"the lesson's evidence has no failed criterion on {case['name']}")
+    lesson = [(lesson_id, state["rule"])]
+    baseline = load_baseline().get(spec, {})
+    root = state_root() / f"{time.strftime('%Y%m%d-%H%M%S')}-measure-{secrets.token_hex(2)}"
+    root.mkdir(parents=True)
+    ids = {"with": [], "without": [], "controls": []}
+    reasons = []
+
+    def attempt(target, name, lessons, label):
+        out = root / target["name"] / name
+        result = run_case(target, spec, timeout, out, root, lessons=lessons)
+        record = record_ledger(spec, target["name"], result, out, None)
+        if record is None:
+            raise RuntimeError(f"ledger did not record {out}")
+        ids[label].append(record["id"])
+        if result["error"]:
+            reasons.append(f"{target['name']} {name}: agent error")
+        if any(item["name"] == "clean" and not item["passed"] for item in result["criteria"]):
+            reasons.append(f"{target['name']} {name}: not clean, the agent may have read the graders")
+        return result
+
+    try:
+        for label, lessons in (("without", []), ("with", lesson)):
+            hits = []
+            for number in (1, 2):
+                result = attempt(case, f"{label}-{number}", lessons, label)
+                hits.append(set(targets) <= passing(result["criteria"]))
+                print(f"{case['name']} {label}-{number}: {'pass' if hits[-1] else 'miss'} "
+                      f"({', '.join(targets)}), tokens {result['tokens']}")
+            if label == "with" and not all(hits):
+                reasons.append("with the lesson a target criterion was missed")
+            if label == "without" and all(hits):
+                reasons.append("without the lesson every target criterion passed")
+        for control in all_cases():
+            if control["name"] == case["name"] or lesson_stage(control) != stage:
+                continue
+            base = baseline.get(control["name"])
+            if base is None:
+                plain = attempt(control, "control-without", [], "controls")
+                base = {"criteria": {item["name"]: item["passed"] for item in plain["criteria"]},
+                        "tokens": plain["tokens"], "seconds": plain["seconds"]}
+            result = attempt(control, "control-with", lesson, "controls")
+            diff = compare(result, base)
+            if diff["lost"]:
+                reasons.append(f"{control['name']}: lost {', '.join(diff['lost'])}")
+            if diff["tokens_over"]:
+                reasons.append(f"{control['name']}: tokens {signed(diff['tokens_pct'])}")
+            print(f"{control['name']} control: {'lost ' + ', '.join(diff['lost']) if diff['lost'] else 'kept'}"
+                  f", tokens {result['tokens']}")
+    except RuntimeError as error:
+        return stop(f"{error}; no measurement recorded")
+    measurement = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "runtime": spec,
+                   "criteria": targets, "with": ids["with"], "without": ids["without"],
+                   "controls": ids["controls"], "helps": not reasons, "reasons": reasons}
+    record = qk_ledger.append("lesson", {"lesson_id": lesson_id, "measurement": measurement}, source="code")
+    print(f"measurement {record['id']}: {'helps' if not reasons else 'does not help: ' + '; '.join(reasons)}")
+    print(f"results: {root}")
+    return 0
 
 
 def main(argv=None):

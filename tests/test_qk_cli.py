@@ -71,8 +71,10 @@ class CliTests(unittest.TestCase):
         return {line.split("\t")[0]: int(line.split("\t")[1])
                 for line in text.splitlines()}
 
-    def lesson_args(self):
-        evidence = [ledger.append(kind, {})["id"] for kind in ("eval", "finding")]
+    def lesson_args(self, failed=True):
+        evidence = [ledger.append("eval", {"case": "csv-export", "criteria": [
+                        {"name": "clean", "passed": True}, {"name": "b", "passed": not failed}]})["id"],
+                    ledger.append("finding", {})["id"]]
         return ["lesson", "propose", "--class", "missing validation", "--rule",
                 "Validate external input before using it.", "--scope", "stage:review",
                 "--scope", "repo:example", "--evidence", evidence[0],
@@ -93,7 +95,8 @@ class CliTests(unittest.TestCase):
         _, output, _ = self.cli("lesson", "list", "--json", "--status", "proposed")
         self.assertEqual(json.loads(output), [{"id": identifier, "status": "proposed",
             "case": "csv-export", "scope": ["stage:review", "repo:example"],
-            "evidence_count": 2, "measured_count": 0, "needs_measure": True}])
+            "evidence_count": 2, "measured_count": 0, "needs_measure": True,
+            "needs_remeasure": False}])
         before = ledger.store_path().read_bytes()
         status, _, errors = self.cli("lesson", "decide", identifier, "active")
         self.assertEqual(status, 1)
@@ -116,6 +119,14 @@ class CliTests(unittest.TestCase):
         self.assertFalse(rows[0]["needs_measure"])
         _, output, _ = self.cli("lesson", "list", "--status", "proposed", "--json")
         self.assertEqual(json.loads(output), [])
+
+    def test_lesson_propose_needs_a_failed_eval_of_its_case(self):
+        args = self.lesson_args(failed=False)
+        before = ledger.store_path().read_bytes()
+        status, _, errors = self.cli(*args)
+        self.assertEqual(status, 1)
+        self.assertIn("needs an eval of case csv-export", errors)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
 
     def test_lesson_invalid_proposals_return_errors_without_writing(self):
         args = self.lesson_args()
@@ -144,7 +155,7 @@ class CliTests(unittest.TestCase):
         self.cli(*self.lesson_args())
         proposal = ledger.records()[-1]
         active = dict(proposal, id="active-state", source="user", data=dict(
-            proposal["data"], status="active", measured=[proposal["data"]["evidence"][0]]))
+            proposal["data"], status="active", measured=[{"at": ledger.datetime.now(ledger.timezone.utc).isoformat(), "helps": True}]))
         with ledger.store_path().open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(active) + "\n")
         status, _, errors = self.cli("lesson", "decide", proposal["id"], "retired")

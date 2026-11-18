@@ -258,3 +258,25 @@ resume; chuỗi shell short-circuit đánh lừa bộ chấm triage. Revision ng
 Sau sửa, Python 3.12 đạt CLI 24, triage 8, ledger 27 và resume 4 test;
 Python 3.9 đạt regression late-backfill và cả tám test triage. Câu trả lời model
 thật đã lưu vẫn đạt bộ chấm siết lại, không cần gọi thêm model.
+
+## Bài học đầu tiên
+
+18/11/2026, Codex `gpt-6.1-sol`, case `pip-config-review`, tiêu chí đích
+`parser-reuse`. Lesson `d13e1f58a54b` (lớp "giá trị được ghi hoặc đọc dưới sai
+khoá hay phạm vi"), bằng chứng là một lượt sót trên Codex (`4db9d7a13ad1`) và một
+trên omp (`31b776ca993e`). Hai lượt lấy bằng chứng trên Codex: một sót, một bắt
+thật (finding ở dòng 404 đề nghị dùng lại parser đã nạp), nên Codex nay sót khoảng
+1/2, không còn 3/3 như 15/11.
+
+| Nhóm | Lượt 1 | Lượt 2 |
+|---|---|---|
+| Không có lesson | bắt | sót |
+| Có lesson | sót | bắt |
+
+Đối chứng `bundle-malformed` và `waf-bundle-review` có lesson không mất tiêu chí
+nào. Lượt `bundle-malformed` không có lesson lỗi vì Codex báo model hết công suất;
+lỗi này không đổi kết luận.
+
+**Kết luận: lesson không giúp** (đo `18e9d3101a4f`). Có lesson vẫn sót 1/2, bằng
+không có lesson. Mỗi ô hai lượt là bằng chứng mỏng; kết quả chỉ nói luật này không
+cho thấy hiệu quả, không nói lỗi này không thể dạy được.
