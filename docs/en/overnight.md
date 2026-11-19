@@ -36,9 +36,9 @@ qk sync
 qk brief
 ```
 
-`qk sync` reads PR state with `gh` and prints `Decision snapshots: N recorded; N unchanged; N failures.` (exit 1 on any failure). `qk brief` is offline and prints one card per run. A card for a run that is not blocked shows:
+`qk sync` reads PR state with `gh` and prints `Decision snapshots: N recorded; N unchanged; N failures.` (exit 1 on any failure). `qk brief` prints one card per run. A card for a run that is not blocked shows:
 
-- a title line ending in `RISK: <level> — <rule>`;
+- a title line ending in `RISK: <level> — <rule>; full: qk show --id <id>` (a rule longer than 100 characters is cut);
 - `Done`, `Evidence`, `Unchecked`, `History`;
 - `Decision: human decision required; …`.
 
@@ -46,11 +46,21 @@ A blocked card shows the title line, then `Done`, `Next` and `History` only.
 
 Cards are ordered high, medium, low, with blocked runs first within a level. The first matching rule sets the level, and its text is printed:
 
-- **high:** `blocked at <stage>: <reason>`, `<n> findings remain`, `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Sensitive means `.github/`, dependency manifests and lockfiles (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, or a path containing `auth`, `secret`, `permission` or `policy`.
+- **high:** `blocked at <stage>: <reason>`, `<n> blocker/important findings remain` (nit findings do not count; a run recorded before severity was kept shows `<n> findings remain (severity unknown)` and counts every remaining finding), `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Sensitive means `.github/`, dependency manifests and lockfiles (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, or a path containing `auth`, `secret`, `permission` or `policy`.
 - **medium:** `fix round used`, `<n> lines changed` (over 300), `<n> files changed` (over 10), `PR head differs from recorded commit`, `never synced`, `scope unknown`.
 - **low:** `no rule matched`.
 
 The rules do not grant approval. The brief leaves out aborted runs, runs that are not blocked whose PR is merged or closed, and runs without a PR unless they are blocked. With nothing to show, it prints `No open, unknown or blocked runs recorded.`
+
+### Deciding from the terminal
+
+When stdin and stdout are both a terminal, `qk brief` asks after each card. Piped or redirected, it only prints and makes no network call.
+
+- Not blocked: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merges with `gh`, and only if the PR head still equals the run's recorded commit: it reads the methods the repository allows, asks which one when there are several, and passes `--match-head-commit`. If the merge does not happen, it prints `qk brief: not merged: <reason>` and asks again. `d` prints the PR diff and asks again. `n` records that you leave the PR.
+- Blocked: `[a] abort later  [r] resume later  [s] skip`. These only record your intent; run `qk run abort` or `qk run resume` yourself.
+- `s` records nothing. End of input (Ctrl-D) stops the questions; the remaining cards are printed only.
+
+Each choice is written to the ledger as a decision with `source=user`, then prints `Recorded <choice>: <id>`. A recorded choice does not hide the card; a merged PR leaves the brief after the next `qk sync`.
 
 A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Check the cause with `qk run status <id>`. `resume` runs in your terminal, not in a drain. If the run blocked at verifying, reviewing or fixing, your hand fixes are verified and reviewed again (see [Authority](runner.md#authority)). `qk run abort <id>` keeps the worktree; remove it with `git worktree remove`.
 

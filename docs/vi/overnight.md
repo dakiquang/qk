@@ -36,9 +36,9 @@ qk sync
 qk brief
 ```
 
-`qk sync` đọc trạng thái PR bằng `gh` và in `Decision snapshots: N recorded; N unchanged; N failures.` (thoát 1 khi có lỗi). `qk brief` chạy offline và in một thẻ cho mỗi run. Thẻ của run không bị chặn hiện:
+`qk sync` đọc trạng thái PR bằng `gh` và in `Decision snapshots: N recorded; N unchanged; N failures.` (thoát 1 khi có lỗi). `qk brief` in một thẻ cho mỗi run. Thẻ của run không bị chặn hiện:
 
-- dòng tiêu đề kết thúc bằng `RISK: <level> — <rule>`;
+- dòng tiêu đề kết thúc bằng `RISK: <level> — <rule>; full: qk show --id <id>` (quy tắc dài quá 100 ký tự bị cắt);
 - `Done`, `Evidence`, `Unchecked`, `History`;
 - `Decision: human decision required; …`.
 
@@ -46,11 +46,21 @@ Thẻ của run bị chặn chỉ hiện dòng tiêu đề, rồi `Done`, `Next`
 
 Thẻ xếp theo high, medium, low; trong cùng mức, run bị chặn đứng trước. Quy tắc khớp đầu tiên quyết định mức, và nội dung quy tắc được in ra:
 
-- **high:** `blocked at <stage>: <reason>`, `<n> findings remain`, `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Nhạy cảm nghĩa là `.github/`, manifest và lockfile phụ thuộc (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, hoặc đường dẫn chứa `auth`, `secret`, `permission` hay `policy`.
+- **high:** `blocked at <stage>: <reason>`, `<n> blocker/important findings remain` (finding nit không tính; run ghi trước khi sổ lưu mức độ hiện `<n> findings remain (severity unknown)` và tính mọi finding còn lại), `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Nhạy cảm nghĩa là `.github/`, manifest và lockfile phụ thuộc (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, hoặc đường dẫn chứa `auth`, `secret`, `permission` hay `policy`.
 - **medium:** `fix round used`, `<n> lines changed` (trên 300), `<n> files changed` (trên 10), `PR head differs from recorded commit`, `never synced`, `scope unknown`.
 - **low:** `no rule matched`.
 
 Các quy tắc không trao quyền duyệt. Brief bỏ qua run đã abort, run không bị chặn có PR đã merge hoặc đóng, và run chưa có PR trừ khi run bị chặn. Khi không có gì để hiện, brief in `No open, unknown or blocked runs recorded.`
+
+### Quyết định ngay trong terminal
+
+Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi output được pipe hoặc chuyển hướng, nó chỉ in và không gọi mạng.
+
+- Run không bị chặn: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merge bằng `gh`, và chỉ khi head của PR vẫn đúng commit mà run đã ghi: nó đọc các cách merge repo cho phép, hỏi chọn cách nào khi có nhiều cách, và truyền `--match-head-commit`. Nếu không merge được, nó in `qk brief: not merged: <reason>` rồi hỏi lại. `d` in diff của PR rồi hỏi lại. `n` ghi lại rằng bạn để nguyên PR.
+- Run bị chặn: `[a] abort later  [r] resume later  [s] skip`. Hai lựa chọn này chỉ ghi lại ý định; bạn tự chạy `qk run abort` hoặc `qk run resume`.
+- `s` không ghi gì. Hết input (Ctrl-D) thì dừng hỏi; các thẻ còn lại chỉ được in.
+
+Mỗi lựa chọn được ghi vào sổ thành một decision với `source=user`, rồi in `Recorded <choice>: <id>`. Lựa chọn đã ghi không ẩn thẻ; PR đã merge rời khỏi brief sau lần `qk sync` kế tiếp.
 
 Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Xem nguyên nhân bằng `qk run status <id>`. `resume` chạy trong terminal của bạn, không trong drain. Nếu run bị chặn ở verifying, reviewing hoặc fixing, phần bạn tự sửa được kiểm và review lại (xem [Quyền](runner.md#quyền)). `qk run abort <id>` giữ lại worktree; xoá nó bằng `git worktree remove`.
 
