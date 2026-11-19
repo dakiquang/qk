@@ -509,9 +509,13 @@ def _blocked_reason(run):
 def _brief_risk(data, snapshot, reason="reason unknown"):
     if data.get("status") == "blocked":
         return "high", "blocked at %s: %s" % (data.get("blocked_at") or "unknown", reason)
-    remaining = data.get("remaining_count") or 0
-    if remaining > 0:
-        return "high", "%d findings remain" % remaining
+    serious = data.get("serious_count")
+    if serious is None:  # older records: severity unknown, so every remaining finding counts
+        remaining = data.get("remaining_count") or 0
+        if remaining > 0:
+            return "high", "%d findings remain (severity unknown)" % remaining
+    elif serious > 0:
+        return "high", "%d blocker/important findings remain" % serious
     failed = sum(isinstance(item, dict) and type(item.get("exit")) is int and item["exit"] != 0
                  for item in data.get("verify_results") or [])
     if failed:

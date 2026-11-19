@@ -319,6 +319,13 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "regular files"):
             ledger.records()
 
+    def test_run_counts_only_blocker_and_important_as_serious(self):
+        state = self.run_state()
+        state["findings"] = [dict(self.finding(), severity=severity)
+                             for severity in ("nit", "Important", "blocker", "nit")]
+        data = ledger.record_run(state, self.root / "serious")["data"]
+        self.assertEqual((data["remaining_count"], data["serious_count"]), (4, 2))
+
     def test_run_projection_omits_sensitive_raw_fields_and_keeps_provenance(self):
         state = self.run_state()
         state["findings"] = [self.finding()]
@@ -330,6 +337,8 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(record["data"]["repo_path"], str(self.root / "project"))
         self.assertEqual(record["data"]["verify_results"], [{"index": 0, "exit": 0}, {"index": 1, "exit": 2}])
         self.assertEqual(record["data"]["remaining_count"], 1)
+        self.assertEqual(record["data"]["serious_count"],
+                         int(state["findings"][0]["severity"].lower() in ("blocker", "important")))
         self.assertEqual(record["data"]["addressed_count"], 1)
         self.assertEqual(record["refs"], [str(self.root / "artifacts" / "state.json")])
         finding = records[1]
