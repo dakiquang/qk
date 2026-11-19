@@ -51,7 +51,7 @@ def _since(value):
 
 
 def _parser():
-    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,lesson,run,eval} ...")
+    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,run,eval} ...")
     commands = parser.add_subparsers(dest="command", required=True)
     show = commands.add_parser("show", help="read recorded evidence")
     show.add_argument("--kind")
@@ -72,6 +72,11 @@ def _parser():
     sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
     brief = commands.add_parser("brief", help="summarize open/unknown PRs; on a terminal, ask per card")
     brief.add_argument("--repo")
+    decide = commands.add_parser("decide", help="record one brief decision without a terminal; merge checks the head")
+    decide.add_argument("run_id", metavar="RUN_ID")
+    decide.add_argument("choice", choices=("merge", "leave", "abort-later", "resume-later"))
+    decide.add_argument("--method", choices=tuple(method for method, _ in MERGE_METHODS),
+                        help="merge method when the repository allows several")
     lesson = commands.add_parser("lesson", help="propose and decide evidence-backed lessons")
     lessons = lesson.add_subparsers(dest="lesson_command", required=True)
     suggest = lessons.add_parser("suggest", help="find repeated failures without writing")
@@ -614,8 +619,9 @@ MERGE_METHODS = (("squash", "squashMergeAllowed"), ("merge", "mergeCommitAllowed
 MERGE_PERMISSIONS = {"ADMIN", "MAINTAIN", "WRITE"}  # GitHub viewerPermission values that may merge
 
 
-def _merge(url, commit):
-    """Merge only the recorded commit; return (ok, head, reason). EOF at the method prompt propagates."""
+def _merge(url, commit, method=None):
+    """Merge only the recorded commit; return (ok, head, reason). With `method` None, ask when several are
+    allowed (EOF at that prompt propagates); with "", use the only allowed method or refuse."""
     head = None
     try:
         url = _pr_url(url)
@@ -636,17 +642,22 @@ def _merge(url, commit):
                 or not isinstance(settings.get("viewerPermission"), str)):
             raise ValueError("invalid repository response")
         if settings["viewerPermission"] not in MERGE_PERMISSIONS:  # check before asking for a method
-            return False, head, ("the active gh account cannot merge in %s/%s (viewerPermission=%s); quit and run "
-                                 "GH_TOKEN=\"$(gh auth token --user <account>)\" qk brief" % (
+            return False, head, ("the active gh account cannot merge in %s/%s (viewerPermission=%s); rerun with "
+                                 "GH_TOKEN=\"$(gh auth token --user <account>)\" in front of the qk command" % (
                                      owner, name, settings["viewerPermission"]))
         methods = [method for method, field in MERGE_METHODS if settings.get(field) is True]
         if not methods:
             return False, head, "repository allows no merge method"
-        method = methods[0]
-        if len(methods) > 1:
-            method = input("Merge method [%s]: " % "/".join(methods)).strip().lower()
-            if method not in methods:
-                return False, head, "merge method must be one of " + ", ".join(methods)
+        if method is None:
+            method = methods[0]
+            if len(methods) > 1:
+                method = input("Merge method [%s]: " % "/".join(methods)).strip().lower()
+        elif method == "":
+            if len(methods) > 1:
+                return False, head, "the repository allows %s; pass --method" % ", ".join(methods)
+            method = methods[0]
+        if method not in methods:
+            return False, head, "merge method must be one of " + ", ".join(methods)
         _gh(["pr", "merge", url, "--" + method, "--match-head-commit", commit], 120)
         return True, head, ""
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
@@ -693,13 +704,27 @@ def _ask(run, snapshot, blocked, ledger):
         except EOFError:
             print()
             return False
-        record = ledger.append("decision", {
-            "choice": choice, "pr_url": data.get("pr_url") or None, "run_key": _run_key(run),
-            "run_id": data.get("run_id"), "head": head, "decided_at": decided_at,
-            "elapsed_s": elapsed},
-            repo=run.get("repo", ""), task_kind=run.get("task_kind", ""), refs=[run["id"]], source="user")
-        print(_text("Recorded %s: %s" % (choice, record["id"])))
+        _record_decision(ledger, run, choice, head, decided_at, elapsed)
         return True
+
+
+def _choices(data):
+    """Decisions a card accepts: merge/leave for a PR, intent only for a blocked or stopped run."""
+    if data.get("status") == "stopped":  # resume refuses a run that is not blocked
+        return ("abort-later",)
+    if data.get("status") == "blocked":
+        return ("abort-later", "resume-later")
+    return ("merge", "leave")
+
+
+def _record_decision(ledger, run, choice, head, decided_at, elapsed):
+    data = _data(run)
+    record = ledger.append("decision", {
+        "choice": choice, "pr_url": data.get("pr_url") or None, "run_key": _run_key(run),
+        "run_id": data.get("run_id"), "head": head, "decided_at": decided_at, "elapsed_s": elapsed},
+        repo=run.get("repo", ""), task_kind=run.get("task_kind", ""), refs=[run["id"]], source="user")
+    print(_text("Recorded %s: %s" % (choice, record["id"])))
+    return record
 
 
 def _print_card(shown, run, snapshot, level, rule, runs, records):
@@ -768,12 +793,12 @@ def _print_card(shown, run, snapshot, level, rule, runs, records):
     _brief_line("  Decision: human decision required; sync state is a recorded observation, not approval.")
 
 
-def _brief(args, records, ledger):
-    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+def _cards(records, repo=None):
+    """The brief's cards, in display order: (run, snapshot, level, rule)."""
     runs = _latest_runs(records)
     decisions = [record for record in records
                  if record.get("kind") == "decision" and not _user_decision(record)]
-    stopped = [run for run in _stopped_runs() if not args.repo or run["repo"] == args.repo]
+    stopped = [run for run in _stopped_runs() if not repo or run["repo"] == repo]
     stopped_keys = {_data(run)["run_key"] for run in stopped}
     # Older run records have no run_key; match those by run id within the same repository only.
     stopped_legacy = {(run["repo"], _data(run)["run_id"]) for run in stopped}
@@ -785,7 +810,7 @@ def _brief(args, records, ledger):
                     else (run.get("repo"), data.get("run_id")) in stopped_legacy)
         if (data.get("status") == "aborted" or replaced
                 or (not url and data.get("status") != "blocked")
-                or (args.repo and run.get("repo") != args.repo)):
+                or (repo and run.get("repo") != repo)):
             continue
         matched = [decision for decision in decisions
                    if _data(decision).get("pr_url") == url
@@ -803,12 +828,47 @@ def _brief(args, records, ledger):
     order = {"stopped": 0, "blocked": 1}
     cards.sort(key=lambda card: ({"high": 0, "medium": 1, "low": 2}[card[2]],
                                  order.get(_data(card[0]).get("status"), 2)))
+    return cards
+
+
+def _brief(args, records, ledger):
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    runs = _latest_runs(records)
+    cards = _cards(records, args.repo)
     for shown, (run, snapshot, level, rule) in enumerate(cards, 1):
         _print_card(shown, run, snapshot, level, rule, runs, records)
         if interactive:
             interactive = _ask(run, snapshot, _data(run).get("status") in {"blocked", "stopped"}, ledger)
     if not cards:
         print("No open, unknown or blocked runs recorded.")
+    return 0
+
+
+def _decide(args, records, ledger):
+    """Record one decision on a card the brief would show, for use without a terminal (e.g. from a chat)."""
+    matches = [card for card in _cards(records) if _data(card[0]).get("run_id") == args.run_id]
+    if not matches:
+        print("qk decide: no brief card for run %s" % _text(args.run_id), file=sys.stderr)
+        return 1
+    if len(matches) > 1:
+        print("qk decide: %d brief cards share run id %s" % (len(matches), _text(args.run_id)), file=sys.stderr)
+        return 1
+    run, snapshot = matches[0][:2]
+    data = _data(run)
+    if args.choice not in _choices(data):
+        print("qk decide: %s is not a choice for this card; choose %s" % (
+            args.choice, " or ".join(_choices(data))), file=sys.stderr)
+        return 1
+    if args.method and args.choice != "merge":
+        print("qk decide: --method applies only to merge", file=sys.stderr)
+        return 1
+    head = snapshot.get("head_sha")
+    if args.choice == "merge":
+        merged, head, reason = _merge(data.get("pr_url"), data.get("commit"), args.method or "")
+        if not merged:
+            print("qk decide: not merged: %s" % _text(reason), file=sys.stderr)
+            return 1
+    _record_decision(ledger, run, args.choice, head, _now(), None)  # no card display to time from
     return 0
 
 
@@ -832,6 +892,8 @@ def main(argv=None):
         records = ledger.records()
         if args.command == "brief":
             return _brief(args, records, ledger)
+        if args.command == "decide":
+            return _decide(args, records, ledger)
         return {"show": _show, "stats": _stats}[args.command](args, records)
     except (OSError, ValueError, TypeError) as error:
         print("qk: %s" % _text(error), file=sys.stderr)

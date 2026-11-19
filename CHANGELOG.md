@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `qk decide RUN_ID merge|leave|abort-later|resume-later [--method M]` records a brief decision without a terminal,
+  for example from an agent in a chat, with the same merge checks and choices as the card.
 - `qk brief` includes blocked runs and orders decision cards by fixed, printed risk rules using recorded diff scope.
 - On a terminal, `qk brief` asks for a decision after each card and records it with `source=user`;
   `y` merges only when the PR head still matches the run's recorded commit.

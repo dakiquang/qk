@@ -65,6 +65,8 @@ When stdin and stdout are both a terminal, `qk brief` asks after each card. Pipe
 
 Each choice is written to the ledger as a decision with `source=user`, then prints `Recorded <choice>: <id>`. A recorded choice does not hide the card; a merged PR leaves the brief after the next `qk sync`.
 
+Without a terminal, for example when an agent in a chat runs the commands for you, record one decision with `qk decide <run-id> merge|leave|abort-later|resume-later`. It accepts only the choices the card offers, applies the same checks before a merge (head equals the recorded commit, merge permission, `--match-head-commit`) and needs `--method` when the repository allows several. The decision is recorded the same way, with `elapsed_s` empty because no card was timed.
+
 ## When something goes wrong
 
 - **A drain killed mid-run** (Ctrl-C, a closed terminal, a kill) leaves that run in its in-progress stage. `resume`, `approve` and `drain` all skip it. While a run works, the runner holds `run.lock` in its run directory and the kernel drops it when the process dies, so `qk brief` shows a run in a working stage whose lock is free as `stopped at <stage> (runner gone)`, with `Next: qk run status <id>, then qk run abort <id>`. The free lock shows only that the runner is gone: an agent it started runs in its own session and may still be finishing its turn in the worktree, so check with `ps` before you abort. Only `qk run abort <id>` gets the run out. Abort leaves the branch, a pushed branch and any PR as they are.

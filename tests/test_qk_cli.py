@@ -1002,7 +1002,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(status, 0)
                 self.assertNotIn("Merge method", output)
                 self.assertIn("cannot merge in example/project (viewerPermission=%s)" % permission, errors)
-                self.assertIn('GH_TOKEN="$(gh auth token --user <account>)" qk brief', errors)
+                self.assertIn('GH_TOKEN="$(gh auth token --user <account>)" in front of the qk command', errors)
                 self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
                 self.assertEqual(self.user_records(), [])
         with self.subTest("permission missing"):
@@ -1011,6 +1011,66 @@ class CliTests(unittest.TestCase):
                 status, _, errors, _ = self.tty_cli(["y", "s"], "brief")
             self.assertIn("invalid repository response", errors)
             self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
+
+    def test_decide_merges_only_the_recorded_head_without_a_terminal(self):
+        self.decision(self.run_record())
+        calls, gh = self.fake_gh()
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, output, errors = self.cli("decide", "one", "merge")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA])
+        [record] = self.user_records()
+        self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["elapsed_s"]),
+                         ("merge", SHA, None))
+        self.assertIn("Recorded merge: " + record["id"], output)
+
+    def test_decide_merge_refusals_record_nothing(self):
+        self.decision(self.run_record())
+        cases = (({"allowed": METHOD_FIELDS.split(",")}, [], "allows squash, merge, rebase; pass --method"),
+                 ({"head": OTHER_SHA}, [], "PR head %s differs from recorded commit" % OTHER_SHA),
+                 ({"permission": "READ"}, [], "cannot merge in example/project (viewerPermission=READ)"),
+                 ({}, ["--method", "rebase"], "merge method must be one of squash"))
+        for options, extra, message in cases:
+            with self.subTest(message=message):
+                calls, gh = self.fake_gh(**options)
+                with mock.patch.object(subprocess, "run", side_effect=gh):
+                    status, _, errors = self.cli("decide", "one", "merge", *extra)
+                self.assertEqual(status, 1)
+                self.assertIn("qk decide: not merged: ", errors)
+                self.assertIn(message, errors)
+                self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
+                self.assertEqual(self.user_records(), [])
+        calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","))
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            self.assertEqual(self.cli("decide", "one", "merge", "--method", "rebase")[0], 0)
+        self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--rebase", "--match-head-commit", SHA])
+
+    def test_decide_choices_follow_the_card(self):
+        self.decision(self.run_record())
+        self.run_record("blocked", status="blocked", pr_url="")
+        self.stopped_state("killed")
+        cases = (("one", "leave", 0), ("one", "abort-later", 1), ("blocked", "merge", 1),
+                 ("blocked", "leave", 1), ("blocked", "abort-later", 0), ("blocked", "resume-later", 0),
+                 ("killed", "resume-later", 1), ("killed", "abort-later", 0), ("missing", "leave", 1))
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("only merge calls gh")):
+            for run_id, choice, expected in cases:
+                with self.subTest(run_id=run_id, choice=choice):
+                    status, _, errors = self.cli("decide", run_id, choice)
+                    self.assertEqual(status, expected, errors)
+            status, _, errors = self.cli("decide", "one", "leave", "--method", "squash")
+        self.assertEqual(status, 1)
+        self.assertIn("--method applies only to merge", errors)
+        self.assertEqual([(record["data"]["run_id"], record["data"]["choice"]) for record in self.user_records()],
+                         [("one", "leave"), ("blocked", "abort-later"), ("blocked", "resume-later"),
+                          ("killed", "abort-later")])
+        self.assertEqual(self.user_records()[0]["data"]["head"], SHA)
+
+    def test_decide_skips_runs_the_brief_does_not_show(self):
+        self.decision(self.run_record(), state="MERGED")
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("nothing to merge")):
+            status, _, errors = self.cli("decide", "one", "leave")
+        self.assertEqual(status, 1)
+        self.assertIn("no brief card for run one", errors)
 
     def test_brief_tty_leave_and_diff_record_only_the_decision(self):
         run = self.run_record()

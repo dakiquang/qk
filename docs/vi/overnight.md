@@ -65,6 +65,8 @@ Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi 
 
 Mỗi lựa chọn được ghi vào sổ thành một decision với `source=user`, rồi in `Recorded <choice>: <id>`. Lựa chọn đã ghi không ẩn thẻ; PR đã merge rời khỏi brief sau lần `qk sync` kế tiếp.
 
+Khi không có terminal, ví dụ khi một agent trong khung chat chạy lệnh thay bạn, ghi từng quyết định bằng `qk decide <run-id> merge|leave|abort-later|resume-later`. Lệnh chỉ nhận đúng các lựa chọn mà thẻ đó có, áp cùng các bước kiểm trước khi merge (head đúng commit đã ghi, quyền merge, `--match-head-commit`), và cần `--method` khi repo cho phép nhiều cách merge. Quyết định được ghi y như trong brief, nhưng `elapsed_s` để trống vì không có thẻ nào được bấm giờ.
+
 ## Khi có sự cố
 
 - **Drain bị dừng giữa chừng** (Ctrl-C, đóng terminal, bị kill) để run đó kẹt ở bước đang chạy. `resume`, `approve` và `drain` đều bỏ qua nó. Khi run đang làm việc, runner giữ `run.lock` trong thư mục run và hệ điều hành nhả khoá khi tiến trình chết, nên `qk brief` hiện run đang ở bước làm việc mà khoá trống là `stopped at <stage> (runner gone)`, kèm `Next: qk run status <id>, then qk run abort <id>`. Khoá trống chỉ cho biết runner đã chết: agent mà runner khởi động chạy trong session riêng và có thể vẫn đang làm nốt lượt trong worktree, nên kiểm bằng `ps` trước khi abort. Chỉ `qk run abort <id>` đưa run ra. Abort để nguyên nhánh, nhánh đã push và PR nếu có.
