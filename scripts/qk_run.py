@@ -1004,13 +1004,22 @@ def block(state, stage, error):
 
 
 def advance(state):
-    while state["stage"] in STAGES:
-        stage = state["stage"]
+    """Run stages while holding `<run>/run.lock`, so `qk brief` can tell a running run from one left mid-stage
+    by a killed process (the kernel drops the lock when the process dies)."""
+    import fcntl  # POSIX only, like the process-group handling above
+    with (run_dir(state["id"]) / "run.lock").open("a") as lock:
         try:
-            state["stage"] = STAGES[stage](state)
-        except Blocked as error:
-            return block(state, stage, error)
-        save(state)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:  # leave the state alone: the other process owns it
+            print(f"qk-run: another process is running {state['id']} (run.lock is held)", file=sys.stderr)
+            return 1
+        while state["stage"] in STAGES:
+            stage = state["stage"]
+            try:
+                state["stage"] = STAGES[stage](state)
+            except Blocked as error:
+                return block(state, stage, error)
+            save(state)
     return 0
 
 
