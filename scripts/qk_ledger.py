@@ -579,6 +579,9 @@ def record_run(state: dict, directory: object) -> dict:
         "verify_results": checks, "usage": _usage(state.get("usage", {})),
         "fix_rounds": _count(state.get("fix_rounds", 0), "fix_rounds"),
         "remaining_count": len(findings), "addressed_count": len(addressed),
+        "serious_count": sum(isinstance(finding, dict)
+                             and str(finding.get("severity", "")).lower() in ("blocker", "important")
+                             for finding in findings),
     }
     data["task"] = " ".join(_text(state.get("task", ""), "task").split())[:120]
     if "diff_stat" in state:

@@ -17,6 +17,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `qk brief` raises a card to high only for remaining blocker or important findings; run records keep a
+  `serious_count`, and older records without it still count every remaining finding.
 - Agent prompts in `qk-run` now require foreground commands; an agent that started its test suite in the
   background and promised to report later ended its one-shot turn without a result.
 

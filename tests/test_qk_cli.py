@@ -236,7 +236,10 @@ class CliTests(unittest.TestCase):
         cases = [
             ({"status": "blocked", "blocked_at": "reviewing", "pr_url": ""},
              {}, "high — blocked at reviewing: reason unknown"),
-            ({"remaining_count": 2}, {}, "high — 2 findings remain"),
+            ({"remaining_count": 2}, {}, "high — 2 findings remain (severity unknown)"),
+            ({"remaining_count": 3, "serious_count": 1}, {}, "high — 1 blocker/important findings remain"),
+            ({"remaining_count": 4, "serious_count": 0, "lines_added": 150, "lines_deleted": 150,
+              "changed_files": ["src/file%d.py" % n for n in range(10)]}, {}, "low — no rule matched"),
             ({"verify_results": [{"exit": 1}, {"exit": 0}]}, {}, "high — verify failed (1 nonzero)"),
             *[({"changed_files": [path]}, {}, "high — sensitive file " + path) for path in (
                 ".github/workflows/ci.yml", "nested/PNPM-lock.yaml", "db/migrations/001.sql", "src/Author.py",
@@ -318,7 +321,7 @@ class CliTests(unittest.TestCase):
         headers = [line for line in output.splitlines() if line.startswith("#")]
         self.assertEqual(len(headers), 4)
         self.assertIn("#1 project: Repair run (no PR)  RISK: high — blocked at unknown: reason unknown", headers[0])
-        self.assertIn("RISK: high — 2 findings remain", headers[1])
+        self.assertIn("RISK: high — 2 findings remain (severity unknown)", headers[1])
         self.assertIn("RISK: medium — never synced", headers[2])
         self.assertIn("RISK: low — no rule matched", headers[3])
         for index, header in enumerate(headers, 1):
