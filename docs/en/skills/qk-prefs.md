@@ -1,5 +1,7 @@
 # qk/prefs
 
+Recorded preference proposals reviewed one by one; only approved ones are written.
+
 [Tiếng Việt](../../vi/skills/qk-prefs.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-prefs/SKILL.md)
 
 ## When to use it

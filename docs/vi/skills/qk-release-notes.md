@@ -1,5 +1,7 @@
 # qk/release-notes
 
+Nháp release notes và changelog truy được nguồn, không bao giờ tự đăng.
+
 [English](../../en/skills/qk-release-notes.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-release-notes/SKILL.md)
 
 ## Khi nào dùng

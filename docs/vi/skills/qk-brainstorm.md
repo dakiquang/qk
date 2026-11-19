@@ -1,5 +1,7 @@
 # qk/brainstorm
 
+Hai đến bốn hướng đi, đánh đổi của từng hướng và một khuyến nghị.
+
 [English](../../en/skills/qk-brainstorm.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-brainstorm/SKILL.md)
 
 ## Khi nào dùng

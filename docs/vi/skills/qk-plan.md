@@ -1,5 +1,7 @@
 # qk/plan
 
+Plan được tạo, audit hoặc sửa, với tiêu chí xong kiểm được.
+
 [English](../../en/skills/qk-plan.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-plan/SKILL.md)
 
 ## Khi nào dùng

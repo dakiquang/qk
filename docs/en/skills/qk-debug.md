@@ -1,5 +1,7 @@
 # qk/debug
 
+A reproduction, a verified root cause and the smallest proposed fix.
+
 [Tiếng Việt](../../vi/skills/qk-debug.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-debug/SKILL.md)
 
 ## When to use it

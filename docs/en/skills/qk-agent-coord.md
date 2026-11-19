@@ -1,5 +1,7 @@
 # qk/agent-coord
 
+A bounded task run on the agent and model you name, with the result checked.
+
 [Tiếng Việt](../../vi/skills/qk-agent-coord.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-agent-coord/SKILL.md)
 
 ## When to use it

@@ -1,5 +1,7 @@
 # qk/handoff
 
+Session context saved, or resumed with drift checks.
+
 [Tiếng Việt](../../vi/skills/qk-handoff.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-handoff/SKILL.md)
 
 ## When to use it

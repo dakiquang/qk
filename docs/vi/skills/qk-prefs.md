@@ -1,5 +1,7 @@
 # qk/prefs
 
+Duyệt từng đề xuất sở thích đã ghi; chỉ ghi những mục được duyệt.
+
 [English](../../en/skills/qk-prefs.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-prefs/SKILL.md)
 
 ## Khi nào dùng

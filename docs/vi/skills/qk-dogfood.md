@@ -1,5 +1,7 @@
 # qk/dogfood
 
+Đề xuất cải thiện instruction dựa trên bằng chứng, không bao giờ tự áp dụng.
+
 [English](../../en/skills/qk-dogfood.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-dogfood/SKILL.md)
 
 ## Khi nào dùng

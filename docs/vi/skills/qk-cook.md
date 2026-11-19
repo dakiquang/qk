@@ -1,5 +1,7 @@
 # qk/cook
 
+Yêu cầu rõ hoặc plan đã duyệt được triển khai, kiểm chứng và tự review.
+
 [English](../../en/skills/qk-cook.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-cook/SKILL.md)
 
 ## Khi nào dùng

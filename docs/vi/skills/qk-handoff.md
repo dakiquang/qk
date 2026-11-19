@@ -1,5 +1,7 @@
 # qk/handoff
 
+Lưu ngữ cảnh phiên, hoặc nhận lại kèm kiểm độ lệch.
+
 [English](../../en/skills/qk-handoff.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-handoff/SKILL.md)
 
 ## Khi nào dùng

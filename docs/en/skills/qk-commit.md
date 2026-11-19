@@ -1,5 +1,7 @@
 # qk/commit
 
+Scoped commits; push and PR only when asked, after an account check.
+
 [Tiếng Việt](../../vi/skills/qk-commit.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-commit/SKILL.md)
 
 ## When to use it

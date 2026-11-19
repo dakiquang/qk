@@ -1,5 +1,7 @@
 # qk
 
+**Bộ agent skill cho Claude Code, Codex và omp giữ quyền quyết định ở bạn: lập plan, triển khai, kiểm chứng và review code do AI viết, với bằng chứng kiểm được.**
+
 [English](README.md) · [Tài liệu](docs/vi/README.md) · [Changelog](CHANGELOG.md)
 
 Bộ agent skill cho Claude Code, Codex và omp, thêm một nhóm nhỏ cách làm việc có kỷ luật lên runtime bạn đang dùng: so sánh hướng đi, lập plan, triển khai có kiểm chứng, debug, kiểm thử, bàn giao giữa các phiên, phối hợp với model thứ hai, commit và soạn nháp release notes.
@@ -7,6 +9,24 @@ Bộ agent skill cho Claude Code, Codex và omp, thêm một nhóm nhỏ cách l
 qk mở rộng runtime, không thay thế nó. Mỗi skill chỉ chạy khi bạn gọi đích danh, theo thiết lập đã kiểm trên Claude Code, Codex và omp. Yêu cầu thường, plan mode, subagent, cấu hình model, quyền và luật repo vẫn do runtime giữ.
 
 > **Trạng thái.** Dự án cá nhân, không liên quan tới công ty nào, công bố nguyên trạng. Tác giả duy trì cho công việc của chính mình và đánh phiên bản bằng tag, nhưng không cam kết hỗ trợ. Issue và pull request đều được đón nhận; không hứa sẽ phản hồi.
+
+## Bắt đầu nhanh
+
+Cài cho các runtime bạn dùng bằng một lệnh (cần Node.js):
+
+```bash
+npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
+```
+
+[Bắt đầu](docs/vi/getting-started.md) có cách cố định bản phát hành, cập nhật, gỡ, và cách cài thủ công không cần Node.js. Sau đó mở phiên mới và gọi một skill:
+
+| Runtime | Ví dụ |
+|---|---|
+| Claude Code | `/qk-brainstorm Should the app read its configuration from environment variables or a TOML file?` |
+| Codex | `$qk-brainstorm …` |
+| omp | `/skill:qk-brainstorm …` (đã kiểm ở chế độ RPC; chế độ tương tác chưa kiểm) |
+
+Tài liệu ghi tên skill dạng `qk/brainstorm`; đó là tên quy trình, không phải lệnh để gõ. Mức hỗ trợ khác nhau theo runtime và Qwen Code chưa được kiểm; xem [Runtime](docs/vi/runtimes.md).
 
 ## Vì sao có qk
 
@@ -18,7 +38,7 @@ Phần lớn bộ kit giúp AI tự làm được nhiều hơn. qk trả lại c
 - **Bằng chứng, không lời khẳng định.** Báo cáo tách điều đã thấy khỏi điều mới chỉ nghe nói, và nói rõ phần chưa kiểm. Mọi báo cáo kết thúc bằng Đã làm, Bằng chứng, Chưa kiểm chứng, Cần bạn quyết định.
 - **Vừa đủ.** Chỉ kiểm điều có thể làm đổi quyết định, mỗi điều một lần; không có pipeline bắt buộc; mười hai skill, khoảng 50 KB, không nạp gì cho tới khi bạn gọi skill.
 
-Đọc [triết lý](docs/vi/philosophy.md) để biết mỗi nguyên tắc nghĩa là gì và không có nghĩa là gì.
+Đọc [triết lý](docs/vi/philosophy.md) để biết mỗi nguyên tắc nghĩa là gì và không có nghĩa là gì. [So sánh các kit](docs/vi/evidence.md#so-sánh-các-kit) chạy cùng bộ bài đo với không kit, Superpowers và qk.
 
 ## Skill
 
@@ -46,24 +66,6 @@ Các công cụ tuỳ chọn đi kèm:
 - **[Lesson](docs/vi/lessons.md)** ghi lỗi AI lặp lại thành quy tắc một dòng; chỉ bật được khi lần đo cho thấy có ích, và chỉ nạp khi có `--lessons`.
 
 Review và chấm điểm pull request nằm ở dự án đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
-
-## Bắt đầu nhanh
-
-Cài cho các runtime bạn dùng bằng một lệnh (cần Node.js):
-
-```bash
-npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
-```
-
-[Bắt đầu](docs/vi/getting-started.md) có cách cố định bản phát hành, cập nhật, gỡ, và cách cài thủ công không cần Node.js. Sau đó mở phiên mới và gọi một skill:
-
-| Runtime | Ví dụ |
-|---|---|
-| Claude Code | `/qk-brainstorm Should the app read its configuration from environment variables or a TOML file?` |
-| Codex | `$qk-brainstorm …` |
-| omp | `/skill:qk-brainstorm …` (đã kiểm ở chế độ RPC; chế độ tương tác chưa kiểm) |
-
-Tài liệu ghi tên skill dạng `qk/brainstorm`; đó là tên quy trình, không phải lệnh để gõ. Mức hỗ trợ khác nhau theo runtime và Qwen Code chưa được kiểm; xem [Runtime](docs/vi/runtimes.md).
 
 ## Tài liệu
 

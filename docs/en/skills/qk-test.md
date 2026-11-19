@@ -1,5 +1,7 @@
 # qk/test
 
+Independent checks, classified failures and verification gaps.
+
 [Tiếng Việt](../../vi/skills/qk-test.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-test/SKILL.md)
 
 ## When to use it

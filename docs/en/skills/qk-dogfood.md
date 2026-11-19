@@ -1,5 +1,7 @@
 # qk/dogfood
 
+Evidence-based proposals to improve instructions, never applied.
+
 [Tiếng Việt](../../vi/skills/qk-dogfood.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-dogfood/SKILL.md)
 
 ## When to use it
