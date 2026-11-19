@@ -655,6 +655,20 @@ class LedgerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "only supported for lessons"):
                     ledger.append(kind, data, source="user")
 
+    def test_user_source_requires_a_decision_with_a_choice(self):
+        record = ledger.append("decision", {"choice": "leave", "pr_url": None}, source="user")
+        self.assertEqual((record["kind"], record["source"], record["recorded_by"]), ("decision", "user", "code"))
+        before = ledger.store_path().read_bytes()
+        rejected = [("decision", {}, "user"), ("decision", {"choice": ""}, "user"),
+                    ("decision", {"choice": " "}, "user"), ("decision", {"choice": None}, "user"),
+                    ("decision", {"choice": "leave"}, "code"), ("decision", {"choice": "leave"}, "model")]
+        rejected += [(kind, {"choice": "leave"}, "user") for kind in ("run", "eval", "finding", "claim")]
+        for kind, data, source in rejected:
+            with self.subTest(kind=kind, data=data, source=source):
+                with self.assertRaisesRegex(ValueError, "only supported for lessons"):
+                    ledger.append(kind, data, source=source)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
     def test_eval_projection_retains_only_outcomes_and_artifact_references(self):
         attempt = self.root / "eval" / "attempt-1"
         record = ledger.record_eval("omp:model", "case-name", self.eval_result(), attempt)

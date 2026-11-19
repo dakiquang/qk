@@ -27,6 +27,15 @@ OTHER_SHA = "b" * 40
 URL = "https://github.com/example/project/pull/10"
 
 
+class FakeTTY(io.StringIO):
+    def isatty(self):
+        return True
+
+
+DIFF = "diff --git a/src/main.py b/src/main.py\n+changed\tline\x1b[2J\n"
+METHOD_FIELDS = "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed"
+
+
 class CliTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -843,6 +852,220 @@ class CliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertTrue(errors)
+
+    def tty_cli(self, answers, *argv, stdin_tty=True, stdout_tty=True):
+        stdin = (FakeTTY if stdin_tty else io.StringIO)("".join(answer + "\n" for answer in answers))
+        output, errors = (FakeTTY if stdout_tty else io.StringIO)(), io.StringIO()
+        with mock.patch.object(sys, "stdin", stdin), mock.patch.object(sys, "stdout", output), \
+                mock.patch.object(sys, "stderr", errors):
+            status = qk.main(list(argv))
+        return status, output.getvalue(), errors.getvalue(), stdin
+
+    def fake_gh(self, head=SHA, allowed=("squashMergeAllowed",), merge_exit=0):
+        calls = []
+
+        def run(argv, **options):
+            calls.append(argv)
+            self.assertNotIn("cwd", options)
+            replies = {("gh", "pr", "view"): (0, json.dumps({"headRefOid": head})),
+                       ("gh", "repo", "view"): (0, json.dumps({field: field in allowed
+                                                               for field in METHOD_FIELDS.split(",")})),
+                       ("gh", "pr", "diff"): (0, DIFF),
+                       ("gh", "pr", "merge"): (merge_exit, "")}
+            code, stdout = replies[tuple(argv[:3])]
+            return subprocess.CompletedProcess(argv, code, stdout, "merge refused" if code else "")
+        return calls, run
+
+    def user_records(self):
+        return [record for record in ledger.records() if record["source"] == "user"]
+
+    def test_brief_tty_merge_requires_matching_head_and_records_choice(self):
+        run = self.run_record()
+        self.decision(run)
+        calls, gh = self.fake_gh()
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, output, errors, _ = self.tty_cli(["y"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("[y] merge  [n] leave  [d] diff  [s] skip", output)
+        self.assertEqual(calls, [["gh", "pr", "view", URL, "--json", "headRefOid"],
+                                 ["gh", "repo", "view", "github.com/example/project", "--json", METHOD_FIELDS],
+                                 ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA]])
+        [record] = self.user_records()
+        self.assertEqual((record["kind"], record["recorded_by"], record["repo"], record["refs"]),
+                         ("decision", "code", "project", [run["id"]]))
+        self.assertEqual(set(record["data"]), {"choice", "pr_url", "run_key", "run_id", "head",
+                                               "decided_at", "elapsed_s"})
+        self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["pr_url"],
+                          record["data"]["run_key"], record["data"]["run_id"]),
+                         ("merge", SHA, URL, run["data"]["run_key"], "one"))
+        self.assertGreaterEqual(record["data"]["elapsed_s"], 0)
+        with self.subTest("merge fails"):
+            before = ledger.store_path().read_bytes()
+            calls, gh = self.fake_gh(merge_exit=1)
+            with mock.patch.object(subprocess, "run", side_effect=gh):
+                status, output, errors, _ = self.tty_cli(["y", "s"], "brief")
+            self.assertEqual(status, 0)
+            self.assertIn("merge refused", errors)
+            self.assertEqual(output.count("[y] merge"), 2)
+            self.assertEqual(calls[-1][:3], ["gh", "pr", "merge"])
+            self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_brief_tty_merge_refuses_incomplete_merge_settings(self):
+        self.decision(self.run_record())
+        calls, gh = self.fake_gh()
+
+        def partial(argv, **options):
+            reply = gh(argv, **options)
+            if argv[:3] == ["gh", "repo", "view"]:
+                return subprocess.CompletedProcess(argv, 0, json.dumps({"squashMergeAllowed": True}), "")
+            return reply
+        before = ledger.store_path().read_bytes()
+        with mock.patch.object(subprocess, "run", side_effect=partial):
+            status, output, errors, _ = self.tty_cli(["y", "s"], "brief")
+        self.assertEqual(status, 0)
+        self.assertIn("invalid repository response", errors)
+        self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_brief_tty_merge_records_time_of_y_not_after_gh_calls(self):
+        self.decision(self.run_record())
+        clock = ["2026-11-19T00:00:00+00:00"]
+        calls, gh = self.fake_gh()
+
+        def delayed_gh(argv, **options):
+            clock[0] = "2026-11-19T00:05:00+00:00"
+            return gh(argv, **options)
+        with mock.patch.object(subprocess, "run", side_effect=delayed_gh), \
+                mock.patch.object(qk, "_now", side_effect=lambda: clock[0]):
+            status, _, errors, _ = self.tty_cli(["y"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(calls[-1][:3], ["gh", "pr", "merge"])
+        [record] = self.user_records()
+        self.assertEqual(record["data"]["decided_at"], "2026-11-19T00:00:00+00:00")
+
+    def test_brief_tty_merge_elapsed_stops_at_the_key_press(self):
+        self.decision(self.run_record())
+        ticks = iter([100.0, 102.5])
+        calls, gh = self.fake_gh()
+        with mock.patch.object(subprocess, "run", side_effect=gh), \
+                mock.patch.object(qk.time, "monotonic", side_effect=lambda: next(ticks, 999.0)):
+            status, _, errors, _ = self.tty_cli(["y"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(calls[-1][:3], ["gh", "pr", "merge"])
+        [record] = self.user_records()
+        self.assertEqual(record["data"]["elapsed_s"], 2.5)
+
+    def test_brief_tty_changed_head_refuses_before_merge(self):
+        self.decision(self.run_record())
+        calls, gh = self.fake_gh(head=OTHER_SHA)
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, output, errors, _ = self.tty_cli(["y", "s"], "brief")
+        self.assertEqual(status, 0)
+        self.assertIn("PR head %s differs from recorded commit %s" % (OTHER_SHA, SHA), errors)
+        self.assertEqual(calls, [["gh", "pr", "view", URL, "--json", "headRefOid"]])
+        self.assertEqual(self.user_records(), [])
+
+    def test_brief_tty_asks_for_method_when_several_are_allowed(self):
+        self.decision(self.run_record())
+        calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","))
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, output, errors, _ = self.tty_cli(["y", "rebase"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("Merge method [squash/merge/rebase]", output)
+        self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--rebase", "--match-head-commit", SHA])
+        self.assertEqual([record["data"]["choice"] for record in self.user_records()], ["merge"])
+        with self.subTest("unknown method"):
+            calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","))
+            with mock.patch.object(subprocess, "run", side_effect=gh):
+                status, _, errors, _ = self.tty_cli(["y", "fast-forward", "s"], "brief")
+            self.assertEqual(status, 0)
+            self.assertIn("merge method must be one of", errors)
+            self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
+            self.assertEqual(len(self.user_records()), 1)
+
+    def test_brief_tty_leave_and_diff_record_only_the_decision(self):
+        run = self.run_record()
+        self.decision(run)
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("leave must not call gh")):
+            status, _, errors, _ = self.tty_cli(["n"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        [record] = self.user_records()
+        self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["pr_url"]),
+                         ("leave", SHA, URL))
+        calls, gh = self.fake_gh()
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, output, errors, _ = self.tty_cli(["d", "n"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(calls, [["gh", "pr", "diff", URL]])
+        self.assertIn("+changed" + " " * 8 + "line\\u001b[2J", output)
+        self.assertNotIn("\x1b", output)
+        self.assertEqual(output.count("[y] merge  [n] leave  [d] diff  [s] skip"), 2)
+        self.assertEqual([record["data"]["choice"] for record in self.user_records()], ["leave", "leave"])
+
+    def test_brief_tty_skip_and_end_of_input_record_nothing(self):
+        self.decision(self.run_record())
+        self.decision(self.run_record("two", pr_url=URL + "2"))
+        before = ledger.store_path().read_bytes()
+        for answers, prompts in ((["s", "s"], 2), ([], 1)):
+            with self.subTest(answers=answers), mock.patch.object(
+                    subprocess, "run", side_effect=AssertionError("skip must not call gh")):
+                status, output, errors, _ = self.tty_cli(answers, "brief")
+                self.assertEqual((status, errors), (0, ""))
+                self.assertEqual(output.count("[y] merge"), prompts)
+                self.assertEqual((output.count("#1 project:"), output.count("#2 project:")), (1, 1))
+                self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_brief_tty_blocked_card_records_intent_only(self):
+        run = self.run_record("blocked", status="blocked", pr_url="")
+        for answers, expected in ((["a"], ["abort-later"]), (["r"], ["resume-later"]),
+                                  (["s"], []), (["y", "a"], ["abort-later"])):
+            with self.subTest(answers=answers), mock.patch.dict(
+                    os.environ, {"QK_STATE_DIR": str(self.root / ("blocked-" + "".join(answers)))}):
+                ledger.append("run", run["data"], repo=run["repo"], task_kind=run["task_kind"])
+                with mock.patch.object(subprocess, "run", side_effect=AssertionError("blocked cards never call gh")):
+                    status, output, errors, _ = self.tty_cli(answers, "brief")
+                self.assertEqual((status, errors), (0, ""))
+                self.assertEqual(output.count("[a] abort later  [r] resume later  [s] skip"), len(answers))
+                self.assertNotIn("[y] merge", output)
+                records = self.user_records()
+                self.assertEqual([record["data"]["choice"] for record in records], expected)
+                for record in records:
+                    self.assertEqual((record["data"]["pr_url"], record["data"]["head"]), (None, None))
+
+    def test_brief_without_both_terminals_never_prompts_or_writes(self):
+        self.decision(self.run_record())
+        self.run_record("blocked", status="blocked", pr_url="")
+        _, plain, _ = self.cli("brief")
+        before = ledger.store_path().read_bytes()
+        for stdin_tty, stdout_tty in ((False, False), (True, False), (False, True)):
+            with self.subTest(stdin_tty=stdin_tty, stdout_tty=stdout_tty), mock.patch.object(
+                    subprocess, "run", side_effect=AssertionError("brief must be offline")):
+                status, output, errors, stdin = self.tty_cli(["y", "a"], "brief", stdin_tty=stdin_tty,
+                                                             stdout_tty=stdout_tty)
+                self.assertEqual((status, output, errors), (0, plain, ""))
+                self.assertEqual(stdin.read(), "y\na\n")
+                self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_user_decisions_stay_separate_from_sync_snapshots(self):
+        self.run_record()
+        with mock.patch.object(subprocess, "run", return_value=self.remote()), \
+                mock.patch.object(qk, "_now", return_value="2026-11-16T00:00:00+00:00"):
+            self.cli("sync")
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("leave must not call gh")):
+            self.tty_cli(["n"], "brief")
+            self.tty_cli(["n"], "brief")
+        with mock.patch.object(subprocess, "run", return_value=self.remote()), \
+                mock.patch.object(qk, "_now", return_value="2026-11-17T00:00:00+00:00"):
+            status, output, errors = self.cli("sync")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("0 recorded; 1 unchanged", output)
+        _, brief, _ = self.cli("brief")
+        self.assertIn("PR=OPEN; synced=2026-11-16T00:00:00+00:00", brief)
+        expected = {"total": 4, "run": 1, "decision": 1, "user_decision": 2}
+        for public in ((), ("--public",)):
+            with self.subTest(public=public):
+                _, output, _ = self.cli("stats", "--by", "kind", *public)
+                self.assertEqual(self.counts(output), expected)
 
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@
 
 Writers and readers share a side-file lock. A failed append may leave a torn
 last line: subsequent operations fail explicitly rather than deleting evidence.
-Like claims, lesson source labels are an interface boundary, not proof of who
-ran the command.
+Like claims, lesson and user-decision source labels are an interface boundary,
+not proof of who ran the command.
 """
 import hashlib
 import json
@@ -344,8 +344,12 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
     _text(kind, "kind", empty=False)
     _text(repo, "repo")
     _text(task_kind, "task_kind")
-    if source is not None and (kind != "lesson" or source not in ("model", "user", "code")):
-        raise ValueError("explicit source is only supported for lessons (model, user or code)")
+    user_decision = (kind == "decision" and source == "user" and isinstance(data, dict)
+                     and isinstance(data.get("choice"), str) and data["choice"].strip() != "")
+    if source is not None and not user_decision and (
+            kind != "lesson" or source not in ("model", "user", "code")):
+        raise ValueError("explicit source is only supported for lessons (model, user or code) "
+                         "and user decisions with a choice")
     if not isinstance(data, dict):
         raise ValueError("data must be an object")
     if not isinstance(refs, (tuple, list)) or any(not isinstance(ref, str) for ref in refs):
@@ -387,8 +391,7 @@ def append(kind: str, data: dict, *, repo: str = "", task_kind: str = "",
         record = {
             "v": 1, "id": identifier, "kind": kind,
             "at": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
-            "source": (source or "model") if kind == "lesson" else (
-                "model" if kind in ("finding", "claim") else "code"),
+            "source": source or ("model" if kind in ("lesson", "finding", "claim") else "code"),
             "recorded_by": "model" if kind == "claim" else "code",
             "repo": repo, "task_kind": task_kind, "refs": list(refs), "data": data,
         }
