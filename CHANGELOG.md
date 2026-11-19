@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - `qk brief` includes blocked runs and orders decision cards by fixed, printed risk rules using recorded diff scope.
+- On a terminal, `qk brief` asks for a decision after each card and records it with `source=user`;
+  `y` merges only when the PR head still matches the run's recorded commit.
 - `qk-run approve ID --later` queues an approved plan without running it, and `qk-run drain
   [--until HH:MM] [--notify]` runs queued runs one at a time; a run that crashes is blocked and the
   queue continues.

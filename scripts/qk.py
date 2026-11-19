@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local evidence reads and read-only pull-request decision snapshots."""
+"""Local evidence reads, read-only PR snapshots and terminal-confirmed brief decisions."""
 
 import argparse
 from collections import Counter, defaultdict, deque
@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 from urllib.parse import urlparse
 
@@ -68,7 +69,7 @@ def _parser():
     claim.add_argument("--text", required=True)
     sync = commands.add_parser("sync", help="read PR state using gh; never change PRs")
     sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
-    brief = commands.add_parser("brief", help="summarize open/unknown PRs offline")
+    brief = commands.add_parser("brief", help="summarize open/unknown PRs; on a terminal, ask per card")
     brief.add_argument("--repo")
     lesson = commands.add_parser("lesson", help="propose and decide evidence-backed lessons")
     lessons = lesson.add_subparsers(dest="lesson_command", required=True)
@@ -197,6 +198,11 @@ def _decision_key(record):
     return (data.get("run_key") or data.get("run_id"), data.get("pr_url"))
 
 
+def _user_decision(record):
+    """Human choices are events; they never stand in for a sync snapshot."""
+    return record.get("kind") == "decision" and record.get("source") == "user"
+
+
 def _snapshots(records):
     """Count a resumed run once, without hiding historical finding events."""
     latest = {("run", _run_key(record)): record for record in _latest_runs(records)}
@@ -204,7 +210,9 @@ def _snapshots(records):
         kind = record.get("kind")
         if kind == "run":
             continue
-        if kind == "decision":
+        if _user_decision(record):
+            key = ("user_decision", record["id"])
+        elif kind == "decision":
             key = (kind, _decision_key(record))
         else:
             key = (kind, record["id"])
@@ -239,7 +247,7 @@ def _stats(args, records):
     counts = Counter()
     for record in selected:
         if args.by == "kind":
-            label = record.get("kind", "unknown")
+            label = "user_decision" if _user_decision(record) else record.get("kind", "unknown")
         elif args.by == "task_kind":
             label = record.get("task_kind") or "unclassified"
         else:
@@ -249,7 +257,7 @@ def _stats(args, records):
         if args.public:
             # Labels are unconstrained local inputs, even kind/runtime names.
             label = label if args.by == "kind" and label in {
-                "run", "finding", "eval", "decision", "claim"} else "other"
+                "run", "finding", "eval", "decision", "user_decision", "claim"} else "other"
         counts[label] += 1
     print("total\t%d" % len(selected))
     for label, count in sorted(counts.items()):
@@ -319,6 +327,10 @@ def _pr_url(value):
     return value.rstrip("/")
 
 
+def _head_sha(value):
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", value) is not None
+
+
 def _remote_snapshot(payload, expected_url):
     if not isinstance(payload, dict) or any(key not in payload for key in PR_FIELDS.split(",")):
         raise ValueError("incomplete PR response")
@@ -330,7 +342,7 @@ def _remote_snapshot(payload, expected_url):
     if not isinstance(payload["title"], str) or not payload["title"].strip():
         raise ValueError("invalid PR title")
     sha = payload["headRefOid"]
-    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}", sha):
+    if not _head_sha(sha):
         raise ValueError("invalid PR head SHA")
     for key in ("mergedAt", "closedAt"):
         if payload[key] is not None:
@@ -359,7 +371,7 @@ def _sync(args, ledger):
     records = ledger.records()
     runs = _latest_runs(records)
     decisions = {_decision_key(record): _data(record) for record in records
-                 if record.get("kind") == "decision"}
+                 if record.get("kind") == "decision" and not _user_decision(record)}
     by_url = defaultdict(list)
     for run in runs:
         if _data(run).get("pr_url"):
@@ -526,9 +538,162 @@ def _brief_risk(data, snapshot, reason="reason unknown"):
     return "low", "no rule matched"
 
 
-def _brief(args, records):
+def _gh(argv, timeout):
+    """Run one gh command without a checkout cwd; the PR URL or owner/repo selects the repository."""
+    reply = subprocess.run(["gh"] + argv, capture_output=True, text=True, timeout=timeout)
+    if reply.returncode:
+        raise ValueError("gh exited %d: %s" % (reply.returncode, reply.stderr.strip()))
+    return reply.stdout
+
+
+MERGE_METHODS = (("squash", "squashMergeAllowed"), ("merge", "mergeCommitAllowed"),
+                 ("rebase", "rebaseMergeAllowed"))
+
+
+def _merge(url, commit):
+    """Merge only the recorded commit; return (ok, head, reason). EOF at the method prompt propagates."""
+    head = None
+    try:
+        url = _pr_url(url)
+        if not commit:
+            return False, None, "run has no recorded commit"
+        payload = json.loads(_gh(["pr", "view", url, "--json", "headRefOid"], 60))
+        head = payload.get("headRefOid") if isinstance(payload, dict) else None
+        if not _head_sha(head):
+            raise ValueError("invalid PR head SHA")
+        if head != commit:
+            return False, head, "PR head %s differs from recorded commit %s" % (head, commit)
+        parsed = urlparse(url)
+        owner, name = parsed.path.split("/")[1:3]
+        # HOST/OWNER/REPO keeps the lookup on the PR's own host (GitHub Enterprise included).
+        settings = json.loads(_gh(["repo", "view", "/".join((parsed.netloc, owner, name)), "--json",
+                                   ",".join(field for _, field in MERGE_METHODS)], 60))
+        if not isinstance(settings, dict) or any(type(settings.get(field)) is not bool for _, field in MERGE_METHODS):
+            raise ValueError("invalid repository response")
+        methods = [method for method, field in MERGE_METHODS if settings.get(field) is True]
+        if not methods:
+            return False, head, "repository allows no merge method"
+        method = methods[0]
+        if len(methods) > 1:
+            method = input("Merge method [%s]: " % "/".join(methods)).strip().lower()
+            if method not in methods:
+                return False, head, "merge method must be one of " + ", ".join(methods)
+        _gh(["pr", "merge", url, "--" + method, "--match-head-commit", commit], 120)
+        return True, head, ""
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        return False, head, str(error)
+
+
+def _ask(run, snapshot, blocked, ledger):
+    """Ask about one card; return False at end of input. Only complete choices are recorded."""
+    shown_at = time.monotonic()
+    data = _data(run)
+    if blocked:
+        prompt, choices = "[a] abort later  [r] resume later  [s] skip: ", {
+            "a": "abort-later", "r": "resume-later"}
+    else:
+        prompt, choices = "[y] merge  [n] leave  [d] diff  [s] skip: ", {"n": "leave"}
+    while True:
+        try:
+            answer = input(prompt).strip().lower()
+            decided_at, elapsed = _now(), round(time.monotonic() - shown_at, 3)
+            if answer == "s":
+                return True
+            head = snapshot.get("head_sha")
+            if not blocked and answer == "d":
+                try:
+                    diff = _gh(["pr", "diff", _pr_url(data.get("pr_url"))], 60)
+                except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+                    print("qk brief: diff unavailable: %s" % _text(error), file=sys.stderr)
+                    continue
+                for line in diff.splitlines():
+                    print(_text(line.expandtabs()))
+                continue
+            if not blocked and answer == "y":
+                merged, head, reason = _merge(data.get("pr_url"), data.get("commit"))
+                if not merged:
+                    print("qk brief: not merged: %s" % _text(reason), file=sys.stderr)
+                    continue
+                choice = "merge"
+            elif answer in choices:
+                choice = choices[answer]
+            else:
+                continue
+        except EOFError:
+            print()
+            return False
+        record = ledger.append("decision", {
+            "choice": choice, "pr_url": data.get("pr_url") or None, "run_key": _run_key(run),
+            "run_id": data.get("run_id"), "head": head, "decided_at": decided_at,
+            "elapsed_s": elapsed},
+            repo=run.get("repo", ""), task_kind=run.get("task_kind", ""), refs=[run["id"]], source="user")
+        print(_text("Recorded %s: %s" % (choice, record["id"])))
+        return True
+
+
+def _print_card(shown, run, snapshot, level, rule, runs, records):
+    data = _data(run)
+    blocked = data.get("status") == "blocked"
+    status = snapshot.get("state", "UNKNOWN")
+    title = snapshot.get("title") or data.get("task") or "PR title unknown"
+    prefix = "#%d %s: " % (shown, run.get("repo", ""))
+    tail = " (%s)  RISK: %s — %s" % (
+        data.get("pr_url") or "no PR", level, _short_text(rule, 100))
+    title_limit = max(3, 240 - len(_text(prefix + tail)) - len("; full: qk show --id " + run["id"]))
+    _brief_line(prefix + _short_text(title, title_limit) + tail, "--id " + run["id"])
+    scope = "scope unknown" if "changed_files" not in data else "%d files, +%s/-%s" % (
+        len(data["changed_files"]), data.get("lines_added", 0), data.get("lines_deleted", 0))
+    done_line = "  Done: run %s status=%s; %s; impl=%s review=%s" % (
+        _short_text(data.get("run_id", run["id"]), 24), data.get("status", "unknown"), scope,
+        _short_text(data.get("impl") or "unknown", 24),
+        _short_text(data.get("review") or "unknown", 24))
+    if not blocked:
+        done_line += "; PR=%s; synced=%s" % (status, snapshot.get("checked_at") or "never / unknown")
+    _brief_line(done_line, "--id " + run["id"])
+    kind = run.get("task_kind") or "unclassified"
+    history = [item for item in runs if (item.get("task_kind") or "unclassified") == kind
+               and item.get("repo") == run.get("repo")]
+    done = sum(_data(item).get("status") == "done" for item in history)
+    history_line = "  History: %s %d/%d done/total (informational)" % (kind, done, len(history))
+    if blocked:
+        _brief_line("  Next: qk run resume %s after fixing the cause, or qk run abort %s" % (
+            data.get("run_id", run["id"]), data.get("run_id", run["id"])), "--id " + run["id"])
+        _brief_line(history_line)
+        return
+    commit, head = data.get("commit"), snapshot.get("head_sha")
+    if not commit or not head:
+        freshness = "UNKNOWN commit comparison / not verified"
+    elif commit != head:
+        freshness = "STALE / not verified (recorded %s; PR head %s)" % (commit, head)
+    else:
+        freshness = "recorded commit %s (matches last synced head)" % commit
+    verifies = data.get("verify_results") or []
+    remaining = data.get("remaining_count")
+    addressed = data.get("addressed_count")
+    review = "remaining=%s, queued-for-fix=%s" % (
+        remaining if remaining is not None else "unknown",
+        addressed if addressed is not None else "unknown")
+    _brief_line("  Evidence: verify: %s; review: %s; %s" % (
+        _verify_summary(verifies), review, freshness), "--id " + run["id"], limit=320)
+    claims = _related_claims(run, records)
+    claim_text = "no recorded model claims"
+    if claims:
+        claim = claims[0]
+        claim_text = "%d total; preview only: %s [source=%s recorded_by=%s]: %s" % (
+            len(claims), claim["id"], claim.get("source", "unknown"),
+            claim.get("recorded_by", "unknown"), _short_text(_data(claim).get("text", ""), 40))
+    _brief_line("  Unchecked: remaining findings=%s; claims (not independent verification): %s" % (
+        remaining if remaining is not None else "unknown", claim_text),
+        "--kind claim" if claims else "")
+    _brief_line(history_line)
+    _brief_line("  Decision: human decision required; sync state is a recorded observation, not approval.")
+
+
+def _brief(args, records, ledger):
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
     runs = _latest_runs(records)
-    decisions = [record for record in records if record.get("kind") == "decision"]
+    decisions = [record for record in records
+                 if record.get("kind") == "decision" and not _user_decision(record)]
     cards = []
     for run in runs:
         data = _data(run)
@@ -552,61 +717,9 @@ def _brief(args, records):
     cards.sort(key=lambda card: ({"high": 0, "medium": 1, "low": 2}[card[2]],
                                  _data(card[0]).get("status") != "blocked"))
     for shown, (run, snapshot, level, rule) in enumerate(cards, 1):
-        data = _data(run)
-        blocked = data.get("status") == "blocked"
-        status = snapshot.get("state", "UNKNOWN")
-        title = snapshot.get("title") or data.get("task") or "PR title unknown"
-        prefix = "#%d %s: " % (shown, run.get("repo", ""))
-        tail = " (%s)  RISK: %s — %s" % (
-            data.get("pr_url") or "no PR", level, _short_text(rule, 100))
-        title_limit = max(3, 240 - len(_text(prefix + tail)) - len("; full: qk show --id " + run["id"]))
-        _brief_line(prefix + _short_text(title, title_limit) + tail, "--id " + run["id"])
-        scope = "scope unknown" if "changed_files" not in data else "%d files, +%s/-%s" % (
-            len(data["changed_files"]), data.get("lines_added", 0), data.get("lines_deleted", 0))
-        done_line = "  Done: run %s status=%s; %s; impl=%s review=%s" % (
-            _short_text(data.get("run_id", run["id"]), 24), data.get("status", "unknown"), scope,
-            _short_text(data.get("impl") or "unknown", 24),
-            _short_text(data.get("review") or "unknown", 24))
-        if not blocked:
-            done_line += "; PR=%s; synced=%s" % (status, snapshot.get("checked_at") or "never / unknown")
-        _brief_line(done_line, "--id " + run["id"])
-        kind = run.get("task_kind") or "unclassified"
-        history = [item for item in runs if (item.get("task_kind") or "unclassified") == kind
-                   and item.get("repo") == run.get("repo")]
-        done = sum(_data(item).get("status") == "done" for item in history)
-        history_line = "  History: %s %d/%d done/total (informational)" % (kind, done, len(history))
-        if blocked:
-            _brief_line("  Next: qk run resume %s after fixing the cause, or qk run abort %s" % (
-                data.get("run_id", run["id"]), data.get("run_id", run["id"])), "--id " + run["id"])
-            _brief_line(history_line)
-            continue
-        commit, head = data.get("commit"), snapshot.get("head_sha")
-        if not commit or not head:
-            freshness = "UNKNOWN commit comparison / not verified"
-        elif commit != head:
-            freshness = "STALE / not verified (recorded %s; PR head %s)" % (commit, head)
-        else:
-            freshness = "recorded commit %s (matches last synced head)" % commit
-        verifies = data.get("verify_results") or []
-        remaining = data.get("remaining_count")
-        addressed = data.get("addressed_count")
-        review = "remaining=%s, queued-for-fix=%s" % (
-            remaining if remaining is not None else "unknown",
-            addressed if addressed is not None else "unknown")
-        _brief_line("  Evidence: verify: %s; review: %s; %s" % (
-            _verify_summary(verifies), review, freshness), "--id " + run["id"], limit=320)
-        claims = _related_claims(run, records)
-        claim_text = "no recorded model claims"
-        if claims:
-            claim = claims[0]
-            claim_text = "%d total; preview only: %s [source=%s recorded_by=%s]: %s" % (
-                len(claims), claim["id"], claim.get("source", "unknown"),
-                claim.get("recorded_by", "unknown"), _short_text(_data(claim).get("text", ""), 40))
-        _brief_line("  Unchecked: remaining findings=%s; claims (not independent verification): %s" % (
-            remaining if remaining is not None else "unknown", claim_text),
-            "--kind claim" if claims else "")
-        _brief_line(history_line)
-        _brief_line("  Decision: human decision required; sync state is a recorded observation, not approval.")
+        _print_card(shown, run, snapshot, level, rule, runs, records)
+        if interactive:
+            interactive = _ask(run, snapshot, _data(run).get("status") == "blocked", ledger)
     if not cards:
         print("No open, unknown or blocked runs recorded.")
     return 0
@@ -630,7 +743,9 @@ def main(argv=None):
                 record["id"], record["source"], record["recorded_by"])))
             return 0
         records = ledger.records()
-        return {"show": _show, "stats": _stats, "brief": _brief}[args.command](args, records)
+        if args.command == "brief":
+            return _brief(args, records, ledger)
+        return {"show": _show, "stats": _stats}[args.command](args, records)
     except (OSError, ValueError, TypeError) as error:
         print("qk: %s" % _text(error), file=sys.stderr)
         return 1
