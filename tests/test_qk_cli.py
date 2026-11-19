@@ -1094,6 +1094,29 @@ class CliTests(unittest.TestCase):
         with mock.patch.object(qk.os, "open", side_effect=finish_then_open):
             self.assertEqual(qk._stopped_runs(), [])
 
+    def test_brief_stopped_scan_skips_a_runner_that_takes_the_lock_meanwhile(self):
+        import fcntl
+        directory = self.stopped_state("starting", lock=True)
+        real_read = Path.read_text
+        reads, taken = [], []
+
+        def read_then_lock(path, *args, **kwargs):
+            text = real_read(path, *args, **kwargs)
+            if path == directory / "state.json":
+                reads.append(path)
+                if len(reads) == 2:  # the re-read after the first probe: a runner takes the lock now
+                    taken.append((directory / "run.lock").open("a"))
+                    fcntl.flock(taken[0], fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return text
+
+        try:
+            with mock.patch.object(Path, "read_text", read_then_lock):
+                self.assertEqual(qk._stopped_runs(), [])
+        finally:
+            for lock in taken:
+                lock.close()
+        self.assertEqual(len(taken), 1)
+
     def test_brief_stopped_run_hides_only_its_own_ledger_card(self):
         self.stopped_state("shared-id")
         self.run_record("shared-id", status="blocked", pr_url="")  # another source directory, same id

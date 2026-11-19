@@ -517,6 +517,23 @@ def _stopped_runs():
         return []
     runner = importlib.import_module("qk_run")
 
+    def free(path):
+        """Probe run.lock and release it at once, so a runner taking the lock waits microseconds at most.
+        A missing lock file counts as free: the run predates run.lock or was killed before advance."""
+        try:
+            descriptor = os.open(str(path.parent / "run.lock"), os.O_RDONLY)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False  # a live runner holds it
+        finally:
+            os.close(descriptor)
+
     def working(path):
         try:
             state = json.loads(path.read_text(encoding="utf-8"))
@@ -529,24 +546,12 @@ def _stopped_runs():
 
     stopped = []
     for path in sorted(Path(runner.state_root()).glob("*/state.json")):
-        if working(path) is None:
+        if working(path) is None or not free(path):
             continue
-        try:
-            descriptor = os.open(str(path.parent / "run.lock"), os.O_RDONLY)
-        except FileNotFoundError:  # never locked: started before run.lock existed, or killed before advance
-            descriptor = None
-        except OSError:
-            continue
-        if descriptor is not None:
-            try:  # probe and release at once, so a runner taking the lock now waits microseconds at most
-                fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
-            except BlockingIOError:
-                continue  # a live runner holds it
-            finally:
-                os.close(descriptor)
-        # Read again after the probe: a runner saves its last state before it releases the lock.
+        # Read again after the probe (a runner saves its last state before it releases the lock), then probe
+        # once more so a runner that took the lock in between is not reported as gone.
         state = working(path)
-        if state is None:
+        if state is None or not free(path):
             continue
         repo = state.get("repo")
         stopped.append({"id": str(path), "repo": Path(repo).name if isinstance(repo, str) and repo else "",
