@@ -6,6 +6,7 @@ from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 import importlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -506,7 +507,65 @@ def _blocked_reason(run):
     return "reason unknown"
 
 
+def _stopped_runs():
+    """Runs left in a working stage with no runner holding their run.lock, e.g. a killed drain.
+
+    Read-only: the lock file is opened for reading and never created, and the ledger is not written."""
+    try:
+        import fcntl  # POSIX only, like the runner
+    except ImportError:
+        return []
+    runner = importlib.import_module("qk_run")
+
+    def free(path):
+        """Probe run.lock and release it at once, so a runner taking the lock waits microseconds at most.
+        A missing lock file counts as free: the run predates run.lock or was killed before advance."""
+        try:
+            descriptor = os.open(str(path.parent / "run.lock"), os.O_RDONLY)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False  # a live runner holds it
+        finally:
+            os.close(descriptor)
+
+    def working(path):
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if (isinstance(state, dict) and state.get("id") == path.parent.name
+                and state.get("stage") in runner.STAGES):
+            return state
+        return None
+
+    stopped = []
+    for path in sorted(Path(runner.state_root()).glob("*/state.json")):
+        if working(path) is None or not free(path):
+            continue
+        # Read again after the probe (a runner saves its last state before it releases the lock), then probe
+        # once more so a runner that took the lock in between is not reported as gone.
+        state = working(path)
+        if state is None or not free(path):
+            continue
+        repo = state.get("repo")
+        stopped.append({"id": str(path), "repo": Path(repo).name if isinstance(repo, str) and repo else "",
+                        "task_kind": state.get("task_kind") or "",
+                        "data": {"run_id": state["id"], "run_key": str(path.parent.resolve()), "status": "stopped",
+                                 "stopped_at": state["stage"], "task": state.get("task"),
+                                 "pr_url": state.get("pr_url") or "", "impl": state.get("impl"),
+                                 "review": state.get("review")}})
+    return stopped
+
+
 def _brief_risk(data, snapshot, reason="reason unknown"):
+    if data.get("status") == "stopped":
+        return "high", "stopped at %s (runner gone)" % (data.get("stopped_at") or "unknown")
     if data.get("status") == "blocked":
         return "high", "blocked at %s: %s" % (data.get("blocked_at") or "unknown", reason)
     serious = data.get("serious_count")
@@ -592,7 +651,9 @@ def _ask(run, snapshot, blocked, ledger):
     """Ask about one card; return False at end of input. Only complete choices are recorded."""
     shown_at = time.monotonic()
     data = _data(run)
-    if blocked:
+    if data.get("status") == "stopped":  # resume refuses a run that is not blocked
+        prompt, choices = "[a] abort later  [s] skip: ", {"a": "abort-later"}
+    elif blocked:
         prompt, choices = "[a] abort later  [r] resume later  [s] skip: ", {
             "a": "abort-later", "r": "resume-later"}
     else:
@@ -638,27 +699,35 @@ def _ask(run, snapshot, blocked, ledger):
 def _print_card(shown, run, snapshot, level, rule, runs, records):
     data = _data(run)
     blocked = data.get("status") == "blocked"
+    stopped = data.get("status") == "stopped"
+    details = "" if stopped else "--id " + run["id"]  # a stopped run has no ledger record to show
     status = snapshot.get("state", "UNKNOWN")
     title = snapshot.get("title") or data.get("task") or "PR title unknown"
     prefix = "#%d %s: " % (shown, run.get("repo", ""))
     tail = " (%s)  RISK: %s — %s" % (
         data.get("pr_url") or "no PR", level, _short_text(rule, 100))
-    title_limit = max(3, 240 - len(_text(prefix + tail)) - len("; full: qk show --id " + run["id"]))
-    _brief_line(prefix + _short_text(title, title_limit) + tail, "--id " + run["id"])
+    title_limit = max(3, 240 - len(_text(prefix + tail)) - len("; full: qk show " + details))
+    _brief_line(prefix + _short_text(title, title_limit) + tail, details)
     scope = "scope unknown" if "changed_files" not in data else "%d files, +%s/-%s" % (
         len(data["changed_files"]), data.get("lines_added", 0), data.get("lines_deleted", 0))
     done_line = "  Done: run %s status=%s; %s; impl=%s review=%s" % (
         _short_text(data.get("run_id", run["id"]), 24), data.get("status", "unknown"), scope,
         _short_text(data.get("impl") or "unknown", 24),
         _short_text(data.get("review") or "unknown", 24))
-    if not blocked:
+    if stopped:
+        done_line = done_line.replace("status=stopped", "status=stopped at " + data["stopped_at"], 1)
+    elif not blocked:
         done_line += "; PR=%s; synced=%s" % (status, snapshot.get("checked_at") or "never / unknown")
-    _brief_line(done_line, "--id " + run["id"])
+    _brief_line(done_line, details)
     kind = run.get("task_kind") or "unclassified"
     history = [item for item in runs if (item.get("task_kind") or "unclassified") == kind
                and item.get("repo") == run.get("repo")]
     done = sum(_data(item).get("status") == "done" for item in history)
     history_line = "  History: %s %d/%d done/total (informational)" % (kind, done, len(history))
+    if stopped:
+        _brief_line("  Next: qk run status %s, then qk run abort %s" % (data["run_id"], data["run_id"]))
+        _brief_line(history_line)
+        return
     if blocked:
         _brief_line("  Next: qk run resume %s after fixing the cause, or qk run abort %s" % (
             data.get("run_id", run["id"]), data.get("run_id", run["id"])), "--id " + run["id"])
@@ -698,11 +767,18 @@ def _brief(args, records, ledger):
     runs = _latest_runs(records)
     decisions = [record for record in records
                  if record.get("kind") == "decision" and not _user_decision(record)]
-    cards = []
+    stopped = [run for run in _stopped_runs() if not args.repo or run["repo"] == args.repo]
+    stopped_keys = {_data(run)["run_key"] for run in stopped}
+    # Older run records have no run_key; match those by run id within the same repository only.
+    stopped_legacy = {(run["repo"], _data(run)["run_id"]) for run in stopped}
+    cards = [(run, {}, *_brief_risk(_data(run), {})) for run in stopped]
     for run in runs:
         data = _data(run)
         url = data.get("pr_url")
-        if (data.get("status") == "aborted" or (not url and data.get("status") != "blocked")
+        replaced = (_run_key(run) in stopped_keys if data.get("run_key")
+                    else (run.get("repo"), data.get("run_id")) in stopped_legacy)
+        if (data.get("status") == "aborted" or replaced
+                or (not url and data.get("status") != "blocked")
                 or (args.repo and run.get("repo") != args.repo)):
             continue
         matched = [decision for decision in decisions
@@ -718,12 +794,13 @@ def _brief(args, records, ledger):
         reason = _blocked_reason(run) if data.get("status") == "blocked" else "reason unknown"
         level, rule = _brief_risk(data, snapshot, reason)
         cards.append((run, snapshot, level, rule))
+    order = {"stopped": 0, "blocked": 1}
     cards.sort(key=lambda card: ({"high": 0, "medium": 1, "low": 2}[card[2]],
-                                 _data(card[0]).get("status") != "blocked"))
+                                 order.get(_data(card[0]).get("status"), 2)))
     for shown, (run, snapshot, level, rule) in enumerate(cards, 1):
         _print_card(shown, run, snapshot, level, rule, runs, records)
         if interactive:
-            interactive = _ask(run, snapshot, _data(run).get("status") == "blocked", ledger)
+            interactive = _ask(run, snapshot, _data(run).get("status") in {"blocked", "stopped"}, ledger)
     if not cards:
         print("No open, unknown or blocked runs recorded.")
     return 0

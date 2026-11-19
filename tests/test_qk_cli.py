@@ -27,6 +27,10 @@ OTHER_SHA = "b" * 40
 URL = "https://github.com/example/project/pull/10"
 
 
+def qk_run_state(root, run_id):
+    return json.loads((root / "state" / "qk-run" / run_id / "state.json").read_text())
+
+
 class FakeTTY(io.StringIO):
     def isatty(self):
         return True
@@ -1034,6 +1038,114 @@ class CliTests(unittest.TestCase):
                 self.assertEqual([record["data"]["choice"] for record in records], expected)
                 for record in records:
                     self.assertEqual((record["data"]["pr_url"], record["data"]["head"]), (None, None))
+
+    def stopped_state(self, run_id, stage="implementing", lock=False):
+        directory = self.root / "state" / "qk-run" / run_id
+        directory.mkdir(parents=True)
+        (directory / "state.json").write_text(json.dumps({
+            "id": run_id, "stage": stage, "task": "Add the thing", "repo": str(self.root / "project"),
+            "impl": "omp:model", "review": "codex:", "task_kind": "feature"}))
+        if lock:
+            (directory / "run.lock").write_text("")
+        return directory
+
+    def test_brief_shows_runs_left_mid_stage_without_a_process(self):
+        import fcntl
+        self.stopped_state("no-lock-file")
+        self.stopped_state("free-lock", stage="verifying", lock=True)
+        held = self.stopped_state("held-lock", lock=True)
+        for stage in ("queued", "awaiting_approval", "blocked", "done"):
+            self.stopped_state("not-running-" + stage, stage=stage)
+        self.run_record("blocked", status="blocked", pr_url="")
+        free_key = str((self.root / "state" / "qk-run" / "free-lock").resolve())
+        self.run_record("free-lock", status="blocked", pr_url="", run_key=free_key)  # earlier block, then killed
+        with (held / "run.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            before = ledger.store_path().read_bytes()
+            with mock.patch.object(subprocess, "run", side_effect=AssertionError("brief must be offline")):
+                status, output, errors = self.cli("brief")
+        self.assertEqual((status, errors), (0, ""))
+        lines = output.splitlines()
+        titles = [line for line in lines if line.startswith("#")]
+        self.assertEqual(len(titles), 3)
+        self.assertEqual(sorted(title.split("RISK: ")[1] for title in titles[:2]),
+                         ["high — stopped at implementing (runner gone)", "high — stopped at verifying (runner gone)"])
+        self.assertIn("RISK: high — blocked at", titles[2])
+        self.assertNotIn("held-lock", output)
+        self.assertNotIn("not-running", output)
+        self.assertIn("  Next: qk run status no-lock-file, then qk run abort no-lock-file", lines)
+        self.assertIn("status=stopped at verifying", output)
+        self.assertNotIn("qk show --id " + str(self.root), output)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+        self.assertFalse((self.root / "state" / "qk-run" / "no-lock-file" / "run.lock").exists())
+        _, filtered, _ = self.cli("brief", "--repo", "other")
+        self.assertNotIn("stopped at", filtered)
+
+    def test_brief_stopped_scan_rereads_state_under_the_lock(self):
+        directory = self.stopped_state("finishing", lock=True)
+        real_open = os.open
+
+        def finish_then_open(path, flags, *args):
+            if str(path).endswith("run.lock"):  # the runner saves `done` and releases before the probe
+                state = json.loads((directory / "state.json").read_text())
+                (directory / "state.json").write_text(json.dumps(dict(state, stage="done")))
+            return real_open(path, flags, *args)
+
+        with mock.patch.object(qk.os, "open", side_effect=finish_then_open):
+            self.assertEqual(qk._stopped_runs(), [])
+
+    def test_brief_stopped_scan_skips_a_runner_that_takes_the_lock_meanwhile(self):
+        import fcntl
+        directory = self.stopped_state("starting", lock=True)
+        real_read = Path.read_text
+        reads, taken = [], []
+
+        def read_then_lock(path, *args, **kwargs):
+            text = real_read(path, *args, **kwargs)
+            if path == directory / "state.json":
+                reads.append(path)
+                if len(reads) == 2:  # the re-read after the first probe: a runner takes the lock now
+                    taken.append((directory / "run.lock").open("a"))
+                    fcntl.flock(taken[0], fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return text
+
+        try:
+            with mock.patch.object(Path, "read_text", read_then_lock):
+                self.assertEqual(qk._stopped_runs(), [])
+        finally:
+            for lock in taken:
+                lock.close()
+        self.assertEqual(len(taken), 1)
+
+    def test_brief_stopped_run_hides_only_its_own_ledger_card(self):
+        self.stopped_state("shared-id")
+        self.run_record("shared-id", status="blocked", pr_url="")  # another source directory, same id
+        _, output, _ = self.cli("brief")
+        titles = [line for line in output.splitlines() if line.startswith("#")]
+        self.assertEqual(len(titles), 2)
+        self.assertIn("stopped at implementing (runner gone)", titles[0])
+        self.assertIn("blocked at", titles[1])
+
+    def test_brief_stopped_run_replaces_legacy_record_only_in_its_repo(self):
+        self.stopped_state("legacy")  # repo label "project"
+        self.run_record("legacy", status="blocked", pr_url="", run_key=None)
+        self.run_record("legacy", repo="elsewhere", status="blocked", pr_url="", run_key=None)
+        _, output, _ = self.cli("brief")
+        titles = [line for line in output.splitlines() if line.startswith("#")]
+        self.assertEqual(len(titles), 2)
+        self.assertIn("#1 project: Add the thing (no PR)  RISK: high — stopped at implementing", titles[0])
+        self.assertIn("#2 elsewhere:", titles[1])
+
+    def test_brief_tty_stopped_card_records_abort_intent_only(self):
+        self.stopped_state("killed")
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("stopped cards never call gh")):
+            status, output, errors, _ = self.tty_cli(["y", "r", "a"], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(output.count("[a] abort later  [s] skip"), 3)
+        [record] = self.user_records()
+        self.assertEqual((record["data"]["choice"], record["data"]["run_id"], record["data"]["pr_url"]),
+                         ("abort-later", "killed", None))
+        self.assertEqual(qk_run_state(self.root, "killed")["stage"], "implementing")
 
     def test_brief_without_both_terminals_never_prompts_or_writes(self):
         self.decision(self.run_record())

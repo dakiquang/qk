@@ -242,6 +242,66 @@ class RunnerTest(unittest.TestCase):
             self.cli("approve", state["id"], "--later")
         self.assertEqual([call[0] for call in agent.calls], ["plan"])
 
+    def test_advance_holds_run_lock_and_refuses_a_second_process(self):
+        import fcntl
+        from unittest import mock
+        state = {"id": "locked", "stage": "verifying"}
+        qk_run.save(state)
+        lock_path = qk_run.run_dir("locked") / "run.lock"
+        seen = []
+
+        def probe(current):
+            with lock_path.open("r") as other:
+                try:
+                    fcntl.flock(other, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    seen.append("free")
+                except BlockingIOError:
+                    seen.append("held")
+            return "done"
+
+        with mock.patch.dict(qk_run.STAGES, verifying=probe):
+            self.assertEqual(qk_run.advance(state), 0)
+        self.assertEqual((seen, qk_run.load("locked")["stage"]), (["held"], "done"))
+        with lock_path.open("r") as other:
+            fcntl.flock(other, fcntl.LOCK_SH | fcntl.LOCK_NB)  # released once advance returns
+
+        state = {"id": "probed", "stage": "verifying"}
+        qk_run.save(state)
+        probe = (qk_run.run_dir("probed") / "run.lock").open("a")
+        fcntl.flock(probe, fcntl.LOCK_SH | fcntl.LOCK_NB)  # a `qk brief` probe at the moment the runner starts
+        import threading
+        threading.Timer(0.2, probe.close).start()
+        with mock.patch.dict(qk_run.STAGES, verifying=lambda current: "done"):
+            self.assertEqual(qk_run.advance(state), 0)
+        self.assertEqual(qk_run.load("probed")["stage"], "done")
+
+        state = {"id": "moved", "stage": "verifying"}
+        qk_run.save(state)
+        held = (qk_run.run_dir("moved") / "run.lock").open("a")
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)  # another runner, which finishes the stage meanwhile
+
+        def finish():
+            qk_run.save(dict(state, stage="done"))
+            held.close()
+
+        threading.Timer(0.2, finish).start()
+        with mock.patch.dict(qk_run.STAGES, verifying=lambda current: self.fail("stale copy repeated a stage")), \
+                contextlib.redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(qk_run.advance(state), 1)
+        self.assertIn("changed while waiting for run.lock", errors.getvalue())
+        self.assertEqual(qk_run.load("moved")["stage"], "done")
+
+        state = {"id": "busy", "stage": "verifying"}
+        qk_run.save(state)
+        with (qk_run.run_dir("busy") / "run.lock").open("a") as held, \
+                mock.patch.object(qk_run, "RUN_LOCK_WAIT_SECONDS", 0.2), \
+                mock.patch.dict(qk_run.STAGES, verifying=lambda current: self.fail("stage ran under a held lock")), \
+                contextlib.redirect_stderr(io.StringIO()) as errors:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertEqual(qk_run.advance(state), 1)
+        self.assertIn("another process is running busy", errors.getvalue())
+        self.assertEqual(qk_run.load("busy")["stage"], "verifying")
+
     def test_drain_runs_queued_in_timestamp_order_and_creates_both_prs(self):
         from unittest import mock
         order = []

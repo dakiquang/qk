@@ -37,6 +37,7 @@ DEFAULT_TIMEOUT = 1800
 HEARTBEAT_SECONDS = 60
 STDERR_DRAIN_SECONDS = 5
 KILL_GRACE_SECONDS = 10
+RUN_LOCK_WAIT_SECONDS = 5  # `qk brief` probes run.lock for microseconds; only a real runner holds it longer
 DISPLAY_LIMIT = 120
 TITLE_LIMIT = 72
 PLAN_RE = re.compile(r"<<<QK-PLAN\s*\n(.*?)\n\s*QK-PLAN>>>", re.S)
@@ -1004,13 +1005,36 @@ def block(state, stage, error):
 
 
 def advance(state):
-    while state["stage"] in STAGES:
-        stage = state["stage"]
+    """Run stages while holding `<run>/run.lock`, so `qk brief` can tell a running run from one left mid-stage
+    by a killed process (the kernel drops the lock when the process dies)."""
+    import fcntl  # POSIX only, like the process-group handling above
+    with (run_dir(state["id"]) / "run.lock").open("a") as lock:
+        deadline = time.monotonic() + RUN_LOCK_WAIT_SECONDS
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:  # leave the state alone: the other process owns it
+                    print(f"qk-run: another process is running {state['id']} (run.lock is held)",
+                          file=sys.stderr)
+                    return 1
+                time.sleep(0.05)
         try:
-            state["stage"] = STAGES[stage](state)
-        except Blocked as error:
-            return block(state, stage, error)
-        save(state)
+            saved = load(state["id"])
+        except SystemExit:
+            saved = {}
+        if (saved.get("stage"), saved.get("ledger_revision")) != (state["stage"], state.get("ledger_revision")):
+            print(f"qk-run: {state['id']} changed while waiting for run.lock; check qk-run status {state['id']}",
+                  file=sys.stderr)  # another runner moved it on: running this copy would repeat a stage
+            return 1
+        while state["stage"] in STAGES:
+            stage = state["stage"]
+            try:
+                state["stage"] = STAGES[stage](state)
+            except Blocked as error:
+                return block(state, stage, error)
+            save(state)
     return 0
 
 

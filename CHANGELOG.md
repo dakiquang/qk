@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
   [--until HH:MM] [--notify]` runs queued runs one at a time; a run that crashes is blocked and the
   queue continues.
 - Overnight guide (`docs/{en,vi}/overnight.md`): queue, drain, morning brief, recovery and the publishing account.
+- `qk brief` shows a run left in a working stage with no runner (a killed drain or terminal) as a high-risk
+  `stopped at <stage> (runner gone)` card; the runner holds `run.lock` in the run directory while it works. A run
+  started before this change and still running has no lock, so it also shows as stopped until it finishes.
 
 ### Fixed
 
