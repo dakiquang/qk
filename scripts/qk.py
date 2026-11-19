@@ -537,17 +537,15 @@ def _stopped_runs():
             descriptor = None
         except OSError:
             continue
-        try:
-            if descriptor is not None:
-                try:
-                    fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    continue  # a live runner holds it
-            # Read again under the lock: the runner saves its last state before releasing it.
-            state = working(path)
-        finally:
-            if descriptor is not None:
+        if descriptor is not None:
+            try:  # probe and release at once, so a runner taking the lock now waits microseconds at most
+                fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue  # a live runner holds it
+            finally:
                 os.close(descriptor)
+        # Read again after the probe: a runner saves its last state before it releases the lock.
+        state = working(path)
         if state is None:
             continue
         repo = state.get("repo")
@@ -766,11 +764,15 @@ def _brief(args, records, ledger):
                  if record.get("kind") == "decision" and not _user_decision(record)]
     stopped = [run for run in _stopped_runs() if not args.repo or run["repo"] == args.repo]
     stopped_keys = {_data(run)["run_key"] for run in stopped}
+    # Older run records have no run_key; match those by run id within the same repository only.
+    stopped_legacy = {(run["repo"], _data(run)["run_id"]) for run in stopped}
     cards = [(run, {}, *_brief_risk(_data(run), {})) for run in stopped]
     for run in runs:
         data = _data(run)
         url = data.get("pr_url")
-        if (data.get("status") == "aborted" or _run_key(run) in stopped_keys
+        replaced = (_run_key(run) in stopped_keys if data.get("run_key")
+                    else (run.get("repo"), data.get("run_id")) in stopped_legacy)
+        if (data.get("status") == "aborted" or replaced
                 or (not url and data.get("status") != "blocked")
                 or (args.repo and run.get("repo") != args.repo)):
             continue

@@ -275,6 +275,22 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(qk_run.advance(state), 0)
         self.assertEqual(qk_run.load("probed")["stage"], "done")
 
+        state = {"id": "moved", "stage": "verifying"}
+        qk_run.save(state)
+        held = (qk_run.run_dir("moved") / "run.lock").open("a")
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)  # another runner, which finishes the stage meanwhile
+
+        def finish():
+            qk_run.save(dict(state, stage="done"))
+            held.close()
+
+        threading.Timer(0.2, finish).start()
+        with mock.patch.dict(qk_run.STAGES, verifying=lambda current: self.fail("stale copy repeated a stage")), \
+                contextlib.redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(qk_run.advance(state), 1)
+        self.assertIn("changed while waiting for run.lock", errors.getvalue())
+        self.assertEqual(qk_run.load("moved")["stage"], "done")
+
         state = {"id": "busy", "stage": "verifying"}
         qk_run.save(state)
         with (qk_run.run_dir("busy") / "run.lock").open("a") as held, \

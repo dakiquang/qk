@@ -1103,6 +1103,16 @@ class CliTests(unittest.TestCase):
         self.assertIn("stopped at implementing (runner gone)", titles[0])
         self.assertIn("blocked at", titles[1])
 
+    def test_brief_stopped_run_replaces_legacy_record_only_in_its_repo(self):
+        self.stopped_state("legacy")  # repo label "project"
+        self.run_record("legacy", status="blocked", pr_url="", run_key=None)
+        self.run_record("legacy", repo="elsewhere", status="blocked", pr_url="", run_key=None)
+        _, output, _ = self.cli("brief")
+        titles = [line for line in output.splitlines() if line.startswith("#")]
+        self.assertEqual(len(titles), 2)
+        self.assertIn("#1 project: Add the thing (no PR)  RISK: high — stopped at implementing", titles[0])
+        self.assertIn("#2 elsewhere:", titles[1])
+
     def test_brief_tty_stopped_card_records_abort_intent_only(self):
         self.stopped_state("killed")
         with mock.patch.object(subprocess, "run", side_effect=AssertionError("stopped cards never call gh")):

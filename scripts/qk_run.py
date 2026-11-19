@@ -1020,6 +1020,14 @@ def advance(state):
                           file=sys.stderr)
                     return 1
                 time.sleep(0.05)
+        try:
+            saved = load(state["id"])
+        except SystemExit:
+            saved = {}
+        if (saved.get("stage"), saved.get("ledger_revision")) != (state["stage"], state.get("ledger_revision")):
+            print(f"qk-run: {state['id']} changed while waiting for run.lock; check qk-run status {state['id']}",
+                  file=sys.stderr)  # another runner moved it on: running this copy would repeat a stage
+            return 1
         while state["stage"] in STAGES:
             stage = state["stage"]
             try:
