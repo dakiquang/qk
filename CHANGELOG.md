@@ -21,6 +21,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `qk brief` checks that the active `gh` account can merge (`viewerPermission` of write or above) before asking for a
+  merge method, and says how to rerun with `GH_TOKEN`; before, it asked for a method and then failed at `gh pr merge`.
 - `qk brief` raises a card to high only for remaining blocker or important findings; run records keep a
   `serious_count`, and older records without it still count every remaining finding.
 - Agent prompts in `qk-run` now require foreground commands; an agent that started its test suite in the

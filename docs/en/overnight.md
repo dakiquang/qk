@@ -58,7 +58,7 @@ A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run
 
 When stdin and stdout are both a terminal, `qk brief` asks after each card. Piped or redirected, it only prints and makes no network call.
 
-- Not blocked: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merges with `gh`, and only if the PR head still equals the run's recorded commit: it reads the methods the repository allows, asks which one when there are several, and passes `--match-head-commit`. If the merge does not happen, it prints `qk brief: not merged: <reason>` and asks again. `d` prints the PR diff and asks again. `n` records that you leave the PR.
+- Not blocked: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merges with `gh`, and only if the PR head still equals the run's recorded commit: it checks that the active `gh` account can merge in that repository (otherwise it says so before asking anything; quit and rerun with `GH_TOKEN="$(gh auth token --user <account>)" qk brief`), reads the methods the repository allows, asks which one when there are several, and passes `--match-head-commit`. If the merge does not happen, it prints `qk brief: not merged: <reason>` and asks again. `d` prints the PR diff and asks again. `n` records that you leave the PR.
 - Blocked: `[a] abort later  [r] resume later  [s] skip`. These only record your intent; run `qk run abort` or `qk run resume` yourself.
 - Stopped mid-stage: `[a] abort later  [s] skip`. `a` only records your intent.
 - `s` records nothing. End of input (Ctrl-D) stops the questions; the remaining cards are printed only.

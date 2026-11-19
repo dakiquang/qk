@@ -58,7 +58,7 @@ Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the ca
 
 Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi output được pipe hoặc chuyển hướng, nó chỉ in và không gọi mạng.
 
-- Run không bị chặn: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merge bằng `gh`, và chỉ khi head của PR vẫn đúng commit mà run đã ghi: nó đọc các cách merge repo cho phép, hỏi chọn cách nào khi có nhiều cách, và truyền `--match-head-commit`. Nếu không merge được, nó in `qk brief: not merged: <reason>` rồi hỏi lại. `d` in diff của PR rồi hỏi lại. `n` ghi lại rằng bạn để nguyên PR.
+- Run không bị chặn: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merge bằng `gh`, và chỉ khi head của PR vẫn đúng commit mà run đã ghi: nó kiểm tài khoản `gh` đang active có quyền merge ở repo đó không (không có thì báo ngay, trước khi hỏi gì; thoát rồi chạy lại bằng `GH_TOKEN="$(gh auth token --user <account>)" qk brief`), đọc các cách merge repo cho phép, hỏi chọn cách nào khi có nhiều cách, và truyền `--match-head-commit`. Nếu không merge được, nó in `qk brief: not merged: <reason>` rồi hỏi lại. `d` in diff của PR rồi hỏi lại. `n` ghi lại rằng bạn để nguyên PR.
 - Run bị chặn: `[a] abort later  [r] resume later  [s] skip`. Hai lựa chọn này chỉ ghi lại ý định; bạn tự chạy `qk run abort` hoặc `qk run resume`.
 - Run dừng giữa chừng: `[a] abort later  [s] skip`. `a` chỉ ghi lại ý định.
 - `s` không ghi gì. Hết input (Ctrl-D) thì dừng hỏi; các thẻ còn lại chỉ được in.

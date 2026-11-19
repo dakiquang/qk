@@ -868,15 +868,16 @@ class CliTests(unittest.TestCase):
             status = qk.main(list(argv))
         return status, output.getvalue(), errors.getvalue(), stdin
 
-    def fake_gh(self, head=SHA, allowed=("squashMergeAllowed",), merge_exit=0):
+    def fake_gh(self, head=SHA, allowed=("squashMergeAllowed",), merge_exit=0, permission="WRITE"):
         calls = []
 
         def run(argv, **options):
             calls.append(argv)
             self.assertNotIn("cwd", options)
             replies = {("gh", "pr", "view"): (0, json.dumps({"headRefOid": head})),
-                       ("gh", "repo", "view"): (0, json.dumps({field: field in allowed
-                                                               for field in METHOD_FIELDS.split(",")})),
+                       ("gh", "repo", "view"): (0, json.dumps(dict(
+                           {field: field in allowed for field in METHOD_FIELDS.split(",")},
+                           viewerPermission=permission))),
                        ("gh", "pr", "diff"): (0, DIFF),
                        ("gh", "pr", "merge"): (merge_exit, "")}
             code, stdout = replies[tuple(argv[:3])]
@@ -895,7 +896,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual((status, errors), (0, ""))
         self.assertIn("[y] merge  [n] leave  [d] diff  [s] skip", output)
         self.assertEqual(calls, [["gh", "pr", "view", URL, "--json", "headRefOid"],
-                                 ["gh", "repo", "view", "github.com/example/project", "--json", METHOD_FIELDS],
+                                 ["gh", "repo", "view", "github.com/example/project", "--json",
+                                  METHOD_FIELDS + ",viewerPermission"],
                                  ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA]])
         [record] = self.user_records()
         self.assertEqual((record["kind"], record["recorded_by"], record["repo"], record["refs"]),
@@ -989,6 +991,26 @@ class CliTests(unittest.TestCase):
             self.assertIn("merge method must be one of", errors)
             self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
             self.assertEqual(len(self.user_records()), 1)
+
+    def test_brief_tty_without_merge_permission_stops_before_asking_for_a_method(self):
+        self.decision(self.run_record())
+        for permission in ("READ", "TRIAGE"):
+            with self.subTest(permission=permission):
+                calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","), permission=permission)
+                with mock.patch.object(subprocess, "run", side_effect=gh):
+                    status, output, errors, _ = self.tty_cli(["y", "s"], "brief")
+                self.assertEqual(status, 0)
+                self.assertNotIn("Merge method", output)
+                self.assertIn("cannot merge in example/project (viewerPermission=%s)" % permission, errors)
+                self.assertIn('GH_TOKEN="$(gh auth token --user <account>)" qk brief', errors)
+                self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
+                self.assertEqual(self.user_records(), [])
+        with self.subTest("permission missing"):
+            calls, gh = self.fake_gh(permission=None)
+            with mock.patch.object(subprocess, "run", side_effect=gh):
+                status, _, errors, _ = self.tty_cli(["y", "s"], "brief")
+            self.assertIn("invalid repository response", errors)
+            self.assertNotIn(["gh", "pr", "merge"], [call[:3] for call in calls])
 
     def test_brief_tty_leave_and_diff_record_only_the_decision(self):
         run = self.run_record()

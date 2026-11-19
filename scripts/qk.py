@@ -611,6 +611,7 @@ def _gh(argv, timeout):
 
 MERGE_METHODS = (("squash", "squashMergeAllowed"), ("merge", "mergeCommitAllowed"),
                  ("rebase", "rebaseMergeAllowed"))
+MERGE_PERMISSIONS = {"ADMIN", "MAINTAIN", "WRITE"}  # GitHub viewerPermission values that may merge
 
 
 def _merge(url, commit):
@@ -630,9 +631,14 @@ def _merge(url, commit):
         owner, name = parsed.path.split("/")[1:3]
         # HOST/OWNER/REPO keeps the lookup on the PR's own host (GitHub Enterprise included).
         settings = json.loads(_gh(["repo", "view", "/".join((parsed.netloc, owner, name)), "--json",
-                                   ",".join(field for _, field in MERGE_METHODS)], 60))
-        if not isinstance(settings, dict) or any(type(settings.get(field)) is not bool for _, field in MERGE_METHODS):
+                                   ",".join([field for _, field in MERGE_METHODS] + ["viewerPermission"])], 60))
+        if (not isinstance(settings, dict) or any(type(settings.get(field)) is not bool for _, field in MERGE_METHODS)
+                or not isinstance(settings.get("viewerPermission"), str)):
             raise ValueError("invalid repository response")
+        if settings["viewerPermission"] not in MERGE_PERMISSIONS:  # check before asking for a method
+            return False, head, ("the active gh account cannot merge in %s/%s (viewerPermission=%s); quit and run "
+                                 "GH_TOKEN=\"$(gh auth token --user <account>)\" qk brief" % (
+                                     owner, name, settings["viewerPermission"]))
         methods = [method for method, field in MERGE_METHODS if settings.get(field) is True]
         if not methods:
             return False, head, "repository allows no merge method"
