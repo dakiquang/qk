@@ -46,11 +46,11 @@ Thẻ của run bị chặn chỉ hiện dòng tiêu đề, rồi `Done`, `Next`
 
 Thẻ xếp theo high, medium, low; trong cùng mức, run dừng giữa chừng đứng trước, rồi tới run bị chặn. Quy tắc khớp đầu tiên quyết định mức, và nội dung quy tắc được in ra:
 
-- **high:** `stopped at <stage> (no process)`, `blocked at <stage>: <reason>`, `<n> blocker/important findings remain` (finding nit không tính; run ghi trước khi sổ lưu mức độ hiện `<n> findings remain (severity unknown)` và tính mọi finding còn lại), `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Nhạy cảm nghĩa là `.github/`, manifest và lockfile phụ thuộc (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, hoặc đường dẫn chứa `auth`, `secret`, `permission` hay `policy`.
+- **high:** `stopped at <stage> (runner gone)`, `blocked at <stage>: <reason>`, `<n> blocker/important findings remain` (finding nit không tính; run ghi trước khi sổ lưu mức độ hiện `<n> findings remain (severity unknown)` và tính mọi finding còn lại), `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Nhạy cảm nghĩa là `.github/`, manifest và lockfile phụ thuộc (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, hoặc đường dẫn chứa `auth`, `secret`, `permission` hay `policy`.
 - **medium:** `fix round used`, `<n> lines changed` (trên 300), `<n> files changed` (trên 10), `PR head differs from recorded commit`, `never synced`, `scope unknown`.
 - **low:** `no rule matched`.
 
-Các quy tắc không trao quyền duyệt. Brief bỏ qua run đã abort, run không bị chặn có PR đã merge hoặc đóng, và run chưa có PR trừ khi run bị chặn. Khi không có gì để hiện, brief in `No open, unknown or blocked runs recorded.`
+Các quy tắc không trao quyền duyệt. Brief bỏ qua run đã abort, run không bị chặn có PR đã merge hoặc đóng, và run chưa có PR trừ khi run bị chặn hoặc dừng giữa chừng. Khi không có gì để hiện, brief in `No open, unknown or blocked runs recorded.`
 
 ### Quyết định ngay trong terminal
 
@@ -67,7 +67,7 @@ Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the ca
 
 ## Khi có sự cố
 
-- **Drain bị dừng giữa chừng** (Ctrl-C, đóng terminal, bị kill) để run đó kẹt ở bước đang chạy. `resume`, `approve` và `drain` đều bỏ qua nó. Khi run đang làm việc, runner giữ `run.lock` trong thư mục run và hệ điều hành nhả khoá khi tiến trình chết, nên `qk brief` hiện run đang ở bước làm việc mà khoá trống là `stopped at <stage> (no process)`, kèm `Next: qk run status <id>, then qk run abort <id>`. Chỉ `qk run abort <id>` đưa nó ra. Abort để nguyên nhánh, nhánh đã push và PR nếu có.
+- **Drain bị dừng giữa chừng** (Ctrl-C, đóng terminal, bị kill) để run đó kẹt ở bước đang chạy. `resume`, `approve` và `drain` đều bỏ qua nó. Khi run đang làm việc, runner giữ `run.lock` trong thư mục run và hệ điều hành nhả khoá khi tiến trình chết, nên `qk brief` hiện run đang ở bước làm việc mà khoá trống là `stopped at <stage> (runner gone)`, kèm `Next: qk run status <id>, then qk run abort <id>`. Khoá trống chỉ cho biết runner đã chết: agent mà runner khởi động chạy trong session riêng và có thể vẫn đang làm nốt lượt trong worktree, nên kiểm bằng `ps` trước khi abort. Chỉ `qk run abort <id>` đưa run ra. Abort để nguyên nhánh, nhánh đã push và PR nếu có.
 - **Hết quota hoặc lỗi đăng nhập** làm run đó dừng ở `blocked`, và drain chuyển sang run kế tiếp, run này có thể bị chặn vì cùng lý do.
 - **Hai việc cùng lúc:** drain không bao giờ chạy hai run trong hàng đợi cùng lúc, nhưng không chặn `start`, `approve` không có `--later`, hay `resume` mà bạn tự chạy ở terminal khác.
 - **Máy ngủ:** máy ngủ thì agent và drain tạm dừng. Giữ `caffeinate -i` trước `drain`.

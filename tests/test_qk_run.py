@@ -265,9 +265,20 @@ class RunnerTest(unittest.TestCase):
         with lock_path.open("r") as other:
             fcntl.flock(other, fcntl.LOCK_SH | fcntl.LOCK_NB)  # released once advance returns
 
+        state = {"id": "probed", "stage": "verifying"}
+        qk_run.save(state)
+        probe = (qk_run.run_dir("probed") / "run.lock").open("a")
+        fcntl.flock(probe, fcntl.LOCK_SH | fcntl.LOCK_NB)  # a `qk brief` probe at the moment the runner starts
+        import threading
+        threading.Timer(0.2, probe.close).start()
+        with mock.patch.dict(qk_run.STAGES, verifying=lambda current: "done"):
+            self.assertEqual(qk_run.advance(state), 0)
+        self.assertEqual(qk_run.load("probed")["stage"], "done")
+
         state = {"id": "busy", "stage": "verifying"}
         qk_run.save(state)
         with (qk_run.run_dir("busy") / "run.lock").open("a") as held, \
+                mock.patch.object(qk_run, "RUN_LOCK_WAIT_SECONDS", 0.2), \
                 mock.patch.dict(qk_run.STAGES, verifying=lambda current: self.fail("stage ran under a held lock")), \
                 contextlib.redirect_stderr(io.StringIO()) as errors:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)

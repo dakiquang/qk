@@ -46,11 +46,11 @@ A blocked card shows the title line, then `Done`, `Next` and `History` only. So 
 
 Cards are ordered high, medium, low; within a level, stopped runs come first, then blocked runs. The first matching rule sets the level, and its text is printed:
 
-- **high:** `stopped at <stage> (no process)`, `blocked at <stage>: <reason>`, `<n> blocker/important findings remain` (nit findings do not count; a run recorded before severity was kept shows `<n> findings remain (severity unknown)` and counts every remaining finding), `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Sensitive means `.github/`, dependency manifests and lockfiles (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, or a path containing `auth`, `secret`, `permission` or `policy`.
+- **high:** `stopped at <stage> (runner gone)`, `blocked at <stage>: <reason>`, `<n> blocker/important findings remain` (nit findings do not count; a run recorded before severity was kept shows `<n> findings remain (severity unknown)` and counts every remaining finding), `verify failed (<n> nonzero)`, `sensitive file <path>` (`+N more`). Sensitive means `.github/`, dependency manifests and lockfiles (`package.json`, `*.lock`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, `Dockerfile`, `requirements*.txt`, …), `*.tf`, `migrations/`, or a path containing `auth`, `secret`, `permission` or `policy`.
 - **medium:** `fix round used`, `<n> lines changed` (over 300), `<n> files changed` (over 10), `PR head differs from recorded commit`, `never synced`, `scope unknown`.
 - **low:** `no rule matched`.
 
-The rules do not grant approval. The brief leaves out aborted runs, runs that are not blocked whose PR is merged or closed, and runs without a PR unless they are blocked. With nothing to show, it prints `No open, unknown or blocked runs recorded.`
+The rules do not grant approval. The brief leaves out aborted runs, runs that are not blocked whose PR is merged or closed, and runs without a PR unless they are blocked or stopped mid-stage. With nothing to show, it prints `No open, unknown or blocked runs recorded.`
 
 ### Deciding from the terminal
 
@@ -67,7 +67,7 @@ A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run
 
 ## When something goes wrong
 
-- **A drain killed mid-run** (Ctrl-C, a closed terminal, a kill) leaves that run in its in-progress stage. `resume`, `approve` and `drain` all skip it. While a run works, the runner holds `run.lock` in its run directory and the kernel drops it when the process dies, so `qk brief` shows a run in a working stage whose lock is free as `stopped at <stage> (no process)`, with `Next: qk run status <id>, then qk run abort <id>`. Only `qk run abort <id>` gets it out. Abort leaves the branch, a pushed branch and any PR as they are.
+- **A drain killed mid-run** (Ctrl-C, a closed terminal, a kill) leaves that run in its in-progress stage. `resume`, `approve` and `drain` all skip it. While a run works, the runner holds `run.lock` in its run directory and the kernel drops it when the process dies, so `qk brief` shows a run in a working stage whose lock is free as `stopped at <stage> (runner gone)`, with `Next: qk run status <id>, then qk run abort <id>`. The free lock shows only that the runner is gone: an agent it started runs in its own session and may still be finishing its turn in the worktree, so check with `ps` before you abort. Only `qk run abort <id>` gets the run out. Abort leaves the branch, a pushed branch and any PR as they are.
 - **Quota or login failures** end that run as `blocked`, and drain moves on to the next run, which may block for the same reason.
 - **Two tasks at once:** drain never runs two queued runs together, but it does not stop `start`, `approve` without `--later`, or `resume` that you run by hand in another terminal.
 - **Sleep:** a sleeping machine pauses the agents and the drain. Keep `caffeinate -i` in front of `drain`.

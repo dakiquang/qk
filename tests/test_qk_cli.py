@@ -1057,7 +1057,8 @@ class CliTests(unittest.TestCase):
         for stage in ("queued", "awaiting_approval", "blocked", "done"):
             self.stopped_state("not-running-" + stage, stage=stage)
         self.run_record("blocked", status="blocked", pr_url="")
-        self.run_record("free-lock", status="blocked", pr_url="")  # an earlier block, since resumed and killed
+        free_key = str((self.root / "state" / "qk-run" / "free-lock").resolve())
+        self.run_record("free-lock", status="blocked", pr_url="", run_key=free_key)  # earlier block, then killed
         with (held / "run.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             before = ledger.store_path().read_bytes()
@@ -1068,7 +1069,7 @@ class CliTests(unittest.TestCase):
         titles = [line for line in lines if line.startswith("#")]
         self.assertEqual(len(titles), 3)
         self.assertEqual(sorted(title.split("RISK: ")[1] for title in titles[:2]),
-                         ["high — stopped at implementing (no process)", "high — stopped at verifying (no process)"])
+                         ["high — stopped at implementing (runner gone)", "high — stopped at verifying (runner gone)"])
         self.assertIn("RISK: high — blocked at", titles[2])
         self.assertNotIn("held-lock", output)
         self.assertNotIn("not-running", output)
@@ -1079,6 +1080,28 @@ class CliTests(unittest.TestCase):
         self.assertFalse((self.root / "state" / "qk-run" / "no-lock-file" / "run.lock").exists())
         _, filtered, _ = self.cli("brief", "--repo", "other")
         self.assertNotIn("stopped at", filtered)
+
+    def test_brief_stopped_scan_rereads_state_under_the_lock(self):
+        directory = self.stopped_state("finishing", lock=True)
+        real_open = os.open
+
+        def finish_then_open(path, flags, *args):
+            if str(path).endswith("run.lock"):  # the runner saves `done` and releases before the probe
+                state = json.loads((directory / "state.json").read_text())
+                (directory / "state.json").write_text(json.dumps(dict(state, stage="done")))
+            return real_open(path, flags, *args)
+
+        with mock.patch.object(qk.os, "open", side_effect=finish_then_open):
+            self.assertEqual(qk._stopped_runs(), [])
+
+    def test_brief_stopped_run_hides_only_its_own_ledger_card(self):
+        self.stopped_state("shared-id")
+        self.run_record("shared-id", status="blocked", pr_url="")  # another source directory, same id
+        _, output, _ = self.cli("brief")
+        titles = [line for line in output.splitlines() if line.startswith("#")]
+        self.assertEqual(len(titles), 2)
+        self.assertIn("stopped at implementing (runner gone)", titles[0])
+        self.assertIn("blocked at", titles[1])
 
     def test_brief_tty_stopped_card_records_abort_intent_only(self):
         self.stopped_state("killed")

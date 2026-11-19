@@ -508,19 +508,28 @@ def _blocked_reason(run):
 
 
 def _stopped_runs():
-    """Runs left in a running stage with no process holding their run.lock, e.g. a killed drain.
+    """Runs left in a working stage with no runner holding their run.lock, e.g. a killed drain.
 
     Read-only: the lock file is opened for reading and never created, and the ledger is not written."""
-    import fcntl  # POSIX only, like the runner
+    try:
+        import fcntl  # POSIX only, like the runner
+    except ImportError:
+        return []
     runner = importlib.import_module("qk_run")
-    stopped = []
-    for path in sorted(Path(runner.state_root()).glob("*/state.json")):
+
+    def working(path):
         try:
             state = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            continue
-        if (not isinstance(state, dict) or state.get("id") != path.parent.name
-                or state.get("stage") not in runner.STAGES):
+            return None
+        if (isinstance(state, dict) and state.get("id") == path.parent.name
+                and state.get("stage") in runner.STAGES):
+            return state
+        return None
+
+    stopped = []
+    for path in sorted(Path(runner.state_root()).glob("*/state.json")):
+        if working(path) is None:
             continue
         try:
             descriptor = os.open(str(path.parent / "run.lock"), os.O_RDONLY)
@@ -528,17 +537,23 @@ def _stopped_runs():
             descriptor = None
         except OSError:
             continue
-        if descriptor is not None:
-            try:
-                fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
-            except BlockingIOError:
-                continue  # a live process holds it
-            finally:
+        try:
+            if descriptor is not None:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    continue  # a live runner holds it
+            # Read again under the lock: the runner saves its last state before releasing it.
+            state = working(path)
+        finally:
+            if descriptor is not None:
                 os.close(descriptor)
+        if state is None:
+            continue
         repo = state.get("repo")
         stopped.append({"id": str(path), "repo": Path(repo).name if isinstance(repo, str) and repo else "",
                         "task_kind": state.get("task_kind") or "",
-                        "data": {"run_id": state["id"], "run_key": str(path.parent), "status": "stopped",
+                        "data": {"run_id": state["id"], "run_key": str(path.parent.resolve()), "status": "stopped",
                                  "stopped_at": state["stage"], "task": state.get("task"),
                                  "pr_url": state.get("pr_url") or "", "impl": state.get("impl"),
                                  "review": state.get("review")}})
@@ -547,7 +562,7 @@ def _stopped_runs():
 
 def _brief_risk(data, snapshot, reason="reason unknown"):
     if data.get("status") == "stopped":
-        return "high", "stopped at %s (no process)" % (data.get("stopped_at") or "unknown")
+        return "high", "stopped at %s (runner gone)" % (data.get("stopped_at") or "unknown")
     if data.get("status") == "blocked":
         return "high", "blocked at %s: %s" % (data.get("blocked_at") or "unknown", reason)
     serious = data.get("serious_count")
@@ -750,12 +765,12 @@ def _brief(args, records, ledger):
     decisions = [record for record in records
                  if record.get("kind") == "decision" and not _user_decision(record)]
     stopped = [run for run in _stopped_runs() if not args.repo or run["repo"] == args.repo]
-    stopped_ids = {_data(run)["run_id"] for run in stopped}
+    stopped_keys = {_data(run)["run_key"] for run in stopped}
     cards = [(run, {}, *_brief_risk(_data(run), {})) for run in stopped]
     for run in runs:
         data = _data(run)
         url = data.get("pr_url")
-        if (data.get("status") == "aborted" or data.get("run_id") in stopped_ids
+        if (data.get("status") == "aborted" or _run_key(run) in stopped_keys
                 or (not url and data.get("status") != "blocked")
                 or (args.repo and run.get("repo") != args.repo)):
             continue
