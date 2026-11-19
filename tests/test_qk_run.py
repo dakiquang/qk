@@ -709,6 +709,27 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.latest()["stage"], "done")
         self.assertNotIn("fix", [c[0] for c in agent.calls])
 
+    def test_every_agent_stage_is_told_to_run_commands_in_the_foreground(self):
+        reviews = iter([
+            result(findings=[{"severity": "important", "file": "greeting.txt", "line": 1,
+                              "claim": "needs fix", "fix": "fix it"}]),
+            result(),
+        ])
+        agent = Agent(review=lambda cwd, state_dir: next(reviews))
+        prompts = []
+
+        def recording(spec, prompt, *args, **kwargs):
+            prompts.append(prompt)
+            return agent(spec, prompt, *args, **kwargs)
+        state = self.start(recording)
+        self.cli("approve", state["id"])
+        self.assertEqual(self.latest()["stage"], "done")
+        self.assertEqual([call[0] for call in agent.calls], ["plan", "cook", "review", "fix", "review"])
+        foreground = "run every command in the foreground and wait for it to finish"
+        for stage, prompt in zip([call[0] for call in agent.calls], prompts):
+            with self.subTest(stage=stage):
+                self.assertIn(foreground, prompt)
+
     def test_review_prompt_text_is_pinned_and_used_by_the_runner(self):
         pinned = """Independent read-only review. Do not edit files and do not run commands that write.
 Repository: /w. Approved plan: /r/approved-plan.md. Full diff: /r/review.diff.
