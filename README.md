@@ -1,5 +1,7 @@
 # qk
 
+**Agent skills for Claude Code, Codex and omp that keep you the one who decides: plan, implement, verify and review AI-written code with evidence you can check.**
+
 [Tiếng Việt](README.vi.md) · [Documentation](docs/en/README.md) · [Changelog](CHANGELOG.md)
 
 Agent skills for Claude Code, Codex and omp that add a small set of disciplined workflows on top of the runtime you already use: compare approaches, plan, implement with verification, debug, test, hand off between sessions, coordinate a second model, commit, and draft release notes.
@@ -8,15 +10,23 @@ qk extends the runtime and does not replace it. Every skill runs only when you c
 
 > **Status.** A personal project, not affiliated with any company, published as is. It is maintained for its author's own work and versioned with tags, but there is no support commitment. Issues and pull requests are welcome; a reply is not guaranteed.
 
-### ☕ Found it useful? Buy me a coffee
+## Quick start
 
-If this project saves you time, a coffee keeps it maintained. Any amount helps. More
-options on the [donate page](https://dakiquang.github.io/donate/).
+Install for the runtimes you use with one command (needs Node.js):
 
-| MoMo · VietQR | PayPal |
-|:---:|:---:|
-| <img src="https://dakiquang.github.io/donate/images/qr-momo.png" width="180" alt="MoMo and VietQR code"> | <img src="https://dakiquang.github.io/donate/images/qr-paypal.png" width="180" alt="PayPal QR code"> |
-| [![Open MoMo](https://img.shields.io/badge/Open%20MoMo-%E2%86%92-A50064?style=for-the-badge)](https://me.momo.vn/dakiquang) | [![Open PayPal](https://img.shields.io/badge/Open%20PayPal-%E2%86%92-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/dakiquang) |
+```bash
+npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
+```
+
+[Getting started](docs/en/getting-started.md) covers pinning a release, updating, removing, and a manual install without Node.js. Then open a new session and call a skill:
+
+| Runtime | Example |
+|---|---|
+| Claude Code | `/qk-brainstorm Should the app read its configuration from environment variables or a TOML file?` |
+| Codex | `$qk-brainstorm …` |
+| omp | `/skill:qk-brainstorm …` (RPC mode checked; interactive mode not yet checked) |
+
+The docs write a skill as `qk/brainstorm`; that is the workflow's name, not something to type. Support differs by runtime and Qwen Code is not yet checked; see [Runtimes](docs/en/runtimes.md).
 
 ## Why qk
 
@@ -28,7 +38,7 @@ Most kits help AI do more on its own. qk hands back what you need to decide, thr
 - **Evidence, not claims.** Reports separate what was seen from what was only told, and say what was not checked. Every report ends with Done, Evidence, Not verified, Needs your decision.
 - **Enough.** Check only what could change the decision, once; no mandatory pipeline; twelve skills, about 50 KB, nothing loaded until you call a skill.
 
-Read the [philosophy](docs/en/philosophy.md) for what each principle does and does not mean.
+Read the [philosophy](docs/en/philosophy.md) for what each principle does and does not mean. The [kit comparison](docs/en/evidence.md#kit-comparison) runs the same eval cases with no kit, Superpowers and qk.
 
 ## Skills
 
@@ -57,24 +67,6 @@ Opt-in tools sit beside the skills:
 
 Pull-request review and scoring live in the companion project [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 
-## Quick start
-
-Install for the runtimes you use with one command (needs Node.js):
-
-```bash
-npx skills add dakiquang/qk -g -a claude-code codex qwen-code -y
-```
-
-[Getting started](docs/en/getting-started.md) covers pinning a release, updating, removing, and a manual install without Node.js. Then open a new session and call a skill:
-
-| Runtime | Example |
-|---|---|
-| Claude Code | `/qk-brainstorm Should the app read its configuration from environment variables or a TOML file?` |
-| Codex | `$qk-brainstorm …` |
-| omp | `/skill:qk-brainstorm …` (RPC mode checked; interactive mode not yet checked) |
-
-The docs write a skill as `qk/brainstorm`; that is the workflow's name, not something to type. Support differs by runtime and Qwen Code is not yet checked; see [Runtimes](docs/en/runtimes.md).
-
 ## Documentation
 
 - [Getting started](docs/en/getting-started.md): install, call, update, pin a release, uninstall.
@@ -93,6 +85,16 @@ python3 -m unittest discover -s tests
 ```
 
 The validator checks skill metadata, explicit-invocation settings, internal links, English and Vietnamese page pairs, personal paths and secret-like strings; Static checks do not prove runtime isolation; [Getting started](docs/en/getting-started.md#6-check-the-kit) lists the other limits. CI runs both commands and a gitleaks scan.
+
+## ☕ Found it useful? Buy me a coffee
+
+If this project saves you time, a coffee keeps it maintained. Any amount helps. More
+options on the [donate page](https://dakiquang.github.io/donate/).
+
+| MoMo · VietQR | PayPal |
+|:---:|:---:|
+| <img src="https://dakiquang.github.io/donate/images/qr-momo.png" width="180" alt="MoMo and VietQR code"> | <img src="https://dakiquang.github.io/donate/images/qr-paypal.png" width="180" alt="PayPal QR code"> |
+| [![Open MoMo](https://img.shields.io/badge/Open%20MoMo-%E2%86%92-A50064?style=for-the-badge)](https://me.momo.vn/dakiquang) | [![Open PayPal](https://img.shields.io/badge/Open%20PayPal-%E2%86%92-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/dakiquang) |
 
 ## License
 

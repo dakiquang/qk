@@ -1,5 +1,7 @@
 # qk/commit
 
+Commit đúng phạm vi; chỉ push và mở PR khi được yêu cầu, sau bước kiểm account.
+
 [English](../../en/skills/qk-commit.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-commit/SKILL.md)
 
 ## Khi nào dùng

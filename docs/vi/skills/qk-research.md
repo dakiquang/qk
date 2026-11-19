@@ -1,5 +1,7 @@
 # qk/research
 
+Câu hỏi quyết định được trả lời từ nguồn chính và thí nghiệm có đối chứng.
+
 [English](../../en/skills/qk-research.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-research/SKILL.md)
 
 ## Khi nào dùng

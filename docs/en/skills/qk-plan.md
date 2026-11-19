@@ -1,5 +1,7 @@
 # qk/plan
 
+A plan created, audited or revised, with checkable completion criteria.
+
 [Tiếng Việt](../../vi/skills/qk-plan.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-plan/SKILL.md)
 
 ## When to use it

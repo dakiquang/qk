@@ -1,5 +1,7 @@
 # qk/release-notes
 
+Traceable release-note and changelog drafts, never published.
+
 [Tiếng Việt](../../vi/skills/qk-release-notes.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-release-notes/SKILL.md)
 
 ## When to use it

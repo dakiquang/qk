@@ -1,5 +1,7 @@
 # qk/brainstorm
 
+Two to four approaches, their trade-offs and a recommendation.
+
 [Tiếng Việt](../../vi/skills/qk-brainstorm.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-brainstorm/SKILL.md)
 
 ## When to use it

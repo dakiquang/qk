@@ -1,5 +1,7 @@
 # qk/debug
 
+Cách tái hiện, nguyên nhân gốc đã kiểm và cách sửa nhỏ nhất được đề xuất.
+
 [English](../../en/skills/qk-debug.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-debug/SKILL.md)
 
 ## Khi nào dùng

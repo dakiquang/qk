@@ -1,5 +1,7 @@
 # qk/agent-coord
 
+Một việc có giới hạn chạy trên đúng agent và model bạn nêu, kết quả được kiểm.
+
 [English](../../en/skills/qk-agent-coord.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-agent-coord/SKILL.md)
 
 ## Khi nào dùng

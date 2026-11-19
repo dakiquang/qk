@@ -1,5 +1,7 @@
 # qk/test
 
+Kiểm độc lập, phân loại lỗi và chỉ ra chỗ chưa kiểm.
+
 [English](../../en/skills/qk-test.md) · [Mục lục](../README.md) · [Nguồn skill](../../../skills/qk-test/SKILL.md)
 
 ## Khi nào dùng

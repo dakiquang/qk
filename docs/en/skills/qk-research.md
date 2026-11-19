@@ -1,5 +1,7 @@
 # qk/research
 
+A decision question answered from primary sources and controlled experiments.
+
 [Tiếng Việt](../../vi/skills/qk-research.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-research/SKILL.md)
 
 ## When to use it

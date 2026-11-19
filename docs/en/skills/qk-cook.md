@@ -1,5 +1,7 @@
 # qk/cook
 
+A clear request or approved plan implemented, verified and self-reviewed.
+
 [Tiếng Việt](../../vi/skills/qk-cook.md) · [Docs index](../README.md) · [Skill source](../../../skills/qk-cook/SKILL.md)
 
 ## When to use it
