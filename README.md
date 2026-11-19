@@ -62,7 +62,7 @@ Opt-in tools sit beside the skills:
 - **[qk-run](docs/en/runner.md)** drives one task from request to a ready-for-review pull request: one plan-approval gate, the plan's own checks, a review by a different model family, and never a merge.
 - **[Overnight runs](docs/en/overnight.md)** queue approved plans in the evening, drain them one at a time overnight, and review the results with `qk brief` in the morning.
 - **[The preference hook](docs/en/preference-hook.md)** turns "from now on…" requests into proposals you review with `qk/prefs`.
-- **[The evidence ledger and `qk` CLI](docs/en/ledger.md)** keep local run/eval evidence and model claims together, sync PR state and show a read-only decision brief.
+- **[The evidence ledger and `qk` CLI](docs/en/ledger.md)** keep local run/eval evidence and model claims together, sync PR state and print a decision brief; on a terminal it asks for a decision on each run and can merge a PR whose head still matches the run.
 - **[Lessons](docs/en/lessons.md)** record repeated AI mistakes as one-line rules; a lesson can be turned on only after a measurement shows it helps, and is loaded only with `--lessons`.
 
 Pull-request review and scoring live in the companion project [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
