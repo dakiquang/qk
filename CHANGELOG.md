@@ -14,6 +14,7 @@ All notable changes to this project are documented here. The format follows
 - `qk-run approve ID --later` queues an approved plan without running it, and `qk-run drain
   [--until HH:MM] [--notify]` runs queued runs one at a time; a run that crashes is blocked and the
   queue continues.
+- Overnight guide (`docs/{en,vi}/overnight.md`): queue, drain, morning brief, recovery and the publishing account.
 
 ### Fixed
 

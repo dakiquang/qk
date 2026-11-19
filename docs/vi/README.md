@@ -14,6 +14,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 ## Hướng dẫn
 
 - [Runner qk-run](runner.md): tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, với một cổng duyệt plan.
+- [Chạy qua đêm](overnight.md): xếp hàng plan đã duyệt buổi tối, chạy lần lượt qua đêm, đọc `qk brief` buổi sáng.
 - [qk-eval](evals.md): kiểm trước/sau chấm bằng code khi bạn sửa một skill hoặc bước review của runner.
 - [Sổ bằng chứng và CLI](ledger.md): bằng chứng cục bộ, kết luận model và hồ sơ quyết định PR chỉ đọc.
 - [Lesson](lessons.md): quy tắc về lỗi AI lặp lại, đo trước khi dùng, chỉ nạp khi có `--lessons`.
