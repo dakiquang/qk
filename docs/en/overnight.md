@@ -52,6 +52,8 @@ Cards are ordered high, medium, low; within a level, stopped runs come first, th
 
 The rules do not grant approval. The brief leaves out aborted runs, runs that are not blocked whose PR is merged or closed, and runs without a PR unless they are blocked or stopped mid-stage. With nothing to show, it prints `No open, unknown or blocked runs recorded.`
 
+A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Check the cause with `qk run status <id>`. `resume` runs in your terminal, not in a drain. If the run blocked at verifying, reviewing or fixing, your hand fixes are verified and reviewed again (see [Authority](runner.md#authority)). `qk run abort <id>` keeps the worktree; remove it with `git worktree remove`.
+
 ### Deciding from the terminal
 
 When stdin and stdout are both a terminal, `qk brief` asks after each card. Piped or redirected, it only prints and makes no network call.
@@ -62,8 +64,6 @@ When stdin and stdout are both a terminal, `qk brief` asks after each card. Pipe
 - `s` records nothing. End of input (Ctrl-D) stops the questions; the remaining cards are printed only.
 
 Each choice is written to the ledger as a decision with `source=user`, then prints `Recorded <choice>: <id>`. A recorded choice does not hide the card; a merged PR leaves the brief after the next `qk sync`.
-
-A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Check the cause with `qk run status <id>`. `resume` runs in your terminal, not in a drain. If the run blocked at verifying, reviewing or fixing, your hand fixes are verified and reviewed again (see [Authority](runner.md#authority)). `qk run abort <id>` keeps the worktree; remove it with `git worktree remove`.
 
 ## When something goes wrong
 

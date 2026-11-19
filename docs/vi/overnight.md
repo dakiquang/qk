@@ -52,6 +52,8 @@ Thẻ xếp theo high, medium, low; trong cùng mức, run dừng giữa chừng
 
 Các quy tắc không trao quyền duyệt. Brief bỏ qua run đã abort, run không bị chặn có PR đã merge hoặc đóng, và run chưa có PR trừ khi run bị chặn hoặc dừng giữa chừng. Khi không có gì để hiện, brief in `No open, unknown or blocked runs recorded.`
 
+Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Xem nguyên nhân bằng `qk run status <id>`. `resume` chạy trong terminal của bạn, không trong drain. Nếu run bị chặn ở verifying, reviewing hoặc fixing, phần bạn tự sửa được kiểm và review lại (xem [Quyền](runner.md#quyền)). `qk run abort <id>` giữ lại worktree; xoá nó bằng `git worktree remove`.
+
 ### Quyết định ngay trong terminal
 
 Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi output được pipe hoặc chuyển hướng, nó chỉ in và không gọi mạng.
@@ -62,8 +64,6 @@ Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi 
 - `s` không ghi gì. Hết input (Ctrl-D) thì dừng hỏi; các thẻ còn lại chỉ được in.
 
 Mỗi lựa chọn được ghi vào sổ thành một decision với `source=user`, rồi in `Recorded <choice>: <id>`. Lựa chọn đã ghi không ẩn thẻ; PR đã merge rời khỏi brief sau lần `qk sync` kế tiếp.
-
-Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Xem nguyên nhân bằng `qk run status <id>`. `resume` chạy trong terminal của bạn, không trong drain. Nếu run bị chặn ở verifying, reviewing hoặc fixing, phần bạn tự sửa được kiểm và review lại (xem [Quyền](runner.md#quyền)). `qk run abort <id>` giữ lại worktree; xoá nó bằng `git worktree remove`.
 
 ## Khi có sự cố
 
