@@ -574,6 +574,7 @@ def parse_result(text):
 
 RESULT_CONTRACT = """
 This is one non-interactive turn that ends with your reply: run every command in the foreground and wait for it to finish; do not start background jobs or say you will report later.
+Never merge pull requests or record decisions (no `gh pr merge`, `qk decide` or `qk brief`): a person makes those.
 End your reply with exactly one fenced block:
 ```qk-result
 {"status": "done|blocked|needs_input", "summary": "...", "files": [], "evidence": [], "reason": "", "findings": []}

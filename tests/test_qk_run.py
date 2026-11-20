@@ -786,9 +786,11 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(self.latest()["stage"], "done")
         self.assertEqual([call[0] for call in agent.calls], ["plan", "cook", "review", "fix", "review"])
         foreground = "run every command in the foreground and wait for it to finish"
+        no_decisions = "Never merge pull requests or record decisions (no `gh pr merge`, `qk decide` or `qk brief`)"
         for stage, prompt in zip([call[0] for call in agent.calls], prompts):
             with self.subTest(stage=stage):
                 self.assertIn(foreground, prompt)
+                self.assertIn(no_decisions, prompt)
 
     def test_review_prompt_text_is_pinned_and_used_by_the_runner(self):
         pinned = """Independent read-only review. Do not edit files and do not run commands that write.
@@ -805,6 +807,7 @@ Report only verified problems introduced by this diff. Put them in "findings" as
 "fix": "..."}.
 Use status "done" when the review itself completed, even if there are findings.
 This is one non-interactive turn that ends with your reply: run every command in the foreground and wait for it to finish; do not start background jobs or say you will report later.
+Never merge pull requests or record decisions (no `gh pr merge`, `qk decide` or `qk brief`): a person makes those.
 End your reply with exactly one fenced block:
 ```qk-result
 {"status": "done|blocked|needs_input", "summary": "...", "files": [], "evidence": [], "reason": "", "findings": []}
