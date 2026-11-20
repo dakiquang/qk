@@ -65,7 +65,7 @@ When stdin and stdout are both a terminal, `qk brief` asks after each card. Pipe
 
 Each choice is written to the ledger as a decision with `source=user`, then prints `Recorded <choice>: <id>`. A recorded choice does not hide the card; a merged PR leaves the brief after the next `qk sync`.
 
-Without a terminal, for example when an agent in a chat runs the commands for you, record one decision with `qk decide <run-id> merge|leave|abort-later|resume-later`. It accepts only the choices the card offers, applies the same checks before a merge (head equals the recorded commit, merge permission, `--match-head-commit`) and needs `--method` when the repository allows several. The decision is recorded the same way, with `elapsed_s` empty because no card was timed.
+Without a terminal, for example when an agent in a chat runs the commands for you, record one decision with `qk decide <run-id> merge|leave|abort-later|resume-later`. It accepts only the choices the card offers, applies the same checks before a merge (head equals the recorded commit, merge permission, `--match-head-commit`) and needs `--method` when the repository allows several. Run it only on the user's own stated choice, including the merge method; an agent must not pick one. The decision is recorded the same way, with `via=decide` instead of `via=brief` and `elapsed_s` empty because no card was timed. `source=user` attributes the choice to the user; it does not prove who typed the command. Agents that `qk-run` starts are told never to merge or run `qk decide`.
 
 ## When something goes wrong
 

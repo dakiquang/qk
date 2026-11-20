@@ -903,7 +903,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual((record["kind"], record["recorded_by"], record["repo"], record["refs"]),
                          ("decision", "code", "project", [run["id"]]))
         self.assertEqual(set(record["data"]), {"choice", "pr_url", "run_key", "run_id", "head",
-                                               "decided_at", "elapsed_s"})
+                                               "decided_at", "elapsed_s", "via"})
+        self.assertEqual(record["data"]["via"], "brief")
         self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["pr_url"],
                           record["data"]["run_key"], record["data"]["run_id"]),
                          ("merge", SHA, URL, run["data"]["run_key"], "one"))
@@ -1015,13 +1016,20 @@ class CliTests(unittest.TestCase):
     def test_decide_merges_only_the_recorded_head_without_a_terminal(self):
         self.decision(self.run_record())
         calls, gh = self.fake_gh()
-        with mock.patch.object(subprocess, "run", side_effect=gh):
+
+        def now():
+            calls.append("now")
+            return "2026-11-20T00:00:00+00:00"
+
+        with mock.patch.object(subprocess, "run", side_effect=gh), mock.patch.object(qk, "_now", side_effect=now):
             status, output, errors = self.cli("decide", "one", "merge")
         self.assertEqual((status, errors), (0, ""))
+        self.assertEqual(calls[0], "now")  # decided_at is the time of the choice, not after GitHub answered
         self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA])
         [record] = self.user_records()
-        self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["elapsed_s"]),
-                         ("merge", SHA, None))
+        self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["elapsed_s"],
+                          record["data"]["via"], record["data"]["decided_at"]),
+                         ("merge", SHA, None, "decide", "2026-11-20T00:00:00+00:00"))
         self.assertIn("Recorded merge: " + record["id"], output)
 
     def test_decide_merge_refusals_record_nothing(self):

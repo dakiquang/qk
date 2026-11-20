@@ -65,7 +65,7 @@ Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi 
 
 Mỗi lựa chọn được ghi vào sổ thành một decision với `source=user`, rồi in `Recorded <choice>: <id>`. Lựa chọn đã ghi không ẩn thẻ; PR đã merge rời khỏi brief sau lần `qk sync` kế tiếp.
 
-Khi không có terminal, ví dụ khi một agent trong khung chat chạy lệnh thay bạn, ghi từng quyết định bằng `qk decide <run-id> merge|leave|abort-later|resume-later`. Lệnh chỉ nhận đúng các lựa chọn mà thẻ đó có, áp cùng các bước kiểm trước khi merge (head đúng commit đã ghi, quyền merge, `--match-head-commit`), và cần `--method` khi repo cho phép nhiều cách merge. Quyết định được ghi y như trong brief, nhưng `elapsed_s` để trống vì không có thẻ nào được bấm giờ.
+Khi không có terminal, ví dụ khi một agent trong khung chat chạy lệnh thay bạn, ghi từng quyết định bằng `qk decide <run-id> merge|leave|abort-later|resume-later`. Lệnh chỉ nhận đúng các lựa chọn mà thẻ đó có, áp cùng các bước kiểm trước khi merge (head đúng commit đã ghi, quyền merge, `--match-head-commit`), và cần `--method` khi repo cho phép nhiều cách merge. Chỉ chạy lệnh này theo đúng lựa chọn người dùng đã nói, kể cả cách merge; agent không được tự chọn. Quyết định được ghi y như trong brief, nhưng với `via=decide` thay vì `via=brief`, và `elapsed_s` để trống vì không có thẻ nào được bấm giờ. `source=user` gán lựa chọn cho người dùng; nó không chứng minh ai đã gõ lệnh. Các agent do `qk-run` khởi động được dặn không bao giờ merge hay chạy `qk decide`.
 
 ## Khi có sự cố
 

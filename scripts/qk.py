@@ -704,7 +704,7 @@ def _ask(run, snapshot, blocked, ledger):
         except EOFError:
             print()
             return False
-        _record_decision(ledger, run, choice, head, decided_at, elapsed)
+        _record_decision(ledger, run, choice, head, decided_at, elapsed, "brief")
         return True
 
 
@@ -717,11 +717,13 @@ def _choices(data):
     return ("merge", "leave")
 
 
-def _record_decision(ledger, run, choice, head, decided_at, elapsed):
+def _record_decision(ledger, run, choice, head, decided_at, elapsed, via):
+    """`source=user` attributes the choice to the user; it is not proof of who typed it. `via` records the path:
+    "brief" for a key pressed at a card on a terminal, "decide" for a command run on the user's stated choice."""
     data = _data(run)
     record = ledger.append("decision", {
         "choice": choice, "pr_url": data.get("pr_url") or None, "run_key": _run_key(run),
-        "run_id": data.get("run_id"), "head": head, "decided_at": decided_at, "elapsed_s": elapsed},
+        "run_id": data.get("run_id"), "head": head, "decided_at": decided_at, "elapsed_s": elapsed, "via": via},
         repo=run.get("repo", ""), task_kind=run.get("task_kind", ""), refs=[run["id"]], source="user")
     print(_text("Recorded %s: %s" % (choice, record["id"])))
     return record
@@ -862,13 +864,13 @@ def _decide(args, records, ledger):
     if args.method and args.choice != "merge":
         print("qk decide: --method applies only to merge", file=sys.stderr)
         return 1
-    head = snapshot.get("head_sha")
+    head, decided_at = snapshot.get("head_sha"), _now()  # the choice was made before any GitHub call
     if args.choice == "merge":
         merged, head, reason = _merge(data.get("pr_url"), data.get("commit"), args.method or "")
         if not merged:
             print("qk decide: not merged: %s" % _text(reason), file=sys.stderr)
             return 1
-    _record_decision(ledger, run, args.choice, head, _now(), None)  # no card display to time from
+    _record_decision(ledger, run, args.choice, head, decided_at, None, "decide")  # no card display to time
     return 0
 
 
