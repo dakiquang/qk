@@ -546,8 +546,10 @@ def _findings(state: dict, round_number: int) -> list:
     return [finding for findings in result for finding in findings]
 
 
-def record_run(state: dict, directory: object) -> dict:
-    """Project a stopped snapshot; repeated calls also repair missing findings."""
+def record_run(state: dict, directory: object, producer: Optional[str] = None) -> dict:
+    """Project a stopped snapshot; repeated calls also repair missing findings.
+
+    `producer` labels a run recorded by a tool other than qk-run; it is the caller's own claim."""
     if not isinstance(state, dict) or state.get("stage") not in ("done", "blocked", "aborted"):
         raise ValueError("only done, blocked or aborted runs can be recorded")
     source = Path(directory).resolve()
@@ -594,6 +596,8 @@ def record_run(state: dict, directory: object) -> dict:
     if state["stage"] == "blocked":
         # Only the stage: a reason can quote verify commands and raw output, which stay in state.json.
         data["blocked_at"] = _text(state.get("blocked_at", ""), "blocked_at")
+    if producer is not None:
+        data["producer"] = _lesson_line(producer, "producer", 100)
     projected = _findings(state, data["fix_rounds"])
     snapshot = _digest({"repo": repo, "task_kind": task_kind,
                         "data": data, "findings": projected})

@@ -23,7 +23,7 @@ VERSION = "0.9.0"
 # External tools may rely on these commands' flags, JSON fields and exit codes.
 # Removing or renaming any of them needs a new CONTRACT number.
 CONTRACT = 1
-CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family")
+CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family", "log run")
 
 
 def _text(value):
@@ -70,11 +70,16 @@ def _parser():
     stats.add_argument("--task-kind")
     stats.add_argument("--by", choices=("kind", "task_kind", "runtime"), default="kind")
     stats.add_argument("--public", action="store_true", help="counts only; omit private labels")
-    log = commands.add_parser("log", help="record a model claim")
+    log = commands.add_parser("log", help="record a model claim or a stopped run")
     kinds = log.add_subparsers(dest="log_kind", required=True)
     claim = kinds.add_parser("claim", help="attach a claim to existing evidence")
     claim.add_argument("--about", required=True)
     claim.add_argument("--text", required=True)
+    stopped = kinds.add_parser("run", help="record a run another tool stopped; its state as JSON on stdin")
+    stopped.add_argument("--producer", required=True, metavar="NAME", help="the recording tool and its version")
+    stopped.add_argument("--state-dir", required=True, metavar="DIR",
+                         help="the caller's directory for this run, outside any repository; it identifies the run")
+    stopped.add_argument("--json", action="store_true")
     sync = commands.add_parser("sync", help="read PR state using gh; never change PRs")
     sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
     brief = commands.add_parser("brief", help="summarize open/unknown PRs; on a terminal, ask per card")
@@ -213,6 +218,27 @@ def _agent_run(args):
         if status != "done":
             print("qk: %s: %s" % (status, _text(reason)), file=sys.stderr)
     return 0 if status == "done" else 2
+
+
+def _log_run(args, ledger):
+    """Record a stopped run for a tool other than qk-run, through the same projection qk-run uses."""
+    try:
+        state = json.loads(sys.stdin.read())
+    except ValueError as error:
+        raise ValueError("stdin is not valid JSON: %s" % error) from None
+    if not isinstance(state, dict):
+        raise ValueError("stdin must be a JSON object")
+    repo = state.get("repo")
+    if not isinstance(repo, str) or not Path(repo).is_absolute():
+        raise ValueError("repo must be the absolute path of the repository")
+    directory = Path(args.state_dir).resolve()
+    if not directory.is_dir():
+        raise ValueError("--state-dir is not a directory: %s" % args.state_dir)
+    ledger._outside_repository(directory)
+    run = ledger.record_run(state, directory, producer=args.producer)
+    findings = sum(record["kind"] == "finding" and run["id"] in record["refs"] for record in ledger.records())
+    print(json.dumps({"contract": CONTRACT, "id": run["id"], "findings": findings}) if args.json else run["id"])
+    return 0
 
 
 def _data(record):
@@ -993,10 +1019,12 @@ def main(argv=None):
     args = _parser().parse_args(argv)
     if args.command == "contract":
         return _contract(args)
-    if args.command == "agent":
+    if args.command == "agent" or (args.command == "log" and args.log_kind == "run"):
         try:
+            if args.command == "log":
+                return _log_run(args, importlib.import_module("qk_ledger"))
             return (_agent_run if args.agent_command == "run" else _agent_family)(args)
-        except ValueError as error:  # rejected input: nothing ran
+        except (ValueError, TypeError) as error:  # rejected input: nothing ran, nothing was recorded
             print("qk: %s" % _text(error), file=sys.stderr)
             return 2
         except OSError as error:

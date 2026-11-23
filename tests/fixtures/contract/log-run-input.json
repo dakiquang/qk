@@ -1,0 +1,22 @@
+{
+  "id": "20261123-101500-ab12cd",
+  "stage": "done",
+  "repo": "/work/project",
+  "task": "Add CSV export to the report page",
+  "task_kind": "feature",
+  "impl": "codex:gpt-example, omp:anthropic/claude-example",
+  "review": "claude:",
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "pr_url": "https://github.com/example/project/pull/10",
+  "verify_results": [{"exit": 0}, {"exit": 0}],
+  "usage": {
+    "implementing": [{"spec": "codex:gpt-example", "input": 1200, "cached": 300, "output": 150},
+                     {"spec": "omp:anthropic/claude-example", "input": 900, "cached": 0, "output": 80,
+                      "cost_usd": 0.12}],
+    "reviewing": [{"spec": "claude:", "input": 700, "cached": 100, "output": 60, "cost_usd": 0.05}]
+  },
+  "fix_rounds": 1,
+  "findings": [{"severity": "nit", "class": "naming", "file": "src/export.py", "line": 12}],
+  "addressed": [{"severity": "important", "class": "correctness", "file": "src/export.py", "line": 40}],
+  "diff_stat": {"files": ["src/export.py", "tests/test_export.py"], "added": 80, "deleted": 3}
+}

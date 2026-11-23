@@ -35,6 +35,7 @@ SAMPLE_ARGV = {
                   "--read-only-mcp", "tracker", "--no-result-contract", "--no-git-rules", "--lessons", "review",
                   "--repo", "project", "--events", "events.jsonl"],
     "agent family": ["codex:"],
+    "log run": ["--producer", "other-tool 1.2.0", "--state-dir", "state"],
 }
 
 
@@ -112,6 +113,22 @@ class ContractTests(unittest.TestCase):
         for reported in ("blocked", "needs_input"):
             self.assertEqual(self.agent_run(FAKE_STATUS=reported)[0], 2, reported)
         self.assertEqual(self.agent_run(FAKE_STATUS=reported)[1]["status"], reported)
+
+    def log_run(self, text):
+        (self.root / "tool").mkdir(exist_ok=True)
+        with mock.patch("sys.stdin", io.StringIO(text)):
+            return self.cli("log", "run", "--producer", "other-tool 1.2.0", "--state-dir",
+                            str(self.root / "tool"), "--json")
+
+    def test_log_run_accepts_the_sample_state_and_keeps_fields(self):
+        status, output, errors = self.log_run((FIXTURES / "log-run-input.json").read_text())
+        self.assertEqual((status, errors), (0, ""))
+        actual = json.loads(output)
+        self.assert_keeps_fields(actual, fixture("log-run.json"))
+        self.assertEqual((actual["contract"], actual["findings"]), (1, 1))
+        run = self.json("show", "--kind", "run", "--json")[0]
+        self.assertEqual((run["id"], run["data"]["producer"]), (actual["id"], "other-tool 1.2.0"))
+        self.assertEqual(self.log_run("{}")[0], 2)
 
     def test_agent_family_keeps_fields(self):
         sample = fixture("agent-family.json")

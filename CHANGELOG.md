@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The format follows
   agent turn with the runner's isolation and prints its status, parsed `qk-result`, final text and token usage.
   It never touches git; exit 0 is done, 2 is blocked or rejected input. `qk agent family SPEC` prints the model
   family the runner uses to keep the implementer and reviewer apart.
+- `qk log run --producer NAME --state-dir DIR --json < state.json` records a run that another tool stopped
+  (`done`, `blocked` or `aborted`) and its findings through the projection `qk-run` uses, so it shows in
+  `qk show`, `qk stats` and `qk brief`. The run record carries the caller's `producer` label. Rejected input
+  exits 2 and records nothing; the same input twice adds nothing.
 - `qk decide RUN_ID merge|leave|abort-later|resume-later [--method M]` records a brief decision without a terminal,
   for example from an agent in a chat acting on the user's stated choice, with the same merge checks and choices as
   the card. Decisions record `via` (`brief` or `decide`), and `qk-run` agents are told never to merge or record
