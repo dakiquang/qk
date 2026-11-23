@@ -27,6 +27,8 @@ All notable changes to this project are documented here. The format follows
   the final reply as `qk eval` lays them out, and reports `criteria` and `passed`. Neither runs an agent, writes the
   baseline or records anything, so another tool can measure itself on the same cases with the same grading. The old
   `qk eval --case/--skill/--all` flags are unchanged.
+- CLI contract guide (`docs/{en,vi}/cli-contract.md`): the commands, JSON fields, exit codes and versioning rules
+  that tools outside qk may rely on, linked from the ledger and eval guides.
 - `qk decide RUN_ID merge|leave|abort-later|resume-later [--method M]` records a brief decision without a terminal,
   for example from an agent in a chat acting on the user's stated choice, with the same merge checks and choices as
   the card. Decisions record `via` (`brief` or `decide`), and `qk-run` agents are told never to merge or record

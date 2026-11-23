@@ -16,7 +16,7 @@ qk --help
 
 Use an unused destination; do not replace another executable. Put `~/.local/bin` on the agent's `PATH`. A shell alias works for your own interactive terminal but may not exist in an agent's shell. Python 3.9+ is required; PR sync also needs `gh` authenticated for the relevant repository. Existing runner and eval scripts remain usable.
 
-Start with `qk show --help`, `qk sync --help` or `qk brief --help`. `qk run --help` and `qk eval --help` delegate to the existing [runner](runner.md) and [eval harness](evals.md).
+Start with `qk show --help`, `qk sync --help` or `qk brief --help`. `qk run --help` and `qk eval --help` delegate to the existing [runner](runner.md) and [eval harness](evals.md). Tools outside qk use only the commands in the [CLI contract](cli-contract.md): `qk log run` records a run they stopped so it shows here like a qk-run run.
 
 ## Storage and privacy
 

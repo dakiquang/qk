@@ -23,6 +23,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 
 ## Reference
 
+- [CLI contract](cli-contract.md): the versioned commands other tools may rely on to run an agent turn, record a run and grade an eval case.
 - [Runtimes](runtimes.md): support status, explicit-only settings, hook registration, known quirks and model selection.
 - [Test evidence](evidence.md): dated records of what was checked, on which version, and the manual smoke checklist.
 
