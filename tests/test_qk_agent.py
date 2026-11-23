@@ -123,6 +123,20 @@ class AgentCliTests(unittest.TestCase):
         self.assertIn("prompt on stdin is empty", errors)
         self.assertFalse(self.prompt_file.exists())
 
+    def test_relative_directories_reach_the_runtime_as_absolute_paths(self):
+        arguments = self.root / "arguments.txt"
+        (self.root / "extra").mkdir()
+        with mock.patch.dict(os.environ, {"FAKE_ARGV": str(arguments)}):
+            previous = os.getcwd()
+            os.chdir(str(self.root))
+            self.addCleanup(os.chdir, previous)
+            status, output, _ = self.run_cli("--spec", "codex:", "--cwd", "work", "--read-only",
+                                             "--add-dir", "extra", "--json")
+        self.assertEqual((status, json.loads(output)["status"]), (0, "done"))
+        argv = json.loads(arguments.read_text())
+        self.assertEqual(argv[argv.index("-C") + 1], str(self.work))
+        self.assertIn(str(self.root / "extra"), argv)
+
     def test_events_file_receives_raw_events(self):
         events = self.root / "events.jsonl"
         _, data = self.turn("--events", str(events))

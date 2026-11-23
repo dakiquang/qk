@@ -162,7 +162,9 @@ def _agent_run(args):
     """One agent turn with the runner's isolation. It reports; the caller owns git and what happens next."""
     runner = importlib.import_module("qk_run")
     kin = _family(runner, args.spec)
-    cwd = Path(args.cwd)
+    # The runtime starts inside --cwd and also receives these paths, so a relative one would resolve twice.
+    cwd = Path(args.cwd).resolve()
+    extra_dirs = [Path(directory).resolve() for directory in args.add_dir]
     if not cwd.is_dir():
         raise ValueError("--cwd is not a directory: %s" % args.cwd)
     timeout = runner.DEFAULT_TIMEOUT if args.timeout is None else args.timeout
@@ -189,7 +191,7 @@ def _agent_run(args):
     try:
         try:
             text, usage = runner.call_agent(
-                args.spec, "\n".join(parts), cwd, args.write, timeout, [scratch, *args.add_dir],
+                args.spec, "\n".join(parts), cwd, args.write, timeout, [scratch, *extra_dirs],
                 events=Path(args.events) if args.events else scratch / "events.jsonl",
                 progress=lambda message: print(_text(message), file=sys.stderr, flush=True),
                 read_only_mcp=args.read_only_mcp)

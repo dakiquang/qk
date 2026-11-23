@@ -1,7 +1,7 @@
 """Stand-in `claude` and `codex` binaries for tests that run real agent turns without a model.
 
 `path_with(directory)` writes both executables and returns a PATH that finds them first. Behaviour comes from
-environment variables: FAKE_STATUS (qk-result status, or `none` for no block), FAKE_PROMPT (file that receives the
+environment variables: FAKE_ARGV (file that receives the arguments as JSON), FAKE_STATUS (qk-result status, or `none` for no block), FAKE_PROMPT (file that receives the
 prompt), FAKE_TOOL (a tool name the Claude stand-in calls first), FAKE_WRITE (file name to create in the working
 directory), FAKE_SLEEP (seconds), FAKE_BARRIER (directory: wait until two turns have started) and FAKE_EXIT.
 """
@@ -18,6 +18,8 @@ import json, os, sys, time
 from pathlib import Path
 
 prompt = sys.stdin.read()
+if os.environ.get("FAKE_ARGV"):
+    Path(os.environ["FAKE_ARGV"]).write_text(json.dumps(sys.argv[1:]))
 if os.environ.get("FAKE_PROMPT"):
     Path(os.environ["FAKE_PROMPT"]).write_text(prompt)
 if os.environ.get("FAKE_WRITE"):
