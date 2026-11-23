@@ -4,7 +4,7 @@
 
 Một phần nhỏ của CLI `qk` là hợp đồng có phiên bản mà công cụ ngoài repo này được phép dựa vào: chạy một lượt agent có cô lập, ghi một run do chính công cụ đó dừng, và tự đo trên bộ bài eval của qk. Mọi phần khác của qk có thể đổi mà không báo trước. qk không biết ai gọi nó; bên gọi chỉ tự khai tên ở chỗ nó ghi vào sổ.
 
-Mỗi lệnh trong hợp đồng làm một việc rồi kết thúc. Không lệnh nào gọi lệnh khác theo trình tự hay giữ trạng thái nhiều bước, và không lệnh nào commit, push, mở pull request hay merge. Điều phối là việc của bên gọi.
+Mỗi lệnh trong hợp đồng làm một việc rồi kết thúc. Không lệnh nào gọi lệnh khác theo trình tự hay giữ trạng thái nhiều bước, và không lệnh nào commit, push, mở pull request hay merge trong repository bạn đưa cho nó; commit duy nhất là commit nền mà `qk eval prepare` tạo trong repository bài mới do chính nó dựng. Điều phối là việc của bên gọi.
 
 ## Luật chung
 
@@ -93,8 +93,8 @@ qk eval prepare CASE DIR [--json]
 qk eval grade   CASE WORKDIR [--final FILE] [--events FILE] [--json]
 ```
 
-- `prepare` dựng repository Git của bài trong `DIR/repo` đúng như `qk-eval`: commit bản nền, và với bài review thì áp thay đổi mà không commit. Trả `{"contract": 1, "case", "skill", "write", "workdir", "task", "plan", "diff"}`: `task` cho bài làm, `plan` và `diff` (chép cạnh repository, ngoài thư mục bài) cho bài review. `DIR/repo` không được tồn tại trước.
-- `grade` chạy `check.py` của bài từ một bản chép riêng và trả `{"contract": 1, "case", "criteria": [{"name", "passed", "detail"}], "passed"}`. `--final` là câu trả lời cuối của agent (mặc định rỗng). `--events` thêm tiêu chí `clean`: hỏng khi sự kiện nhắc tới thư mục bài. Bài không đạt tiêu chí vẫn thoát 0; đọc `passed`.
+- `prepare` dựng repository Git của bài trong `DIR/repo` đúng như `qk-eval`: commit bản nền, và với bài review thì áp thay đổi mà không commit. Trả `{"contract": 1, "case", "skill", "write", "workdir", "task", "plan", "diff"}`: `task` cho bài làm, `plan` và `diff` (chép cạnh repository, ngoài thư mục bài) cho bài review. `DIR/repo`, và với bài review thì cả `DIR/plan.md` và `DIR/review.diff`, không được tồn tại trước.
+- `grade` chạy `check.py` của bài từ một bản chép riêng, trên một bản sao tạm của `WORKDIR` (bộ chấm có thể stage rồi reset file), với câu trả lời cuối và sự kiện đặt cạnh nhau như `qk-eval` bố trí, và trả `{"contract": 1, "case", "criteria": [{"name", "passed", "detail"}], "passed"}`. `--final` là câu trả lời cuối của agent (mặc định rỗng). `--events` là sự kiện thô của lượt chạy: một số bộ chấm đọc chúng, và chúng thêm tiêu chí `clean`, hỏng khi sự kiện nhắc tới thư mục bài. Đường dẫn `--final` hay `--events` không phải file thì thoát 2. Bài không đạt tiêu chí vẫn thoát 0; đọc `passed`.
 - Hai lệnh này không chạy agent, không ghi baseline và không ghi sổ. Các cờ cũ `qk eval --case/--skill/--all` không đổi.
 
 ## Định dạng thuộc hợp đồng

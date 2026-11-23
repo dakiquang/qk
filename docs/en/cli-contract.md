@@ -4,7 +4,7 @@
 
 A small part of the `qk` CLI is a versioned contract that tools outside this repository may rely on: run one isolated agent turn, record a run they stopped, and measure themselves on qk's eval cases. Everything else in qk can change without notice. qk does not know who calls it; a caller names itself only where it writes to the ledger.
 
-Each contract command does one thing and exits. None of them runs another in sequence or keeps multi-step state, and none commits, pushes, opens a pull request or merges. Orchestration belongs to the caller.
+Each contract command does one thing and exits. None of them runs another in sequence or keeps multi-step state, and none commits, pushes, opens a pull request or merges in a repository you give it; the only commit is the base commit `qk eval prepare` makes in the new case repository it creates. Orchestration belongs to the caller.
 
 ## Rules
 
@@ -93,8 +93,8 @@ qk eval prepare CASE DIR [--json]
 qk eval grade   CASE WORKDIR [--final FILE] [--events FILE] [--json]
 ```
 
-- `prepare` builds the case's Git repository in `DIR/repo` exactly as `qk-eval` does: the base committed, and for a review case the change applied uncommitted. It returns `{"contract": 1, "case", "skill", "write", "workdir", "task", "plan", "diff"}`: `task` for a task case, `plan` and `diff` (copied next to the repository, outside the case directory) for a review case. `DIR/repo` must not exist.
-- `grade` runs the case's `check.py` from a private copy and returns `{"contract": 1, "case", "criteria": [{"name", "passed", "detail"}], "passed"}`. `--final` is the agent's last reply (empty by default). `--events` adds the `clean` criterion: it fails when the events name the case directory. A case that fails its criteria still exits 0; read `passed`.
+- `prepare` builds the case's Git repository in `DIR/repo` exactly as `qk-eval` does: the base committed, and for a review case the change applied uncommitted. It returns `{"contract": 1, "case", "skill", "write", "workdir", "task", "plan", "diff"}`: `task` for a task case, `plan` and `diff` (copied next to the repository, outside the case directory) for a review case. `DIR/repo`, and for a review case `DIR/plan.md` and `DIR/review.diff`, must not exist.
+- `grade` runs the case's `check.py` from a private copy, on a throwaway copy of `WORKDIR` (graders may stage and reset files) with the final reply and the events side by side as `qk-eval` lays them out, and returns `{"contract": 1, "case", "criteria": [{"name", "passed", "detail"}], "passed"}`. `--final` is the agent's last reply (empty by default). `--events` is the turn's raw events: some graders read them, and they add the `clean` criterion, which fails when the events name the case directory. A `--final` or `--events` path that is not a file exits 2. A case that fails its criteria still exits 0; read `passed`.
 - Neither runs an agent, writes the baseline or records anything. The old `qk eval --case/--skill/--all` flags are unchanged.
 
 ## Formats in the contract
