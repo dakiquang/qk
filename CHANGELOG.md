@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Usage limits are recognised. When Claude, Codex or omp exits because of its usage limit, `qk agent run --json`
+  reports `"limit": {"runtime", "reset_at", "message"}` (`null` otherwise; `status` stays `blocked`), and a qk-run
+  run records `limited` with the runtime and reset time. `qk brief` shows such a run as
+  `medium — waiting for <runtime> limit until HH:MM`.
+- `qk run drain --until` waits for usage limits: once the queue is empty it sleeps until two minutes after the
+  reset time, notifies, resumes the queued runs the limit stopped and carries on. No reset time means a retry
+  every 30 minutes, at most 3 tries per run; a reset after the deadline ends the drain with a notice.
+  `--wait-limits` / `--no-wait-limits` override the default (on with `--until`).
+
 ## [0.9.0] - 2026-11-23
 
 ### Added

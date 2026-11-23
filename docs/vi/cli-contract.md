@@ -49,10 +49,11 @@ qk agent run --spec RUNTIME:MODEL --cwd DIR (--write | --read-only)
 ```json
 {"contract": 1, "status": "done", "reason": "", "family": "anthropic", "spec": "claude:",
  "result": {"status": "done", "summary": "…", "files": [], "evidence": [], "reason": "", "findings": []},
- "text": "…", "usage": {"input": 15, "cached": 4, "output": 7}, "lessons": [], "events": null, "seconds": 12}
+ "text": "…", "usage": {"input": 15, "cached": 4, "output": 7}, "limit": null, "lessons": [], "events": null,
+ "seconds": 12}
 ```
 
-`status` là `done`, `blocked` hoặc `needs_input`. Thiếu runtime, quá giờ, thoát mã khác 0 và vi phạm cô lập đều là `blocked` kèm `reason`. `result` là `null` khi tắt hợp đồng kết quả hoặc câu trả lời không có khối hợp lệ. `usage` là `null` khi runtime không báo token, và có thể thiếu `cost_usd` (Codex không báo).
+`status` là `done`, `blocked` hoặc `needs_input`. Thiếu runtime, quá giờ, thoát mã khác 0 và vi phạm cô lập đều là `blocked` kèm `reason`. `result` là `null` khi tắt hợp đồng kết quả hoặc câu trả lời không có khối hợp lệ. `usage` là `null` khi runtime không báo token, và có thể thiếu `cost_usd` (Codex không báo). `limit` là `null` trừ khi runtime thoát vì chạm giới hạn hạn mức; khi đó `status` vẫn là `blocked` và `limit` là `{"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00", "message": "…"}`, trong đó `reset_at` theo ISO 8601, hoặc `null` khi thông báo không ghi giờ mở lại.
 
 ### `qk agent family SPEC`
 
@@ -79,6 +80,7 @@ Ghi một run đã dừng và các finding của nó qua cùng phép chiếu qk-
 | `fix_rounds`, `findings`, `addressed` | không | Finding có `severity`, `class`, `file` và `line` |
 | `diff_stat` | không | `{"files": [], "added": n, "deleted": n}` |
 | `blocked_at` | khi bị chặn | Chỉ tên giai đoạn; sổ không lưu lý do |
+| `limited` | không | Khi bị chặn vì giới hạn hạn mức: `{"runtime": "…", "reset_at": "ISO 8601" hoặc null}`; `qk brief` khi đó hiện `waiting for <runtime> limit until HH:MM` |
 | `ledger_revision` | không | Tăng số này khi ghi trạng thái mới hơn của cùng một run |
 
 - `--state-dir` là thư mục của bên gọi cho run này: phải tồn tại, nằm ngoài mọi repository và có `state.json`, file mà bản ghi trỏ tới. Đường dẫn này là danh tính của run, nên ảnh chụp sau của cùng run thay ảnh trước trong `qk brief`.

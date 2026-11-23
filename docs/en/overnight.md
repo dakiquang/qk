@@ -27,7 +27,8 @@ caffeinate -i qk run drain --until 07:00 --notify
 - One run at a time, oldest queued first. A second `drain` exits with `another drain is already running`.
 - `--until 07:00` means the next 07:00 after now. The deadline is checked only before a run starts: the run in progress finishes, then drain prints `Deadline reached; N queued runs left.` Runs not started stay queued for the next drain.
 - `--notify` shows one notification for each blocked run and one for the summary. A failed notification only prints a warning.
-- The last line is `Drain: X done, Y blocked, Z left queued.` The exit code is 1 if any run blocked.
+- Usage limits: when an agent turn stops because a runtime hit its usage limit (Claude's 5-hour or session limit, Codex's usage limit), the run blocks with `limited` (runtime and reset time) in its state. With `--until`, drain waits for it: once the queue is empty it sleeps until two minutes after the reset time the message named, says so (`claude limited; 2 runs waiting until 23:52.`), resumes those runs and carries on. A message with no reset time is retried every 30 minutes; one run is retried at most 3 times per drain. A reset after the deadline ends the drain with `Gave up: claude limit resets after the 07:00 deadline; …`, and the runs stay blocked for `qk run resume`. Only runs that came through the queue are resumed; a run blocked for any other reason is left for you. `--wait-limits` turns this on without `--until`, `--no-wait-limits` turns it off.
+- The last line is `Drain: X done, Y blocked, Z left queued.`, with `(N by a usage limit)` after the blocked count when some are waiting for a limit. The exit code is 1 if any run blocked.
 
 ## Morning
 
@@ -52,7 +53,7 @@ Cards are ordered high, medium, low; within a level, stopped runs come first, th
 
 The rules do not grant approval. The brief leaves out aborted runs, runs that are not blocked whose PR is merged or closed, and runs without a PR unless they are blocked or stopped mid-stage. With nothing to show, it prints `No open, unknown or blocked runs recorded.`
 
-A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Check the cause with `qk run status <id>`. `resume` runs in your terminal, not in a drain. If the run blocked at verifying, reviewing or fixing, your hand fixes are verified and reviewed again (see [Authority](runner.md#authority)). `qk run abort <id>` keeps the worktree; remove it with `git worktree remove`.
+A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`; a run stopped by a usage limit shows `RISK: medium — waiting for claude limit until 23:50` and `after the limit resets` instead. Check the cause with `qk run status <id>`. `resume` runs in your terminal, not in a drain. If the run blocked at verifying, reviewing or fixing, your hand fixes are verified and reviewed again (see [Authority](runner.md#authority)). `qk run abort <id>` keeps the worktree; remove it with `git worktree remove`.
 
 ### Deciding from the terminal
 
@@ -70,7 +71,7 @@ Without a terminal, for example when an agent in a chat runs the commands for yo
 ## When something goes wrong
 
 - **A drain killed mid-run** (Ctrl-C, a closed terminal, a kill) leaves that run in its in-progress stage. `resume`, `approve` and `drain` all skip it. While a run works, the runner holds `run.lock` in its run directory and the kernel drops it when the process dies, so `qk brief` shows a run in a working stage whose lock is free as `stopped at <stage> (runner gone)`, with `Next: qk run status <id>, then qk run abort <id>`. The free lock shows only that the runner is gone: an agent it started runs in its own session and may still be finishing its turn in the worktree, so check with `ps` before you abort. Only `qk run abort <id>` gets the run out. Abort leaves the branch, a pushed branch and any PR as they are.
-- **Quota or login failures** end that run as `blocked`, and drain moves on to the next run, which may block for the same reason.
+- **Usage limits** are waited for as described under [Night](#night). **Login failures** and limits without `--until` end that run as `blocked`, and drain moves on to the next run, which may block for the same reason.
 - **Two tasks at once:** drain never runs two queued runs together, but it does not stop `start`, `approve` without `--later`, or `resume` that you run by hand in another terminal.
 - **Sleep:** a sleeping machine pauses the agents and the drain. Keep `caffeinate -i` in front of `drain`.
 

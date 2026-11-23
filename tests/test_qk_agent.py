@@ -102,12 +102,27 @@ class AgentCliTests(unittest.TestCase):
         status, data = self.turn(FAKE_EXIT="3")
         self.assertEqual((status, data["status"]), (2, "blocked"))
         self.assertIn("exited 3", data["reason"])
+        self.assertIsNone(data["limit"])
         status, data = self.turn("--timeout", "1", FAKE_SLEEP="30")
         self.assertEqual((status, data["status"]), (2, "blocked"))
         self.assertIn("timed out after 1s", data["reason"])
         status, data = self.turn(PATH=str(self.root / "empty"))
         self.assertEqual((status, data["status"]), (2, "blocked"))
         self.assertIn("runtime binary not found", data["reason"])
+
+    def test_usage_limit_is_reported_with_its_runtime_and_reset_time(self):
+        claude = "You've hit your 5-hour limit \u00b7 resets 11:50pm (Asia/Saigon)"
+        status, data = self.turn(FAKE_EXIT="1", FAKE_STDERR=claude)
+        self.assertEqual((status, data["status"]), (2, "blocked"))
+        self.assertIn(claude, data["reason"])
+        self.assertEqual((data["limit"]["runtime"], data["limit"]["message"]), ("claude", claude))
+        self.assertRegex(data["limit"]["reset_at"], r"T23:50:00[+-]")  # +07:00 where the zone is known
+        codex = "You\u2019ve hit your usage limit. Upgrade to Pro or try again at 6:52 PM."
+        status, data = self.turn(spec="codex:", FAKE_EXIT="1", FAKE_STDERR=codex)
+        self.assertEqual((status, data["limit"]["runtime"]), (2, "codex"))
+        self.assertRegex(data["limit"]["reset_at"], r"T18:52:00")
+        status, data = self.turn(FAKE_STDERR=claude)  # a limit message from a turn that still finished
+        self.assertEqual((status, data["limit"]), (0, None))
 
     def test_rejected_input_runs_nothing(self):
         cases = (("--spec", "claude:", "--cwd", str(self.root / "missing"), "--read-only"),

@@ -27,7 +27,8 @@ caffeinate -i qk run drain --until 07:00 --notify
 - Mỗi lần một run, run xếp hàng sớm nhất trước. `drain` thứ hai thoát với `another drain is already running`.
 - `--until 07:00` nghĩa là 07:00 kế tiếp sau thời điểm hiện tại. Hạn chỉ được kiểm trước khi bắt đầu một run: run đang chạy vẫn chạy xong, rồi drain in `Deadline reached; N queued runs left.` Run chưa bắt đầu vẫn nằm trong hàng đợi cho lần drain sau.
 - `--notify` hiện một thông báo cho mỗi run bị chặn và một thông báo tổng kết. Thông báo lỗi chỉ in cảnh báo.
-- Dòng cuối là `Drain: X done, Y blocked, Z left queued.` Mã thoát là 1 nếu có run bị chặn.
+- Giới hạn hạn mức: khi một lượt agent dừng vì runtime chạm giới hạn (giới hạn 5 giờ hoặc giới hạn phiên của Claude, giới hạn sử dụng của Codex), run bị chặn và trạng thái ghi `limited` (runtime và giờ mở lại). Khi có `--until`, drain chờ: khi hàng đợi đã hết, nó ngủ tới 2 phút sau giờ mở lại mà thông báo ghi, báo điều đó (`claude limited; 2 runs waiting until 23:52.`), chạy tiếp các run đó rồi làm tiếp. Thông báo không ghi giờ mở lại thì thử lại mỗi 30 phút; mỗi run được thử lại tối đa 3 lần trong một drain. Giờ mở lại sau hạn thì drain dừng với `Gave up: claude limit resets after the 07:00 deadline; …`, và các run vẫn bị chặn chờ `qk run resume`. Chỉ run đi qua hàng đợi mới được chạy tiếp; run bị chặn vì lý do khác thì để cho bạn. `--wait-limits` bật việc này khi không có `--until`, `--no-wait-limits` tắt nó.
+- Dòng cuối là `Drain: X done, Y blocked, Z left queued.`, thêm `(N by a usage limit)` sau số bị chặn khi có run đang chờ hạn mức. Mã thoát là 1 nếu có run bị chặn.
 
 ## Buổi sáng
 
@@ -52,7 +53,7 @@ Thẻ xếp theo high, medium, low; trong cùng mức, run dừng giữa chừng
 
 Các quy tắc không trao quyền duyệt. Brief bỏ qua run đã abort, run không bị chặn có PR đã merge hoặc đóng, và run chưa có PR trừ khi run bị chặn hoặc dừng giữa chừng. Khi không có gì để hiện, brief in `No open, unknown or blocked runs recorded.`
 
-Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`. Xem nguyên nhân bằng `qk run status <id>`. `resume` chạy trong terminal của bạn, không trong drain. Nếu run bị chặn ở verifying, reviewing hoặc fixing, phần bạn tự sửa được kiểm và review lại (xem [Quyền](runner.md#quyền)). `qk run abort <id>` giữ lại worktree; xoá nó bằng `git worktree remove`.
+Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the cause, or qk run abort <id>`; run dừng vì giới hạn hạn mức hiện `RISK: medium — waiting for claude limit until 23:50` và `after the limit resets`. Xem nguyên nhân bằng `qk run status <id>`. `resume` chạy trong terminal của bạn, không trong drain. Nếu run bị chặn ở verifying, reviewing hoặc fixing, phần bạn tự sửa được kiểm và review lại (xem [Quyền](runner.md#quyền)). `qk run abort <id>` giữ lại worktree; xoá nó bằng `git worktree remove`.
 
 ### Quyết định ngay trong terminal
 
@@ -70,7 +71,7 @@ Khi không có terminal, ví dụ khi một agent trong khung chat chạy lệnh
 ## Khi có sự cố
 
 - **Drain bị dừng giữa chừng** (Ctrl-C, đóng terminal, bị kill) để run đó kẹt ở bước đang chạy. `resume`, `approve` và `drain` đều bỏ qua nó. Khi run đang làm việc, runner giữ `run.lock` trong thư mục run và hệ điều hành nhả khoá khi tiến trình chết, nên `qk brief` hiện run đang ở bước làm việc mà khoá trống là `stopped at <stage> (runner gone)`, kèm `Next: qk run status <id>, then qk run abort <id>`. Khoá trống chỉ cho biết runner đã chết: agent mà runner khởi động chạy trong session riêng và có thể vẫn đang làm nốt lượt trong worktree, nên kiểm bằng `ps` trước khi abort. Chỉ `qk run abort <id>` đưa run ra. Abort để nguyên nhánh, nhánh đã push và PR nếu có.
-- **Hết quota hoặc lỗi đăng nhập** làm run đó dừng ở `blocked`, và drain chuyển sang run kế tiếp, run này có thể bị chặn vì cùng lý do.
+- **Giới hạn hạn mức** được chờ như mô tả ở [Ban đêm](#ban-đêm). **Lỗi đăng nhập**, và giới hạn khi không có `--until`, làm run đó dừng ở `blocked`, và drain chuyển sang run kế tiếp, run này có thể bị chặn vì cùng lý do.
 - **Hai việc cùng lúc:** drain không bao giờ chạy hai run trong hàng đợi cùng lúc, nhưng không chặn `start`, `approve` không có `--later`, hay `resume` mà bạn tự chạy ở terminal khác.
 - **Máy ngủ:** máy ngủ thì agent và drain tạm dừng. Giữ `caffeinate -i` trước `drain`.
 

@@ -370,6 +370,13 @@ class LedgerTests(unittest.TestCase):
         self.assertNotIn("reason", data)
         self.assertNotIn("cause", json.dumps(data))
         self.assertEqual(data["task"], " ".join(state["task"].split())[:120])
+        self.assertNotIn("limited_runtime", data)
+        state["limited"] = {"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00"}
+        data = ledger.record_run(state, self.root / "run")["data"]
+        self.assertEqual((data["limited_runtime"], data["limited_until"]), ("claude", "2026-11-23T23:50:00+07:00"))
+        state["limited"]["reset_at"] = None
+        self.assertEqual(ledger.record_run(state, self.root / "run")["data"]["limited_until"], "")
+        del state["limited"]
         state["stage"] = "done"
         data = ledger.record_run(state, self.root / "run")["data"]
         self.assertNotIn("blocked_at", data)
@@ -380,7 +387,8 @@ class LedgerTests(unittest.TestCase):
             self.assertNotIn(key, minimal)
 
     def test_run_rejects_wrong_scope_task_and_blocked_types(self):
-        bad = [{"task": None}, {"task": 4}, {"blocked_at": []},
+        bad = [{"task": None}, {"task": 4}, {"blocked_at": []}, {"limited": "claude"}, {"limited": {}},
+               {"limited": {"runtime": "claude", "reset_at": 5}},
                {"diff_stat": None}, {"diff_stat": []}]
         for key, value in (("files", "a.py"), ("files", [1]), ("added", True),
                            ("deleted", "1"), ("added", -1), ("deleted", None)):

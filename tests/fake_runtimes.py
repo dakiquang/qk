@@ -4,7 +4,8 @@
 environment variables: FAKE_ARGV (file that receives the arguments as JSON), FAKE_PID (file that receives the
 process id and HOME once the turn has started), FAKE_STATUS (qk-result status, or `none` for no block), FAKE_PROMPT (file that receives the
 prompt), FAKE_TOOL (a tool name the Claude stand-in calls first), FAKE_WRITE (file name to create in the working
-directory), FAKE_SLEEP (seconds), FAKE_BARRIER (directory: wait until two turns have started) and FAKE_EXIT.
+directory), FAKE_SLEEP (seconds), FAKE_BARRIER (directory: wait until two turns have started), FAKE_STDERR
+(text written to stderr) and FAKE_EXIT.
 """
 
 import gc
@@ -36,6 +37,7 @@ if barrier:
         time.sleep(0.02)
     alone = len(list(Path(barrier).iterdir())) < 2
 time.sleep(float(os.environ.get("FAKE_SLEEP", "0")))
+sys.stderr.write(os.environ.get("FAKE_STDERR", ""))
 status = os.environ.get("FAKE_STATUS", "done")
 text = "cwd=%s alone=%s home=%s\n" % (Path.cwd().name, alone, os.environ.get("HOME", ""))
 if status != "none":
