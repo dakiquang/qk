@@ -1364,8 +1364,8 @@ class AgentStreamTest(unittest.TestCase):
         qk_run.agent_command = (lambda spec, write, cwd, extra_dirs, read_only_mcp=(), claude_skills=None:
                                 ([sys.executable, "-c", script, *args], None, None))
 
-    def call(self, timeout=30, spec="omp:anthropic/x", write=True, read_only_mcp=()):
-        return qk_run.call_agent(spec, "prompt", self.dir, write, timeout, [self.dir],
+    def call(self, timeout=30, spec="omp:anthropic/x", write=True, read_only_mcp=(), prompt="prompt"):
+        return qk_run.call_agent(spec, prompt, self.dir, write, timeout, [self.dir],
                                  events=self.dir / "events.jsonl", progress=self.progress.append,
                                  read_only_mcp=read_only_mcp)
 
@@ -1393,9 +1393,21 @@ class AgentStreamTest(unittest.TestCase):
                     gc.collect()
                 self.assertEqual(unraisable, [])
 
+    def test_agent_turn_closes_stdin_when_the_agent_exits_before_reading_the_prompt(self):
+        self.fake_agent("import sys; sys.exit(7)")
+        unraisable = []
+        with warnings.catch_warnings(), mock.patch.object(sys, "unraisablehook", unraisable.append):
+            warnings.simplefilter("error", ResourceWarning)
+            with self.assertRaises(qk_run.Blocked) as caught:
+                self.call(prompt="x" * 300000)  # larger than a pipe buffer, so writing it fails
+            self.assertIn("exited 7", str(caught.exception))
+            del caught
+            gc.collect()
+        self.assertEqual(unraisable, [])
+
     def test_pipe_cleanup_is_bounded_when_descendant_keeps_stderr_open(self):
         self.fake_agent("import subprocess, sys\n"
-                        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(1)'], "
+                        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(5)'], "
                         "stdout=subprocess.DEVNULL)\n"
                         "print('diagnostic', file=sys.stderr, flush=True)\n"
                         "sys.exit(7)\n")
@@ -1404,7 +1416,7 @@ class AgentStreamTest(unittest.TestCase):
             with self.assertRaises(qk_run.Blocked) as caught:
                 self.call()
         self.assertIn("exited 7: diagnostic", str(caught.exception))
-        self.assertLess(time.monotonic() - started, 0.8)
+        self.assertLess(time.monotonic() - started, 3)  # the descendant holds stderr for 5s
 
     def test_event_parsers_match_captured_streams(self):
         expected = {"claude": ["read /work/a.txt", "run ls"],

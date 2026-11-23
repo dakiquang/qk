@@ -521,9 +521,13 @@ def stop_agent(proc):
 def feed(stream, text):
     try:
         stream.write(text)
-        stream.close()
     except OSError:
         pass
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            pass
 
 
 def pump(stream, put, stop):
