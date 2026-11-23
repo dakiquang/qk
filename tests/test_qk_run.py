@@ -1,5 +1,6 @@
 import contextlib
 import fcntl
+import gc
 import io
 import json
 import os
@@ -9,8 +10,10 @@ import sys
 import tempfile
 import time
 import unittest
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import qk_run  # noqa: E402
@@ -1365,6 +1368,43 @@ class AgentStreamTest(unittest.TestCase):
         return qk_run.call_agent(spec, "prompt", self.dir, write, timeout, [self.dir],
                                  events=self.dir / "events.jsonl", progress=self.progress.append,
                                  read_only_mcp=read_only_mcp)
+
+    def test_agent_turn_closes_pipes_on_all_exit_paths(self):
+        done = (FIXTURES / "omp.jsonl").read_text(encoding="utf-8").splitlines()[3]
+        cases = (("success", f"print({done!r}, flush=True)", True, None),
+                 ("timeout", "import time; time.sleep(60)", True, "timed out"),
+                 ("mcp", f"import time; print({MCP_WRITE!r}, flush=True); time.sleep(60)", False,
+                  "read-only stage called mcp"),
+                 ("failure", "import sys; print('diagnostic', file=sys.stderr); sys.exit(7)", True,
+                  "exited 7: diagnostic"))
+        for name, script, write, expected in cases:
+            with self.subTest(name=name):
+                self.fake_agent(script)
+                unraisable = []
+                with warnings.catch_warnings(), mock.patch.object(sys, "unraisablehook", unraisable.append):
+                    warnings.simplefilter("error", ResourceWarning)
+                    if expected:
+                        with self.assertRaises(qk_run.Blocked) as caught:
+                            self.call(timeout=1, write=write)
+                        self.assertIn(expected, str(caught.exception))
+                        del caught
+                    else:
+                        self.assertEqual(self.call(timeout=1, write=write)[0], "DONE")
+                    gc.collect()
+                self.assertEqual(unraisable, [])
+
+    def test_pipe_cleanup_is_bounded_when_descendant_keeps_stderr_open(self):
+        self.fake_agent("import subprocess, sys\n"
+                        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(1)'], "
+                        "stdout=subprocess.DEVNULL)\n"
+                        "print('diagnostic', file=sys.stderr, flush=True)\n"
+                        "sys.exit(7)\n")
+        started = time.monotonic()
+        with mock.patch.object(qk_run, "STDERR_DRAIN_SECONDS", 0.1):
+            with self.assertRaises(qk_run.Blocked) as caught:
+                self.call()
+        self.assertIn("exited 7: diagnostic", str(caught.exception))
+        self.assertLess(time.monotonic() - started, 0.8)
 
     def test_event_parsers_match_captured_streams(self):
         expected = {"claude": ["read /work/a.txt", "run ls"],
