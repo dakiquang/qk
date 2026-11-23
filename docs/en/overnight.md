@@ -58,12 +58,14 @@ A blocked card shows `Next: qk run resume <id> after fixing the cause, or qk run
 
 When stdin and stdout are both a terminal, `qk brief` asks after each card. Piped or redirected, it only prints and makes no network call.
 
-- Not blocked: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merges with `gh`, and only if the PR head still equals the run's recorded commit: it reads the methods the repository allows, asks which one when there are several, and passes `--match-head-commit`. If the merge does not happen, it prints `qk brief: not merged: <reason>` and asks again. `d` prints the PR diff and asks again. `n` records that you leave the PR.
+- Not blocked: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merges with `gh`, and only if the PR head still equals the run's recorded commit: it checks that the active `gh` account can merge in that repository (otherwise it says so before asking anything; quit and rerun with `GH_TOKEN="$(gh auth token --user <account>)" qk brief`), reads the methods the repository allows, asks which one when there are several, and passes `--match-head-commit`. If the merge does not happen, it prints `qk brief: not merged: <reason>` and asks again. `d` prints the PR diff and asks again. `n` records that you leave the PR.
 - Blocked: `[a] abort later  [r] resume later  [s] skip`. These only record your intent; run `qk run abort` or `qk run resume` yourself.
 - Stopped mid-stage: `[a] abort later  [s] skip`. `a` only records your intent.
 - `s` records nothing. End of input (Ctrl-D) stops the questions; the remaining cards are printed only.
 
 Each choice is written to the ledger as a decision with `source=user`, then prints `Recorded <choice>: <id>`. A recorded choice does not hide the card; a merged PR leaves the brief after the next `qk sync`.
+
+Without a terminal, for example when an agent in a chat runs the commands for you, record one decision with `qk decide <run-id> merge|leave|abort-later|resume-later`. It accepts only the choices the card offers, applies the same checks before a merge (head equals the recorded commit, merge permission, `--match-head-commit`) and needs `--method` when the repository allows several. Run it only on the user's own stated choice, including the merge method; an agent must not pick one. The decision is recorded the same way, with `via=decide` instead of `via=brief` and `elapsed_s` empty because no card was timed. `source=user` attributes the choice to the user; it does not prove who typed the command. Agents that `qk-run` starts are told never to merge or run `qk decide`.
 
 ## When something goes wrong
 

@@ -58,12 +58,14 @@ Thẻ của run bị chặn hiện `Next: qk run resume <id> after fixing the ca
 
 Khi cả stdin lẫn stdout là terminal, `qk brief` hỏi sau mỗi thẻ. Khi output được pipe hoặc chuyển hướng, nó chỉ in và không gọi mạng.
 
-- Run không bị chặn: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merge bằng `gh`, và chỉ khi head của PR vẫn đúng commit mà run đã ghi: nó đọc các cách merge repo cho phép, hỏi chọn cách nào khi có nhiều cách, và truyền `--match-head-commit`. Nếu không merge được, nó in `qk brief: not merged: <reason>` rồi hỏi lại. `d` in diff của PR rồi hỏi lại. `n` ghi lại rằng bạn để nguyên PR.
+- Run không bị chặn: `[y] merge  [n] leave  [d] diff  [s] skip`. `y` merge bằng `gh`, và chỉ khi head của PR vẫn đúng commit mà run đã ghi: nó kiểm tài khoản `gh` đang active có quyền merge ở repo đó không (không có thì báo ngay, trước khi hỏi gì; thoát rồi chạy lại bằng `GH_TOKEN="$(gh auth token --user <account>)" qk brief`), đọc các cách merge repo cho phép, hỏi chọn cách nào khi có nhiều cách, và truyền `--match-head-commit`. Nếu không merge được, nó in `qk brief: not merged: <reason>` rồi hỏi lại. `d` in diff của PR rồi hỏi lại. `n` ghi lại rằng bạn để nguyên PR.
 - Run bị chặn: `[a] abort later  [r] resume later  [s] skip`. Hai lựa chọn này chỉ ghi lại ý định; bạn tự chạy `qk run abort` hoặc `qk run resume`.
 - Run dừng giữa chừng: `[a] abort later  [s] skip`. `a` chỉ ghi lại ý định.
 - `s` không ghi gì. Hết input (Ctrl-D) thì dừng hỏi; các thẻ còn lại chỉ được in.
 
 Mỗi lựa chọn được ghi vào sổ thành một decision với `source=user`, rồi in `Recorded <choice>: <id>`. Lựa chọn đã ghi không ẩn thẻ; PR đã merge rời khỏi brief sau lần `qk sync` kế tiếp.
+
+Khi không có terminal, ví dụ khi một agent trong khung chat chạy lệnh thay bạn, ghi từng quyết định bằng `qk decide <run-id> merge|leave|abort-later|resume-later`. Lệnh chỉ nhận đúng các lựa chọn mà thẻ đó có, áp cùng các bước kiểm trước khi merge (head đúng commit đã ghi, quyền merge, `--match-head-commit`), và cần `--method` khi repo cho phép nhiều cách merge. Chỉ chạy lệnh này theo đúng lựa chọn người dùng đã nói, kể cả cách merge; agent không được tự chọn. Quyết định được ghi y như trong brief, nhưng với `via=decide` thay vì `via=brief`, và `elapsed_s` để trống vì không có thẻ nào được bấm giờ. `source=user` gán lựa chọn cho người dùng; nó không chứng minh ai đã gõ lệnh. Các agent do `qk-run` khởi động được dặn không bao giờ merge hay chạy `qk decide`.
 
 ## Khi có sự cố
 
