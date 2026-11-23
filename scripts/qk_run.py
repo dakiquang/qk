@@ -65,7 +65,8 @@ class Limited(Blocked):
 
 # Usage-limit messages seen from the runtimes, e.g. Claude "You've hit your 5-hour limit · resets 11:50pm
 # (Asia/Saigon)" and Codex "You've hit your usage limit. ... try again at Nov 21st, 2026 1:41 AM."
-LIMIT_RE = re.compile(r"hit your [\w -]*limit|usage limit|rate limit", re.I)
+# Only the runtime's own wording: a reply that merely mentions "rate limit" is an ordinary failure.
+LIMIT_RE = re.compile(r"hit your [\w -]*limit", re.I)
 RESET_RE = re.compile(
     r"(?:resets|try again at) "
     r"(?:(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* (?P<day>\d{1,2})(?:st|nd|rd|th)?,? "
@@ -1251,13 +1252,15 @@ def limit_reset(state):
 
 
 def wait_until(moment):
-    """Sleep until the local time `moment`, reading the wall clock each minute so a Mac that slept wakes on time.
-    Replaced in tests."""
+    """Sleep until the local time `moment` and return True, or return False as soon as a run is queued meanwhile.
+    The wall clock is read each minute, so a Mac that slept wakes on time. Replaced in tests."""
     while True:
         left = (moment - datetime.now()).total_seconds()
         if left <= 0:
-            return
+            return True
         time.sleep(min(left, 60))
+        if next_queued()[0] is not None:
+            return False
 
 
 def cmd_drain(args):
@@ -1302,6 +1305,12 @@ def cmd_drain(args):
                 continue
             if not wait_limits:
                 break
+            if deadline is not None and datetime.now() >= deadline:  # a resumed run worked past it
+                left_limited = limited_runs()
+                if left_limited:
+                    ran.update((state["id"], state) for state in left_limited)
+                    say("Deadline reached; runs stopped by a usage limit are left for qk-run resume.")
+                break
             # The queue is empty: wait for the earliest usage limit to reset, then resume the runs it stopped.
             now, waiting = datetime.now(), {}
             for state in limited_runs():
@@ -1321,11 +1330,13 @@ def cmd_drain(args):
             if deadline is not None and wake >= deadline:
                 say(f"Gave up: {names} limit resets after the {deadline:%H:%M} deadline; "
                     f"{len(waiting)} limited runs left for qk-run resume.")
+                ran.update((run_id, state) for run_id, (_, state) in waiting.items())  # counted as blocked
                 break
             due = [(moment, state) for moment, state in waiting.values() if moment <= max(wake, now)]
             if wake > now:
                 say(f"{names} limited; {len(due)} runs waiting until {wake:%H:%M}.")
-                wait_until(wake)
+                if not wait_until(wake):
+                    continue  # a run was queued meanwhile: run it first
             say(f"Retrying {len(due)} runs stopped by a usage limit.")
             for moment, state in due:
                 if deadline is not None and datetime.now() >= deadline:

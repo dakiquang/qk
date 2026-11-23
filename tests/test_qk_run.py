@@ -583,6 +583,81 @@ class RunnerTest(unittest.TestCase):
                       "qk-run resume.", notices)
         self.assertIn("Drain: 0 done, 1 blocked (1 by a usage limit), 0 left queued.", output)
 
+    def test_drain_stops_retrying_at_the_deadline(self):
+        from unittest import mock
+        past = datetime.now() - timedelta(minutes=10)
+        ids, limited = [], []
+
+        class Clock(datetime):
+            shift = timedelta(0)
+
+            @classmethod
+            def now(cls, tz=None):
+                return datetime.now(tz) + cls.shift
+
+        def review(cwd, state_dir):
+            if state_dir.name not in limited:
+                limited.append(state_dir.name)
+                raise qk_run.Limited("limited", {"runtime": "claude", "reset_at": past.isoformat(), "message": ""})
+            Clock.shift = timedelta(hours=3)  # the first resumed run works past the deadline
+            return result()
+
+        qk_run.call_agent = Agent(plan=lambda cwd, state_dir: (ids.append(state_dir.name) or planned()),
+                                  review=review)
+        for _ in range(2):
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            self.cli("approve", ids[-1], "--later")
+        until = (datetime.now() + timedelta(hours=1)).strftime("%H:%M")
+        with mock.patch.object(qk_run, "datetime", Clock):
+            status, waits, notices, output = self.drain("--until", until)
+        self.assertEqual((status, waits), (1, []))
+        first, second = (qk_run.load(run_id) for run_id in ids)
+        self.assertEqual((first["stage"], second["stage"], second["limited"]["runtime"]),
+                         ("done", "blocked", "claude"))
+        self.assertIn("Deadline reached; runs stopped by a usage limit are left for qk-run resume.", notices)
+
+    def test_limit_of_ignores_replies_that_only_mention_limits(self):
+        for text in ("Added a rate limit to the API; tests fail", "the usage limit field is missing"):
+            self.assertIsNone(qk_run.limit_of("codex", text))
+
+    def test_drain_runs_a_run_queued_while_it_waits_first(self):
+        from unittest import mock
+        reset = (datetime.now() + timedelta(hours=1)).replace(second=0, microsecond=0)
+        first = self.limited_run([reset])
+        queued = []
+
+        def wait(moment):
+            if queued:
+                return True
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            queued.extend(path.parent.name for path in qk_run.state_root().glob("*/state.json")
+                          if json.loads(path.read_text())["stage"] == "awaiting_approval")
+            self.cli("approve", queued[0], "--later")
+            return False
+
+        with mock.patch.object(qk_run, "wait_until", side_effect=wait), mock.patch.object(qk_run, "notify"), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(qk_run.main(["drain", "--wait-limits"]), 0)
+        self.assertEqual([qk_run.load(run_id)["stage"] for run_id in (first, queued[0])], ["done", "done"])
+        self.assertIn("Drain: 2 done, 0 blocked, 0 left queued.", output.getvalue())
+
+    def test_wait_until_returns_early_when_a_run_is_queued(self):
+        from unittest import mock
+        self.assertTrue(qk_run.wait_until(datetime.now() - timedelta(seconds=1)))
+        qk_run.save({"id": "late", "stage": "queued", "queued_at": 1.0})
+        with mock.patch.object(qk_run.time, "sleep") as sleep:
+            self.assertFalse(qk_run.wait_until(datetime.now() + timedelta(hours=5)))
+        self.assertEqual(sleep.call_count, 1)
+
+    def test_drain_counts_limited_runs_left_from_an_earlier_drain(self):
+        now = datetime.now()
+        qk_run.save({"id": "earlier", "stage": "blocked", "blocked_at": "reviewing", "queued_at": 1.0,
+                     "limited": {"runtime": "claude", "reset_at": (now + timedelta(hours=3)).isoformat()}})
+        status, waits, notices, output = self.drain("--until", (now + timedelta(hours=1)).strftime("%H:%M"))
+        self.assertEqual((status, waits), (1, []))
+        self.assertNotIn("Nothing is queued", output)
+        self.assertIn("Drain: 0 done, 1 blocked (1 by a usage limit), 0 left queued.", output)
+
     def test_drain_retries_a_limit_without_reset_time_a_few_times(self):
         run_id = self.limited_run([None] * 5)
         status, waits, notices, _ = self.drain("--wait-limits")
