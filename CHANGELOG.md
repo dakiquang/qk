@@ -10,6 +10,10 @@ All notable changes to this project are documented here. The format follows
 
 - `qk contract [--json]` prints the CLI contract version, the qk version and the commands external tools may
   rely on. `tests/test_contract_v1.py` fails when a promised command or JSON field disappears.
+- `qk agent run --spec RUNTIME:MODEL --cwd DIR (--write | --read-only) --json < prompt` runs one non-interactive
+  agent turn with the runner's isolation and prints its status, parsed `qk-result`, final text and token usage.
+  It never touches git; exit 0 is done, 2 is blocked or rejected input. `qk agent family SPEC` prints the model
+  family the runner uses to keep the implementer and reviewer apart.
 - `qk decide RUN_ID merge|leave|abort-later|resume-later [--method M]` records a brief decision without a terminal,
   for example from an agent in a chat acting on the user's stated choice, with the same merge checks and choices as
   the card. Decisions record `via` (`brief` or `decide`), and `qk-run` agents are told never to merge or record

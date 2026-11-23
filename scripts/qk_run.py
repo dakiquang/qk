@@ -557,7 +557,8 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     return text, usage
 
 
-def parse_result(text):
+def read_result(text):
+    """The last qk-result block as a dict, whatever status it reports."""
     blocks = RESULT_RE.findall(text or "")
     if not blocks:
         raise Blocked("agent output has no ```qk-result``` block")
@@ -565,8 +566,14 @@ def parse_result(text):
         result = json.loads(blocks[-1])
     except json.JSONDecodeError as error:
         raise Blocked(f"qk-result is not valid JSON: {error}")
-    if result.get("status") not in ("done", "blocked", "needs_input"):
-        raise Blocked(f"qk-result has invalid status {result.get('status')!r}")
+    if not isinstance(result, dict) or result.get("status") not in ("done", "blocked", "needs_input"):
+        status = result.get("status") if isinstance(result, dict) else None
+        raise Blocked(f"qk-result has invalid status {status!r}")
+    return result
+
+
+def parse_result(text):
+    result = read_result(text)
     if result["status"] != "done":
         raise Blocked(f"agent reported {result['status']}: {result.get('reason') or result.get('summary')}")
     return result
