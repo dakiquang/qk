@@ -868,7 +868,7 @@ class CliTests(unittest.TestCase):
             status = qk.main(list(argv))
         return status, output.getvalue(), errors.getvalue(), stdin
 
-    def fake_gh(self, head=SHA, allowed=("squashMergeAllowed",), merge_exit=0, permission="WRITE"):
+    def fake_gh(self, head=SHA, allowed=("squashMergeAllowed",), merge_exit=0, permission="WRITE", state="MERGED"):
         calls = []
 
         def run(argv, **options):
@@ -881,6 +881,8 @@ class CliTests(unittest.TestCase):
                        ("gh", "pr", "diff"): (0, DIFF),
                        ("gh", "pr", "merge"): (merge_exit, "")}
             code, stdout = replies[tuple(argv[:3])]
+            if argv[:3] == ["gh", "pr", "view"] and argv[-1] == "state":  # read back after the merge
+                code, stdout = 0, json.dumps({"state": state})
             return subprocess.CompletedProcess(argv, code, stdout, "merge refused" if code else "")
         return calls, run
 
@@ -898,13 +900,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(calls, [["gh", "pr", "view", URL, "--json", "headRefOid"],
                                  ["gh", "repo", "view", "github.com/example/project", "--json",
                                   METHOD_FIELDS + ",viewerPermission"],
-                                 ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA]])
+                                 ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA],
+                                 ["gh", "pr", "view", URL, "--json", "state"]])
         [record] = self.user_records()
         self.assertEqual((record["kind"], record["recorded_by"], record["repo"], record["refs"]),
                          ("decision", "code", "project", [run["id"]]))
         self.assertEqual(set(record["data"]), {"choice", "pr_url", "run_key", "run_id", "head",
-                                               "decided_at", "elapsed_s", "via"})
-        self.assertEqual(record["data"]["via"], "brief")
+                                               "decided_at", "elapsed_s", "via", "merged"})
+        self.assertEqual((record["data"]["via"], record["data"]["merged"]), ("brief", True))
         self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["pr_url"],
                           record["data"]["run_key"], record["data"]["run_id"]),
                          ("merge", SHA, URL, run["data"]["run_key"], "one"))
@@ -949,7 +952,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(qk, "_now", side_effect=lambda: clock[0]):
             status, _, errors, _ = self.tty_cli(["y"], "brief")
         self.assertEqual((status, errors), (0, ""))
-        self.assertEqual(calls[-1][:3], ["gh", "pr", "merge"])
+        self.assertEqual(calls[-2][:3], ["gh", "pr", "merge"])
         [record] = self.user_records()
         self.assertEqual(record["data"]["decided_at"], "2026-11-19T00:00:00+00:00")
 
@@ -961,7 +964,7 @@ class CliTests(unittest.TestCase):
                 mock.patch.object(qk.time, "monotonic", side_effect=lambda: next(ticks, 999.0)):
             status, _, errors, _ = self.tty_cli(["y"], "brief")
         self.assertEqual((status, errors), (0, ""))
-        self.assertEqual(calls[-1][:3], ["gh", "pr", "merge"])
+        self.assertEqual(calls[-2][:3], ["gh", "pr", "merge"])
         [record] = self.user_records()
         self.assertEqual(record["data"]["elapsed_s"], 2.5)
 
@@ -982,7 +985,7 @@ class CliTests(unittest.TestCase):
             status, output, errors, _ = self.tty_cli(["y", "rebase"], "brief")
         self.assertEqual((status, errors), (0, ""))
         self.assertIn("Merge method [squash/merge/rebase]", output)
-        self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--rebase", "--match-head-commit", SHA])
+        self.assertEqual(calls[-2], ["gh", "pr", "merge", URL, "--rebase", "--match-head-commit", SHA])
         self.assertEqual([record["data"]["choice"] for record in self.user_records()], ["merge"])
         with self.subTest("unknown method"):
             calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","))
@@ -1025,12 +1028,41 @@ class CliTests(unittest.TestCase):
             status, output, errors = self.cli("decide", "one", "merge")
         self.assertEqual((status, errors), (0, ""))
         self.assertEqual(calls[0], "now")  # decided_at is the time of the choice, not after GitHub answered
-        self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA])
+        self.assertEqual(calls[-2], ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA])
         [record] = self.user_records()
         self.assertEqual((record["data"]["choice"], record["data"]["head"], record["data"]["elapsed_s"],
                           record["data"]["via"], record["data"]["decided_at"]),
                          ("merge", SHA, None, "decide", "2026-11-20T00:00:00+00:00"))
         self.assertIn("Recorded merge: " + record["id"], output)
+
+    def test_merge_accepted_but_queued_is_recorded_as_not_merged(self):
+        self.decision(self.run_record())
+        for pr_state, merged, note in (("OPEN", False, "not merged yet (merge queue or auto-merge)"),
+                                       ("CLOSED", False, "the PR is closed without being merged"),
+                                       ("", None, "the PR state could not be read")):
+            with self.subTest(state=pr_state):
+                calls, gh = self.fake_gh(state=pr_state)
+                with mock.patch.object(subprocess, "run", side_effect=gh):
+                    status, output, errors = self.cli("decide", "one", "merge")
+                self.assertEqual(status, 0)
+                self.assertIn("qk decide: GitHub accepted the merge", errors)
+                self.assertIn(note, errors)
+                self.assertEqual(self.user_records()[-1]["data"]["merged"], merged)
+        calls, gh = self.fake_gh(state="OPEN")
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, _, errors, _ = self.tty_cli(["y"], "brief")
+        self.assertIn("qk brief: GitHub accepted the merge, but the PR is not merged yet", errors)
+        self.assertEqual((self.user_records()[-1]["data"]["merged"], self.user_records()[-1]["data"]["via"]),
+                         (False, "brief"))
+
+    def test_brief_tty_enter_at_the_method_prompt_keeps_squash(self):
+        self.decision(self.run_record())
+        calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","))
+        with mock.patch.object(subprocess, "run", side_effect=gh):
+            status, output, errors, _ = self.tty_cli(["y", ""], "brief")
+        self.assertEqual((status, errors), (0, ""))
+        self.assertIn("(merge = merge commit; Enter: squash)", output)
+        self.assertEqual(calls[-2], ["gh", "pr", "merge", URL, "--squash", "--match-head-commit", SHA])
 
     def test_decide_merge_refusals_record_nothing(self):
         self.decision(self.run_record())
@@ -1051,7 +1083,7 @@ class CliTests(unittest.TestCase):
         calls, gh = self.fake_gh(allowed=METHOD_FIELDS.split(","))
         with mock.patch.object(subprocess, "run", side_effect=gh):
             self.assertEqual(self.cli("decide", "one", "merge", "--method", "rebase")[0], 0)
-        self.assertEqual(calls[-1], ["gh", "pr", "merge", URL, "--rebase", "--match-head-commit", SHA])
+        self.assertEqual(calls[-2], ["gh", "pr", "merge", URL, "--rebase", "--match-head-commit", SHA])
 
     def test_decide_choices_follow_the_card(self):
         self.decision(self.run_record())
