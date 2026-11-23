@@ -10,12 +10,15 @@ Agents only edit files in an isolated worktree. Only this runner commits, pushes
 and opens the PR. It never merges, releases, deletes branches or switches models.
 """
 import argparse
+import codecs
+import io
 import json
 import math
 import os
 import queue
 import re
 import secrets
+import select
 import shutil
 import signal
 import subprocess
@@ -518,15 +521,34 @@ def stop_agent(proc):
 def feed(stream, text):
     try:
         stream.write(text)
-        stream.close()
     except OSError:
         pass
+    finally:
+        try:
+            stream.close()
+        except OSError:
+            pass
 
 
-def pump(stream, put):
-    for line in stream:
-        put(line)
-    put(None)
+def pump(stream, put, stop):
+    decoder = io.IncrementalNewlineDecoder(codecs.getincrementaldecoder("utf-8")("replace"), True)
+    pending = ""
+    try:
+        while not stop.is_set():
+            if not select.select([stream], [], [], 0.1)[0]:
+                continue
+            chunk = os.read(stream.fileno(), 8192)
+            pending += decoder.decode(chunk, final=not chunk)
+            while "\n" in pending:
+                line, pending = pending.split("\n", 1)
+                put(line + "\n")
+            if not chunk:
+                break
+        if pending:
+            put(pending)
+    finally:
+        stream.close()
+        put(None)
 
 
 def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progress, read_only_mcp=(), claude_skills=None):
@@ -545,9 +567,11 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     except FileNotFoundError:
         raise Blocked(f"runtime binary not found: {cmd[0]}")
     lines, errors = queue.Queue(), []
-    stderr_reader = threading.Thread(target=pump, args=(proc.stderr, errors.append), daemon=True)
+    stop_readers = threading.Event()
+    stdout_reader = threading.Thread(target=pump, args=(proc.stdout, lines.put, stop_readers), daemon=True)
+    stderr_reader = threading.Thread(target=pump, args=(proc.stderr, errors.append, stop_readers), daemon=True)
     for thread in (threading.Thread(target=feed, args=(proc.stdin, prompt), daemon=True),
-                   threading.Thread(target=pump, args=(proc.stdout, lines.put), daemon=True), stderr_reader):
+                   stdout_reader, stderr_reader):
         thread.start()
     start = quiet_since = time.monotonic()
     deadline = start + timeout
@@ -608,7 +632,12 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     finally:
         if proc.poll() is None:
             stop_agent(proc)
-    stderr_reader.join(timeout=STDERR_DRAIN_SECONDS)  # the agent has exited; let the reader finish
+        end_drain = time.monotonic() + STDERR_DRAIN_SECONDS
+        for reader in (stdout_reader, stderr_reader):
+            reader.join(timeout=max(end_drain - time.monotonic(), 0))
+        stop_readers.set()
+        for reader in (stdout_reader, stderr_reader):
+            reader.join()
     text = final or ""
     if out_file and out_file.is_file():
         text = out_file.read_text(encoding="utf-8")
