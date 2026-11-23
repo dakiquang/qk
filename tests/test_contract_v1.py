@@ -95,6 +95,7 @@ class ContractTests(unittest.TestCase):
                 self.assertTrue(args.json)
 
     def agent_run(self, **extra):
+        self.addCleanup(fake_runtimes.collect_pipes)
         settings = {"PATH": fake_runtimes.path_with(self.root / "bin"), "HOME": str(self.root)}
         with mock.patch.dict(os.environ, dict(settings, **extra)), mock.patch("sys.stdin", io.StringIO("Task.")):
             status, output, _ = self.cli("agent", "run", "--spec", "claude:", "--cwd", str(self.root),

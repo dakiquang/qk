@@ -6,9 +6,11 @@ prompt), FAKE_TOOL (a tool name the Claude stand-in calls first), FAKE_WRITE (fi
 directory), FAKE_SLEEP (seconds), FAKE_BARRIER (directory: wait until two turns have started) and FAKE_EXIT.
 """
 
+import gc
 import os
 from pathlib import Path
 import sys
+import warnings
 
 
 COMMON = r'''
@@ -57,6 +59,13 @@ Path(argv[argv.index("--output-last-message") + 1]).write_text(text)
 emit({"type": "turn.completed", "usage": {"input_tokens": 20, "cached_input_tokens": 5, "output_tokens": 3}})
 sys.exit(int(os.environ.get("FAKE_EXIT", "0")))
 '''
+
+
+def collect_pipes():
+    """Finalize a finished turn's pipe objects now, so their warnings do not land in a later test's captured stderr."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ResourceWarning)
+        gc.collect()
 
 
 def path_with(directory):

@@ -27,6 +27,7 @@ class AgentCliTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
+        self.addCleanup(fake_runtimes.collect_pipes)
         self.root = Path(directory.name).resolve()
         self.work = self.root / "work"
         self.work.mkdir()
