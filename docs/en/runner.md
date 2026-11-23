@@ -21,6 +21,8 @@ python3 scripts/qk_run.py approve <id> --later
 caffeinate -i python3 scripts/qk_run.py drain --until 07:00 --notify
 ```
 
+A run stopped by a runtime's usage limit records `limited` (runtime and reset time); with `--until`, drain waits for the reset and resumes it. See [Overnight](overnight.md#night).
+
 The [unified CLI](ledger.md) exposes the same commands as `qk run …`. `start --task-kind LABEL` adds an optional history label; it grants no authority. Stopped runs contribute summaries to the local ledger; a ledger write failure warns without changing the run outcome.
 
 Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:anthropic/claude-opus-5-5`, reviewer `codex:` (Codex's own default model). Override with `--impl runtime:model` and `--review runtime:model`; runtimes are `omp`, `claude`, `codex`. Implementer and reviewer must be different model families; an omp spec needs an explicit model whose family can be recognised (for example `omp:anthropic/claude-opus-5-5`), otherwise `start` refuses it. Set `QK_RUN_OMP_PROFILE` to run omp under a named profile. `--timeout` limits each agent turn and each verify command (default 1800 s). `--read-only-mcp NAME` (repeatable, Claude and omp only) lets read-only stages call the MCP server `NAME`; see [Isolation](#isolation). `start` refuses it when Codex would run planning (`--impl`) or review (`--review`).

@@ -193,7 +193,7 @@ def _agent_run(args):
         parts.append(runner.RESULT_CONTRACT)
     # The runtime keeps its private home and last-message file here; it is removed when the turn ends.
     scratch = Path(tempfile.mkdtemp(prefix="qk-agent-"))
-    status, reason, result, text, usage = "done", "", None, "", None
+    status, reason, result, text, usage, limit = "done", "", None, "", None, None
     started = time.monotonic()
     stopping = []
 
@@ -220,12 +220,13 @@ def _agent_run(args):
         except runner.Blocked as error:
             status, reason = "blocked", str(error)
             usage = getattr(error, "usage", None) or usage
+            limit = getattr(error, "limit", None)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
         signal.signal(signal.SIGTERM, previous)
     if args.json:
         print(json.dumps({"contract": CONTRACT, "status": status, "reason": reason, "family": kin,
-                          "spec": args.spec, "result": result, "text": text, "usage": usage,
+                          "spec": args.spec, "result": result, "text": text, "usage": usage, "limit": limit,
                           "lessons": lessons, "events": args.events,
                           "seconds": int(time.monotonic() - started)}, ensure_ascii=True))
     else:
@@ -816,9 +817,20 @@ def _stopped_runs():
     return stopped
 
 
+def _limit_until(reset_at):
+    """`until HH:MM` in local time (with the date when it is not today), from an ISO 8601 reset time."""
+    try:
+        moment = datetime.fromisoformat(reset_at).astimezone()
+    except (TypeError, ValueError):
+        return "(reset time unknown)"
+    return "until " + moment.strftime("%H:%M" if moment.date() == datetime.now().date() else "%Y-%m-%d %H:%M")
+
+
 def _brief_risk(data, snapshot, reason="reason unknown"):
     if data.get("status") == "stopped":
         return "high", "stopped at %s (runner gone)" % (data.get("stopped_at") or "unknown")
+    if data.get("status") == "blocked" and data.get("limited_runtime"):
+        return "medium", "waiting for %s limit %s" % (data["limited_runtime"], _limit_until(data.get("limited_until")))
     if data.get("status") == "blocked":
         return "high", "blocked at %s: %s" % (data.get("blocked_at") or "unknown", reason)
     serious = data.get("serious_count")
@@ -1033,8 +1045,9 @@ def _print_card(shown, run, snapshot, level, rule, runs, records):
         _brief_line(history_line)
         return
     if blocked:
-        _brief_line("  Next: qk run resume %s after fixing the cause, or qk run abort %s" % (
-            data.get("run_id", run["id"]), data.get("run_id", run["id"])), "--id " + run["id"])
+        when = "the limit resets (a drain with --until does it)" if data.get("limited_runtime") else "fixing the cause"
+        _brief_line("  Next: qk run resume %s after %s, or qk run abort %s" % (
+            data.get("run_id", run["id"]), when, data.get("run_id", run["id"])), "--id " + run["id"])
         _brief_line(history_line)
         return
     commit, head = data.get("commit"), snapshot.get("head_sha")

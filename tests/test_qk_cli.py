@@ -1,6 +1,7 @@
 """Behavioral decisions made by the offline CLI and read-only PR sync."""
 
 import contextlib
+from datetime import datetime
 import importlib
 import io
 import json
@@ -240,6 +241,14 @@ class CliTests(unittest.TestCase):
         cases = [
             ({"status": "blocked", "blocked_at": "reviewing", "pr_url": ""},
              {}, "high — blocked at reviewing: reason unknown"),
+            ({"status": "blocked", "pr_url": "", "blocked_at": "reviewing", "limited_runtime": "claude",
+              "limited_until": datetime.now().astimezone().replace(hour=23, minute=50).isoformat()},
+             {}, "medium — waiting for claude limit until 23:50"),
+            ({"status": "blocked", "pr_url": "", "limited_runtime": "codex", "limited_until": "2031-01-02T06:52:00+07:00"},
+             {}, "medium — waiting for codex limit until "
+                 + datetime.fromisoformat("2031-01-02T06:52:00+07:00").astimezone().strftime("%Y-%m-%d %H:%M")),
+            ({"status": "blocked", "pr_url": "", "limited_runtime": "claude", "limited_until": ""},
+             {}, "medium — waiting for claude limit (reset time unknown)"),
             ({"remaining_count": 2}, {}, "high — 2 findings remain (severity unknown)"),
             ({"remaining_count": 3, "serious_count": 1}, {}, "high — 1 blocker/important findings remain"),
             ({"remaining_count": 4, "serious_count": 0, "lines_added": 150, "lines_deleted": 150,
@@ -279,8 +288,9 @@ class CliTests(unittest.TestCase):
                                     for line in output.splitlines()))
                 if values.get("status") == "blocked":
                     self.assertIn("(no PR)", output)
-                    self.assertIn("qk run resume risk0", output)
-                    self.assertIn("qk run abort risk0", output)
+                    self.assertIn("qk run resume risk%d after %s" % (index, "the limit resets" if "limited_runtime"
+                                                                     in values else "fixing the cause"), output)
+                    self.assertIn("qk run abort risk%d" % index, output)
                 elif snapshot is None:
                     self.assertIn("Make a change", output)
 

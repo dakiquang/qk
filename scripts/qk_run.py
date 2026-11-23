@@ -55,6 +55,63 @@ class Blocked(Exception):
     """A gate failed; the run stops in `blocked` with this reason."""
 
 
+class Limited(Blocked):
+    """An agent turn stopped by its runtime's usage limit; `limit` says which runtime and when it resets."""
+
+    def __init__(self, message, limit):
+        super().__init__(message)
+        self.limit = limit
+
+
+# Usage-limit messages seen from the runtimes, e.g. Claude "You've hit your 5-hour limit · resets 11:50pm
+# (Asia/Saigon)" and Codex "You've hit your usage limit. ... try again at Nov 21st, 2026 1:41 AM."
+LIMIT_RE = re.compile(r"hit your [\w -]*limit|usage limit|rate limit", re.I)
+RESET_RE = re.compile(
+    r"(?:resets|try again at) "
+    r"(?:(?P<month>jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* (?P<day>\d{1,2})(?:st|nd|rd|th)?,? "
+    r"(?:(?P<year>\d{4}),? )?(?:at )?)?"
+    r"(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<half>[ap])\.?m\b\.?(?:\s*\((?P<zone>[\w/+-]+)\))?", re.I)
+MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+LIMIT_CLOCK_SLACK = timedelta(minutes=5)  # a reset time this far back still means today: the clocks may differ
+
+
+def limit_of(runtime, text, now=None):
+    """The usage limit a runtime's error output reports, as {"runtime", "reset_at", "message"}, or None.
+
+    `reset_at` is the ISO 8601 time the message says the limit resets, or None when it names none. A time of day
+    without a date is the next such time after `now` (default: the current local time)."""
+    match = LIMIT_RE.search(text or "")
+    if not match:
+        return None
+    line = next(line for line in text.splitlines() if LIMIT_RE.search(line))
+    limit = {"runtime": runtime, "reset_at": None, "message": " ".join(line.split())[:300]}
+    reset = RESET_RE.search(text, match.start())
+    if not reset:
+        return limit
+    zone = None
+    if reset["zone"]:
+        try:
+            from zoneinfo import ZoneInfo
+            zone = ZoneInfo(reset["zone"])
+        except (ImportError, ValueError, KeyError, OSError):  # an unknown zone name: read the time as local
+            zone = None
+    now = (now or datetime.now()).astimezone(zone)
+    hour = int(reset["hour"]) % 12 + (12 if reset["half"].lower() == "p" else 0)
+    try:
+        moment = now.replace(hour=hour, minute=int(reset["minute"] or 0), second=0, microsecond=0)
+        if reset["month"]:
+            moment = moment.replace(year=int(reset["year"] or now.year), day=1,
+                                    month=MONTHS.index(reset["month"][:3].lower()) + 1).replace(day=int(reset["day"]))
+            if not reset["year"] and moment < now - timedelta(days=1):  # December naming a January date
+                moment = moment.replace(year=moment.year + 1)
+        elif moment < now - LIMIT_CLOCK_SLACK:
+            moment += timedelta(days=1)
+    except ValueError:  # a date that does not exist: keep the limit, without a reset time
+        return limit
+    limit["reset_at"] = moment.isoformat(timespec="seconds")
+    return limit
+
+
 # ---------------------------------------------------------------- state
 
 
@@ -553,7 +610,9 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
         out_file.unlink()
     if proc.returncode != 0:
         stderr = "".join(line for line in errors if line)
-        raise Blocked(f"{spec} exited {proc.returncode}: {(stderr or text).strip()[-800:]}")
+        message = f"{spec} exited {proc.returncode}: {(stderr or text).strip()[-800:]}"
+        limit = limit_of(runtime, f"{stderr}\n{text}")
+        raise Limited(message, limit) if limit else Blocked(message)
     return text, usage
 
 
@@ -1007,6 +1066,10 @@ def block(state, stage, error):
     so `resume` can tell hand fixes made after it from changes made while the stage ran."""
     state.update(stage="blocked", blocked_at=stage, reason=str(error))
     state.pop("blocked_tree", None)
+    state.pop("limited", None)
+    limit = getattr(error, "limit", None)
+    if limit:  # drain resumes these itself once the limit resets
+        state["limited"] = {"runtime": limit["runtime"], "reset_at": limit["reset_at"]}
     if stage in RESUMABLE_BY_HAND:
         try:
             state["blocked_tree"] = tree_snapshot(Path(state["worktree"]))
@@ -1159,11 +1222,50 @@ def notify(message):
         print(f"qk-run: notification warning: {error}", file=sys.stderr)
 
 
+LIMIT_GRACE = timedelta(minutes=2)  # resume this long after the reset time a limit message names
+LIMIT_RETRY_GAP = timedelta(minutes=30)  # between tries of one run when no reset time is named, or it has passed
+LIMIT_TRIES = 3  # resumes of one limited run in one drain
+
+
+def limited_runs():
+    """Blocked runs that came through the drain queue and stopped on a usage limit, oldest queued first."""
+    found = []
+    for path in state_root().glob("*/state.json"):
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (isinstance(state, dict) and state.get("stage") == "blocked" and state.get("id") == path.parent.name
+                and isinstance(state.get("limited"), dict)
+                and isinstance(state.get("queued_at"), (int, float)) and math.isfinite(state["queued_at"])):
+            found.append(state)
+    return sorted(found, key=lambda state: (state["queued_at"], state["id"]))
+
+
+def limit_reset(state):
+    """The local time a limited run's limit resets, or None when its message named none."""
+    try:
+        return datetime.fromisoformat(state["limited"]["reset_at"]).astimezone().replace(tzinfo=None)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def wait_until(moment):
+    """Sleep until the local time `moment`, reading the wall clock each minute so a Mac that slept wakes on time.
+    Replaced in tests."""
+    while True:
+        left = (moment - datetime.now()).total_seconds()
+        if left <= 0:
+            return
+        time.sleep(min(left, 60))
+
+
 def cmd_drain(args):
     try:
         deadline = drain_deadline(args.until, datetime.now()) if args.until is not None else None
     except ValueError as error:
         sys.exit(str(error))
+    wait_limits = deadline is not None if args.wait_limits is None else args.wait_limits
     import fcntl  # POSIX only, like the process-group handling above
     state_root().mkdir(parents=True, exist_ok=True)
     with (state_root() / "drain.lock").open("a") as lock:
@@ -1171,30 +1273,83 @@ def cmd_drain(args):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             sys.exit("qk-run: another drain is already running (drain.lock is held)")
-        done = blocked = 0
-        while True:
-            state, left = next_queued()
-            if state is None:
-                if done == blocked == 0:
-                    print("Nothing is queued.")
-                break
-            if deadline is not None and datetime.now() >= deadline:
-                print(f"Deadline reached; {left} queued runs left.")
-                break
-            state["stage"] = "implementing"
-            save(state)
+        ran, tries, retried, first_seen, left = {}, {}, {}, {}, 0
+
+        def say(message):
+            print(message)
+            if args.notify:
+                notify(message)
+
+        def drive(state, step):
             try:
-                advance(state)
+                step(state)
             except Exception as error:  # one broken run must not stop the rest of the queue
                 block(state, state["stage"], f"{type(error).__name__}: {error}")
-            if state["stage"] == "done":
-                done += 1
-            elif state["stage"] == "blocked":
-                blocked += 1
-                if args.notify:
-                    reason = " ".join(state.get("reason", "").split())[:DISPLAY_LIMIT]
-                    notify(f"{state['id']} blocked: {reason}")
-        summary = f"Drain: {done} done, {blocked} blocked, {left} left queued."
+            ran[state["id"]] = state
+            if args.notify and state["stage"] == "blocked" and not (wait_limits and state.get("limited")):
+                reason = " ".join(state.get("reason", "").split())[:DISPLAY_LIMIT]
+                notify(f"{state['id']} blocked: {reason}")
+
+        while True:
+            state, left = next_queued()
+            if state is not None:
+                if deadline is not None and datetime.now() >= deadline:
+                    print(f"Deadline reached; {left} queued runs left.")
+                    break
+                state["stage"] = "implementing"
+                save(state)
+                drive(state, advance)
+                continue
+            if not wait_limits:
+                break
+            # The queue is empty: wait for the earliest usage limit to reset, then resume the runs it stopped.
+            now, waiting = datetime.now(), {}
+            for state in limited_runs():
+                run_id = state["id"]
+                if tries.get(run_id, 0) >= LIMIT_TRIES:
+                    continue
+                reset = limit_reset(state)
+                wake = reset + LIMIT_GRACE if reset else first_seen.setdefault(run_id, now) + LIMIT_RETRY_GAP
+                if run_id in retried:  # limited again: never retry one run more often than the gap
+                    wake = max(wake, retried[run_id] + LIMIT_RETRY_GAP)
+                waiting[run_id] = (wake, state)
+            if not waiting:
+                break
+            wake = min(moment for moment, _ in waiting.values())
+            names = ", ".join(sorted({str(state["limited"].get("runtime") or "runtime")
+                                      for _, state in waiting.values()}))
+            if deadline is not None and wake >= deadline:
+                say(f"Gave up: {names} limit resets after the {deadline:%H:%M} deadline; "
+                    f"{len(waiting)} limited runs left for qk-run resume.")
+                break
+            due = [(moment, state) for moment, state in waiting.values() if moment <= max(wake, now)]
+            if wake > now:
+                say(f"{names} limited; {len(due)} runs waiting until {wake:%H:%M}.")
+                wait_until(wake)
+            say(f"Retrying {len(due)} runs stopped by a usage limit.")
+            for moment, state in due:
+                if deadline is not None and datetime.now() >= deadline:
+                    break
+                run_id = state["id"]
+                try:
+                    state = load(run_id)
+                except SystemExit:
+                    continue
+                if state.get("stage") != "blocked" or not state.get("limited"):
+                    continue  # resumed or aborted by hand while the drain waited
+                tries[run_id] = tries.get(run_id, 0) + 1
+                retried[run_id] = max(datetime.now(), moment)
+                drive(state, resume)
+                if state["stage"] == "blocked" and state.get("limited") and tries[run_id] >= LIMIT_TRIES:
+                    say(f"Gave up on {run_id}: still limited after {LIMIT_TRIES} tries.")
+        finished = list(ran.values())
+        done = sum(state["stage"] == "done" for state in finished)
+        blocked = sum(state["stage"] == "blocked" for state in finished)
+        limited = sum(state["stage"] == "blocked" and bool(state.get("limited")) for state in finished)
+        if not finished and left == 0:
+            print("Nothing is queued.")
+        by_limit = f" ({limited} by a usage limit)" if limited else ""
+        summary = f"Drain: {done} done, {blocked} blocked{by_limit}, {left} left queued."
         print(summary)
         if args.notify:
             notify(summary)
@@ -1214,8 +1369,14 @@ def cmd_resume(args):
     state = load(args.id)
     if state["stage"] != "blocked":
         sys.exit(f"qk-run: run is {state['stage']}; only blocked runs resume")
+    return resume(state)
+
+
+def resume(state):
+    """Retry a blocked run's stage, accepting hand fixes made after a block at verify, review or fix."""
     state["stage"] = state.pop("blocked_at")
     state.pop("reason", None)
+    state.pop("limited", None)
     try:
         accept_manual_changes(state)
     except Blocked as error:
@@ -1226,7 +1387,7 @@ def cmd_resume(args):
 
 def cmd_status(args):
     state = load(args.id)
-    keys = ("id", "stage", "reason", "branch", "worktree", "fix_rounds", "pr_url", "commit")
+    keys = ("id", "stage", "reason", "limited", "branch", "worktree", "fix_rounds", "pr_url", "commit")
     print(json.dumps({k: state[k] for k in keys if k in state}, ensure_ascii=False, indent=2))
     directory = run_dir(args.id)
     print(f"run dir: {directory}")
@@ -1272,6 +1433,9 @@ def main(argv=None):
     drain = sub.add_parser("drain", help="run queued approvals one at a time")
     drain.add_argument("--until", metavar="HH:MM", help="stop starting runs at the next local HH:MM")
     drain.add_argument("--notify", action="store_true", help="send macOS notifications")
+    drain.add_argument("--wait-limits", action=argparse.BooleanOptionalAction, default=None,
+                       help="when the queue is empty, wait for usage limits to reset and resume the queued runs "
+                            "they stopped (default: on with --until)")
     drain.set_defaults(func=cmd_drain)
     revise = sub.add_parser("revise")
     revise.add_argument("id")

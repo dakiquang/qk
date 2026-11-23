@@ -596,6 +596,12 @@ def record_run(state: dict, directory: object, producer: Optional[str] = None) -
     if state["stage"] == "blocked":
         # Only the stage: a reason can quote verify commands and raw output, which stay in state.json.
         data["blocked_at"] = _text(state.get("blocked_at", ""), "blocked_at")
+        limited = state.get("limited")
+        if limited is not None:  # stopped by a runtime's usage limit; reset_at is empty when none was named
+            if not isinstance(limited, dict):
+                raise ValueError("limited must be an object")
+            data["limited_runtime"] = _text(limited.get("runtime", ""), "limited runtime", empty=False)
+            data["limited_until"] = _text(limited.get("reset_at") or "", "limited reset_at")
     if producer is not None:
         data["producer"] = _lesson_line(producer, "producer", 100)
     projected = _findings(state, data["fix_rounds"])

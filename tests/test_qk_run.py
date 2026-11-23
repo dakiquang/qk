@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
@@ -512,6 +512,107 @@ class RunnerTest(unittest.TestCase):
                     contextlib.redirect_stderr(io.StringIO()) as warnings:
                 qk_run.notify("summary")
             self.assertIn("notification warning", warnings.getvalue())
+
+    def limited_run(self, reviews):
+        """Start and queue a run whose review turns follow `reviews`: a reset time, or None for no time named."""
+        ids = []
+
+        def review(cwd, state_dir):
+            if reviews:
+                reset = reviews.pop(0)
+                raise qk_run.Limited("claude: exited 1: You've hit your 5-hour limit",
+                                     {"runtime": "claude", "reset_at": reset and reset.isoformat(),
+                                      "message": "You've hit your 5-hour limit"})
+            return result()
+
+        qk_run.call_agent = Agent(plan=lambda cwd, state_dir: (ids.append(state_dir.name) or planned()),
+                                  review=review)
+        self.cli("start", "add a greeting file", "--repo", str(self.repo))
+        self.cli("approve", ids[-1], "--later")
+        return ids[-1]
+
+    def drain(self, *argv):
+        from unittest import mock
+        with mock.patch.object(qk_run, "wait_until") as wait, mock.patch.object(qk_run, "notify") as notice, \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            status = qk_run.main(["drain", "--notify", *argv])
+        return status, [call.args[0] for call in wait.call_args_list], \
+            [call.args[0] for call in notice.call_args_list], output.getvalue()
+
+    def test_limited_run_records_the_limit_and_resume_clears_it(self):
+        reset = (datetime.now() + timedelta(hours=1)).replace(microsecond=0).astimezone()
+        run_id = self.limited_run([reset])
+        self.cli("drain", "--no-wait-limits")
+        state = qk_run.load(run_id)
+        self.assertEqual((state["stage"], state["blocked_at"]), ("blocked", "reviewing"))
+        self.assertEqual(state["limited"], {"runtime": "claude", "reset_at": reset.isoformat()})
+        self.assertEqual(self.cli("resume", run_id), 0)
+        self.assertNotIn("limited", qk_run.load(run_id))
+        self.assertEqual(qk_run.load(run_id)["stage"], "done")
+
+    def test_drain_waits_for_the_reset_and_resumes_only_limited_queued_runs(self):
+        qk_run.save({"id": "other", "stage": "blocked", "blocked_at": "reviewing", "reason": "tests failed",
+                     "queued_at": 1.0})  # blocked for another reason: left for a person
+        reset = (datetime.now() + timedelta(hours=1)).replace(second=0, microsecond=0)
+        qk_run.save({"id": "by-hand", "stage": "blocked", "blocked_at": "reviewing",  # never queued: left alone
+                     "limited": {"runtime": "claude", "reset_at": reset.isoformat()}})
+        run_id = self.limited_run([reset])
+        status, waits, notices, output = self.drain("--wait-limits")
+        self.assertEqual(status, 0)
+        self.assertEqual(waits, [reset + qk_run.LIMIT_GRACE])
+        self.assertEqual(qk_run.load(run_id)["stage"], "done")
+        self.assertNotIn("limited", qk_run.load(run_id))
+        untouched = qk_run.load("other")
+        self.assertEqual((untouched["stage"], untouched["reason"], untouched["ledger_revision"]),
+                         ("blocked", "tests failed", 1))
+        self.assertEqual(qk_run.load("by-hand")["stage"], "blocked")
+        self.assertIn(f"claude limited; 1 runs waiting until {reset + qk_run.LIMIT_GRACE:%H:%M}.", notices)
+        self.assertIn("Retrying 1 runs stopped by a usage limit.", notices)
+        self.assertNotIn(run_id + " blocked", " ".join(notices))
+        self.assertIn("Drain: 1 done, 0 blocked, 0 left queued.", output)
+
+    def test_drain_gives_up_when_the_limit_resets_after_until(self):
+        now = datetime.now()
+        until = (now + timedelta(hours=1)).strftime("%H:%M")
+        run_id = self.limited_run([now + timedelta(hours=3)])
+        status, waits, notices, output = self.drain("--until", until)
+        self.assertEqual((status, waits), (1, []))
+        state = qk_run.load(run_id)
+        self.assertEqual((state["stage"], state["limited"]["runtime"]), ("blocked", "claude"))
+        self.assertIn(f"Gave up: claude limit resets after the {until} deadline; 1 limited runs left for "
+                      "qk-run resume.", notices)
+        self.assertIn("Drain: 0 done, 1 blocked (1 by a usage limit), 0 left queued.", output)
+
+    def test_drain_retries_a_limit_without_reset_time_a_few_times(self):
+        run_id = self.limited_run([None] * 5)
+        status, waits, notices, _ = self.drain("--wait-limits")
+        self.assertEqual((status, len(waits)), (1, qk_run.LIMIT_TRIES))
+        self.assertEqual(waits[1] - waits[0], qk_run.LIMIT_RETRY_GAP)  # spaced, not a tight loop
+        self.assertIn(f"Gave up on {run_id}: still limited after {qk_run.LIMIT_TRIES} tries.", notices)
+        self.assertEqual(qk_run.load(run_id)["stage"], "blocked")
+
+    def test_limit_of_reads_the_runtimes_messages(self):
+        evening = datetime(2026, 11, 23, 22, 3).astimezone()
+        cases = [
+            ("claude: exited 1: You've hit your 5-hour limit · resets 11:50pm (Asia/Saigon)",
+             "2026-11-23T23:50:00+07:00"),
+            ("You've hit your session limit · resets 10am (Asia/Saigon)", "2026-11-24T10:00:00+07:00"),
+            ("You've hit your 5-hour limit · resets 9:30pm (Asia/Saigon)", "2026-11-24T21:30:00+07:00"),
+            ("You've hit your monthly spend limit · raise it at claude.ai/settings/usage", None),
+        ]
+        for text, reset_at in cases:
+            with self.subTest(text=text):
+                limit = qk_run.limit_of("claude", text, datetime(2026, 11, 23, 22, 3,
+                                                                  tzinfo=__import__("zoneinfo").ZoneInfo("Asia/Saigon")))
+                self.assertEqual((limit["runtime"], limit["reset_at"]), ("claude", reset_at))
+        codex = ("You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro) or try again "
+                 "at 6:52 PM.")
+        self.assertEqual(qk_run.limit_of("codex", codex, evening)["reset_at"],
+                         evening.replace(day=24, hour=18, minute=52, second=0).isoformat())
+        dated = "You've hit your usage limit... try again at Nov 21st, 2026 1:41 AM."
+        self.assertEqual(qk_run.limit_of("codex", dated, evening)["reset_at"],
+                         evening.replace(day=21, hour=1, minute=41, second=0).isoformat())
+        self.assertIsNone(qk_run.limit_of("claude", "tests failed: 3 errors", evening))
 
     def test_ledger_failure_does_not_change_published_run(self):
         from unittest import mock

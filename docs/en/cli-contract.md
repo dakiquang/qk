@@ -49,10 +49,11 @@ Output:
 ```json
 {"contract": 1, "status": "done", "reason": "", "family": "anthropic", "spec": "claude:",
  "result": {"status": "done", "summary": "…", "files": [], "evidence": [], "reason": "", "findings": []},
- "text": "…", "usage": {"input": 15, "cached": 4, "output": 7}, "lessons": [], "events": null, "seconds": 12}
+ "text": "…", "usage": {"input": 15, "cached": 4, "output": 7}, "limit": null, "lessons": [], "events": null,
+ "seconds": 12}
 ```
 
-`status` is `done`, `blocked` or `needs_input`. A missing runtime, a timeout, a non-zero exit and an isolation breach are all `blocked` with a `reason`. `result` is `null` when the result contract is off or the reply has no valid block. `usage` is `null` when the runtime reports no tokens and may lack `cost_usd` (Codex reports none).
+`status` is `done`, `blocked` or `needs_input`. A missing runtime, a timeout, a non-zero exit and an isolation breach are all `blocked` with a `reason`. `result` is `null` when the result contract is off or the reply has no valid block. `usage` is `null` when the runtime reports no tokens and may lack `cost_usd` (Codex reports none). `limit` is `null` unless the runtime exited because of its usage limit; then `status` is still `blocked` and `limit` is `{"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00", "message": "…"}`, where `reset_at` is ISO 8601 or `null` when the message names no reset time.
 
 ### `qk agent family SPEC`
 
@@ -79,6 +80,7 @@ Records a stopped run and its findings through the same projection qk-run uses, 
 | `fix_rounds`, `findings`, `addressed` | no | Findings carry `severity`, `class`, `file` and `line` |
 | `diff_stat` | no | `{"files": [], "added": n, "deleted": n}` |
 | `blocked_at` | when blocked | Stage name only; the ledger keeps no reason text |
+| `limited` | no | When blocked by a usage limit: `{"runtime": "…", "reset_at": "ISO 8601" or null}`; `qk brief` then shows `waiting for <runtime> limit until HH:MM` |
 | `ledger_revision` | no | Raise it when recording a later state of the same run |
 
 - `--state-dir` is the caller's directory for this run: it must exist outside any repository and hold `state.json`, which the record points to. Its path identifies the run, so later snapshots of the same run replace earlier ones in `qk brief`.
