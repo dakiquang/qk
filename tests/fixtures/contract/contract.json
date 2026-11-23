@@ -1,2 +1,2 @@
-{"contract": 1, "qk": "0.9.0", "commands": ["contract", "show", "lesson list", "agent run", "agent family", "log run",
+{"contract": 1, "qk": "0.10.0", "commands": ["contract", "show", "lesson list", "agent run", "agent family", "log run",
  "eval prepare", "eval grade"]}

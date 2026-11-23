@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-24
+
 ### Added
 
 - Usage limits are recognised. When Claude, Codex or omp exits because of its usage limit, `qk agent run --json`
@@ -16,6 +18,14 @@ All notable changes to this project are documented here. The format follows
   reset time, notifies, resumes the queued runs the limit stopped and carries on. No reset time means a retry
   every 30 minutes, at most 3 tries per run; a reset after the deadline ends the drain with a notice.
   `--wait-limits` / `--no-wait-limits` override the default (on with `--until`).
+
+### Fixed
+
+- A turn that fails keeps its token usage: when the runtime exits non-zero (a usage limit included) or the turn
+  times out, `qk agent run --json` reports the usage read so far instead of `null`, and qk-run records it.
+- The runner closes the agent's stdin, stdout and stderr pipes on every way a turn ends (done, timeout, MCP stop,
+  non-zero exit), including when the agent exits before reading the whole prompt, so Python no longer warns about
+  unclosed files. Cleanup stays bounded when a descendant process keeps a pipe open.
 
 ## [0.9.0] - 2026-11-23
 
