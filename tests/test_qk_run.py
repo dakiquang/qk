@@ -667,19 +667,25 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(qk_run.load(run_id)["stage"], "blocked")
 
     def test_limit_of_reads_the_runtimes_messages(self):
-        evening = datetime(2026, 11, 23, 22, 3).astimezone()
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            zone = ZoneInfo("Asia/Saigon")
+        except ZoneInfoNotFoundError:  # a zone database without the old name: limit_of reads local time instead
+            zone = None
+        at = datetime(2026, 11, 23, 22, 3, tzinfo=zone) if zone else datetime(2026, 11, 23, 22, 3).astimezone()
         cases = [
-            ("claude: exited 1: You've hit your 5-hour limit · resets 11:50pm (Asia/Saigon)",
-             "2026-11-23T23:50:00+07:00"),
-            ("You've hit your session limit · resets 10am (Asia/Saigon)", "2026-11-24T10:00:00+07:00"),
-            ("You've hit your 5-hour limit · resets 9:30pm (Asia/Saigon)", "2026-11-24T21:30:00+07:00"),
-            ("You've hit your monthly spend limit · raise it at claude.ai/settings/usage", None),
+            ("claude: exited 1: You've hit your 5-hour limit \u00b7 resets 11:50pm (Asia/Saigon)",
+             at.replace(hour=23, minute=50)),
+            ("You've hit your session limit \u00b7 resets 10am (Asia/Saigon)", at.replace(day=24, hour=10, minute=0)),
+            ("You've hit your 5-hour limit \u00b7 resets 9:30pm (Asia/Saigon)", at.replace(day=24, hour=21, minute=30)),
+            ("You've hit your monthly spend limit \u00b7 raise it at claude.ai/settings/usage", None),
         ]
-        for text, reset_at in cases:
+        for text, reset in cases:
             with self.subTest(text=text):
-                limit = qk_run.limit_of("claude", text, datetime(2026, 11, 23, 22, 3,
-                                                                  tzinfo=__import__("zoneinfo").ZoneInfo("Asia/Saigon")))
-                self.assertEqual((limit["runtime"], limit["reset_at"]), ("claude", reset_at))
+                limit = qk_run.limit_of("claude", text, at)
+                self.assertEqual((limit["runtime"], limit["reset_at"]),
+                                 ("claude", reset and reset.isoformat(timespec="seconds")))
+        evening = datetime(2026, 11, 23, 22, 3).astimezone()
         codex = ("You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro) or try again "
                  "at 6:52 PM.")
         self.assertEqual(qk_run.limit_of("codex", codex, evening)["reset_at"],

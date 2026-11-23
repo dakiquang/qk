@@ -116,7 +116,7 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual((status, data["status"]), (2, "blocked"))
         self.assertIn(claude, data["reason"])
         self.assertEqual((data["limit"]["runtime"], data["limit"]["message"]), ("claude", claude))
-        self.assertRegex(data["limit"]["reset_at"], r"T23:50:00\+07:00$")
+        self.assertRegex(data["limit"]["reset_at"], r"T23:50:00[+-]")  # +07:00 where the zone is known
         codex = "You\u2019ve hit your usage limit. Upgrade to Pro or try again at 6:52 PM."
         status, data = self.turn(spec="codex:", FAKE_EXIT="1", FAKE_STDERR=codex)
         self.assertEqual((status, data["limit"]["runtime"]), (2, "codex"))
