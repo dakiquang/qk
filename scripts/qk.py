@@ -24,7 +24,8 @@ VERSION = "0.9.0"
 # External tools may rely on these commands' flags, JSON fields and exit codes.
 # Removing or renaming any of them needs a new CONTRACT number.
 CONTRACT = 1
-CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family", "log run")
+CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family", "log run", "eval prepare",
+                     "eval grade")
 
 
 def _text(value):
@@ -255,6 +256,100 @@ def _log_run(args, ledger):
     findings = sum(record["kind"] == "finding" and run["id"] in record["refs"] for record in ledger.records())
     print(json.dumps({"contract": CONTRACT, "id": run["id"], "findings": findings}) if args.json else run["id"])
     return 0
+
+
+def _eval_parser():
+    parser = argparse.ArgumentParser(prog="qk eval", description="dry eval steps for external tools; no agent runs")
+    steps = parser.add_subparsers(dest="step", required=True)
+    prepare = steps.add_parser("prepare", help="build a case's repository in DIR/repo")
+    prepare.add_argument("case", metavar="CASE")
+    prepare.add_argument("dir", metavar="DIR", help="created if missing; DIR/repo must not exist")
+    prepare.add_argument("--json", action="store_true")
+    grade = steps.add_parser("grade", help="run a case's check.py on a working directory")
+    grade.add_argument("case", metavar="CASE")
+    grade.add_argument("workdir", metavar="WORKDIR")
+    grade.add_argument("--final", metavar="FILE", help="the agent's final reply (default: empty)")
+    grade.add_argument("--events", metavar="FILE",
+                       help="the turn's raw events; adds the clean criterion that qk eval itself grades")
+    grade.add_argument("--json", action="store_true")
+    return parser
+
+
+def _eval_case(evaluator, name):
+    directory = evaluator.CASES / name
+    if "/" in name or name.startswith(".") or not (directory / "case.json").is_file():
+        raise ValueError("unknown case %r" % name)
+    try:
+        return evaluator.load_case(directory)
+    except SystemExit as error:  # the evaluator reports a broken case by exiting
+        raise ValueError(str(error.code).replace("qk-eval: ", "", 1)) from None
+
+
+def _eval_step(argv):
+    """`qk eval prepare` and `qk eval grade`: the evaluator's own case setup and grading, without an agent turn,
+    baseline or ledger record. The caller runs the agent and records its own measurement."""
+    args = _eval_parser().parse_args(argv)
+    evaluator = importlib.import_module("qk_eval")
+    try:
+        case = _eval_case(evaluator, args.case)
+        if args.step == "prepare":
+            root = Path(args.dir).resolve()
+            outputs = ["repo"] + (["plan.md", "review.diff"] if case["skill"] == evaluator.REVIEW else [])
+            for name in outputs:
+                if (root / name).exists() or (root / name).is_symlink():
+                    raise ValueError("%s already exists" % (root / name))
+            root.mkdir(parents=True, exist_ok=True)
+            workdir = evaluator.prepare(case, root)
+            reply = {"contract": CONTRACT, "case": case["name"], "skill": case["skill"], "write": case["write"],
+                     "workdir": str(workdir), "task": None, "plan": None, "diff": None}
+            if case["skill"] == evaluator.REVIEW:
+                # Copies outside the case directory: a turn that reads the case directory fails `clean`.
+                for name in ("plan", "diff"):
+                    source = case["dir"] / ("plan.md" if name == "plan" else "review.diff")
+                    reply[name] = str(shutil.copy2(source, root / source.name))
+            else:
+                reply["task"] = str(workdir / "task.md")
+        else:
+            workdir = Path(args.workdir).resolve()
+            if not workdir.is_dir():
+                raise ValueError("WORKDIR is not a directory: %s" % args.workdir)
+            for flag, value in (("--final", args.final), ("--events", args.events)):
+                if value and not Path(value).is_file():
+                    raise ValueError("%s is not a file: %s" % (flag, value))
+            with tempfile.TemporaryDirectory(prefix="qk-eval-grader-") as private:
+                # The same layout qk eval grades: private graders, a throwaway copy of the working tree (graders may
+                # stage and reset files), and the final reply with events.jsonl beside it (some graders read it).
+                private = Path(private)
+                grader = private / "case"
+                shutil.copytree(case["dir"], grader, ignore=shutil.ignore_patterns("__pycache__"))
+                tree = private / "work"
+                shutil.copytree(workdir, tree, symlinks=True)
+                final = private / "out" / "final.md"
+                final.parent.mkdir()
+                final.write_text(Path(args.final).read_text(encoding="utf-8") if args.final else "", encoding="utf-8")
+                if args.events:
+                    shutil.copy2(args.events, final.parent / "events.jsonl")
+                criteria = evaluator.grade(dict(case, dir=grader), tree, final)
+            if args.events:
+                touched = evaluator.touched_case_files(Path(args.events))
+                criteria.append({"name": "clean", "passed": not touched,
+                                 "detail": "events name the case directory: %s" % touched[0] if touched else ""})
+            reply = {"contract": CONTRACT, "case": case["name"], "criteria": criteria,
+                     "passed": all(item["passed"] for item in criteria)}
+    except ValueError as error:
+        print("qk: %s" % _text(error), file=sys.stderr)
+        return 2
+    except (OSError, subprocess.SubprocessError) as error:
+        print("qk: %s" % _text(error), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(reply, ensure_ascii=True))
+    elif args.step == "prepare":
+        print(reply["workdir"])
+    else:
+        for item in reply["criteria"]:
+            print(_text("%s %s %s" % ("PASS" if item["passed"] else "FAIL", item["name"], item["detail"])).rstrip())
+    return 0  # a case that fails its criteria is a result, not an error: read `passed`
 
 
 def _data(record):
@@ -1035,6 +1130,8 @@ def _decide(args, records, ledger):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["eval"] and argv[1:2] and argv[1] in ("prepare", "grade"):
+        return _eval_step(argv[1:])
     if argv and argv[0] in {"run", "eval"}:
         module = importlib.import_module("qk_" + argv[0])
         return module.main(argv[1:])
