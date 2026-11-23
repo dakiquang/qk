@@ -6,9 +6,11 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -182,6 +184,30 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(home.name, "codex-home")
         self.assertNotEqual(home, self.root / "home")
         self.assertFalse(home.parent.exists())
+
+    def test_sigterm_stops_the_agent_and_removes_the_scratch_directory(self):
+        started = self.root / "started.txt"
+        proc = subprocess.Popen(
+            [sys.executable, str(SCRIPTS / "qk.py"), "agent", "run", "--spec", "codex:", "--cwd", str(self.work),
+             "--read-only", "--json"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env=dict(os.environ, **self.settings, FAKE_PID=str(started), FAKE_SLEEP="60"))
+        self.addCleanup(proc.stdout.close)
+        self.addCleanup(proc.stderr.close)
+        proc.stdin.write("Task.")
+        proc.stdin.close()
+        deadline = time.monotonic() + 20
+        while not started.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        agent, home = started.read_text().split(" ", 1)
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=30)
+        data = json.loads(proc.stdout.read())
+        self.assertEqual((proc.returncode, data["status"]), (2, "blocked"))
+        self.assertIn("stopped by SIGTERM", data["reason"])
+        with self.assertRaises(ProcessLookupError):
+            os.kill(int(agent), 0)
+        self.assertFalse(Path(home).parent.exists())
 
     def test_two_turns_in_two_directories_run_at_once_without_mixing(self):
         barrier = self.root / "barrier"

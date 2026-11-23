@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -193,6 +194,16 @@ def _agent_run(args):
     scratch = Path(tempfile.mkdtemp(prefix="qk-agent-"))
     status, reason, result, text, usage = "done", "", None, "", None
     started = time.monotonic()
+    stopping = []
+
+    def stop(number, frame):
+        # The caller ended the turn: raise once so call_agent stops the agent's process group and the scratch
+        # directory is removed. A repeated signal while that clean-up runs is ignored.
+        if not stopping:
+            stopping.append(number)
+            raise runner.Blocked("stopped by %s; agent stopped" % signal.Signals(number).name)
+
+    previous = signal.signal(signal.SIGTERM, stop)
     try:
         try:
             text, usage = runner.call_agent(
@@ -210,6 +221,7 @@ def _agent_run(args):
             usage = getattr(error, "usage", None) or usage
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+        signal.signal(signal.SIGTERM, previous)
     if args.json:
         print(json.dumps({"contract": CONTRACT, "status": status, "reason": reason, "family": kin,
                           "spec": args.spec, "result": result, "text": text, "usage": usage,
