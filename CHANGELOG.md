@@ -23,7 +23,8 @@ All notable changes to this project are documented here. The format follows
   `state.json`. Rejected input exits 2 and records nothing; the same input twice adds nothing.
 - `qk eval prepare CASE DIR --json` builds a case's repository in `DIR/repo` (with its task, or for a review case
   the plan and diff copied next to it) and `qk eval grade CASE WORKDIR [--final FILE] [--events FILE] --json` runs
-  the case's `check.py` from a private copy and reports `criteria` and `passed`. Neither runs an agent, writes the
+  the case's `check.py` from a private copy, on a throwaway copy of the working tree and with the events beside
+  the final reply as `qk eval` lays them out, and reports `criteria` and `passed`. Neither runs an agent, writes the
   baseline or records anything, so another tool can measure itself on the same cases with the same grading. The old
   `qk eval --case/--skill/--all` flags are unchanged.
 - CLI contract guide (`docs/{en,vi}/cli-contract.md`): the commands, JSON fields, exit codes and versioning rules

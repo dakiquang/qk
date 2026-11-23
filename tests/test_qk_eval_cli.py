@@ -20,12 +20,16 @@ qk = importlib.import_module("qk")
 evaluator = importlib.import_module("qk_eval")
 
 # Passes when the agent created done.txt and its final reply says "finished".
-CHECK = '''import json, sys
+CHECK = '''import json, subprocess, sys
 from pathlib import Path
 workdir, final = Path(sys.argv[1]), Path(sys.argv[2])
+subprocess.run(["git", "add", "-A"], cwd=str(workdir), check=True)  # like csv-export: stage, inspect, reset
+subprocess.run(["git", "reset", "-q"], cwd=str(workdir), check=True)
+events = final.parent / "events.jsonl"  # like test-failure-triage
 print(json.dumps([
     {"name": "file", "passed": (workdir / "done.txt").is_file(), "detail": ""},
     {"name": "reply", "passed": "finished" in final.read_text(), "detail": ""},
+    {"name": "events", "passed": events.is_file() and "ran-check" in events.read_text(), "detail": ""},
 ]))
 '''
 
@@ -93,18 +97,41 @@ class EvalStepTests(unittest.TestCase):
         status, _, errors = self.cli("prepare", "tiny", str(self.root / "run"), "--json")
         self.assertEqual(status, 2)
         self.assertIn("already exists", errors)
+        (self.root / "other").mkdir()
+        (self.root / "other" / "plan.md").write_text("mine\n")
+        status, _, errors = self.cli("prepare", "tiny-review", str(self.root / "other"), "--json")
+        self.assertEqual(status, 2)
+        self.assertIn("plan.md already exists", errors)
+        self.assertEqual(((self.root / "other" / "plan.md").read_text(), (self.root / "other" / "repo").exists()),
+                         ("mine\n", False))
 
     def test_grade_reports_criteria_and_passed(self):
         workdir = Path(self.json("prepare", "tiny", str(self.root / "run"))["workdir"])
         reply = self.json("grade", "tiny", str(workdir))
         self.assertEqual((reply["contract"], reply["case"], reply["passed"]), (1, "tiny", False))
         self.assertEqual([(item["name"], item["passed"]) for item in reply["criteria"]],
-                         [("file", False), ("reply", False)])
+                         [("file", False), ("reply", False), ("events", False)])
         (workdir / "done.txt").write_text("x")
-        final = self.root / "final.md"
+        final = self.root / "elsewhere" / "final.md"
+        final.parent.mkdir()
         final.write_text("All finished.")
-        reply = self.json("grade", "tiny", str(workdir), "--final", str(final))
-        self.assertTrue(reply["passed"])
+        events = self.root / "turn-events.jsonl"  # not next to --final: the grader still finds it
+        events.write_text('{"ran-check": true}\n')
+        reply = self.json("grade", "tiny", str(workdir), "--final", str(final), "--events", str(events))
+        self.assertTrue(reply["passed"], reply)
+
+    def test_grade_leaves_the_working_tree_and_its_index_alone(self):
+        workdir = Path(self.json("prepare", "tiny", str(self.root / "run"))["workdir"])
+        (workdir / "done.txt").write_text("x")
+        (workdir / "a.txt").write_text("changed\n")
+        subprocess.run(["git", "add", "a.txt"], cwd=str(workdir), check=True)
+        before = subprocess.run(["git", "status", "--porcelain"], cwd=str(workdir), capture_output=True,
+                                text=True).stdout
+        self.json("grade", "tiny", str(workdir))
+        after = subprocess.run(["git", "status", "--porcelain"], cwd=str(workdir), capture_output=True,
+                               text=True).stdout
+        self.assertEqual(after, before)
+        self.assertIn("M  a.txt", after)
 
     def test_grade_runs_a_private_copy_of_the_graders(self):
         workdir = Path(self.json("prepare", "tiny", str(self.root / "run"))["workdir"])
@@ -136,16 +163,18 @@ class EvalStepTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertIn("WORKDIR is not a directory", errors)
         workdir = self.json("prepare", "tiny", str(self.root / "run"))["workdir"]
-        status, _, errors = self.cli("grade", "tiny", workdir, "--final", str(self.root / "none.md"), "--json")
-        self.assertEqual(status, 2)
-        self.assertIn("--final is not a file", errors)
+        for flag in ("--final", "--events"):
+            with self.subTest(flag=flag):
+                status, _, errors = self.cli("grade", "tiny", workdir, flag, str(self.root / "none.md"), "--json")
+                self.assertEqual(status, 2)
+                self.assertIn(flag + " is not a file", errors)
 
     def test_text_output(self):
         status, output, _ = self.cli("prepare", "tiny", str(self.root / "run"))
         self.assertEqual((status, output.strip()), (0, str(self.root / "run" / "repo")))
         status, output, _ = self.cli("grade", "tiny", output.strip())
         self.assertEqual(status, 0)
-        self.assertEqual(output.splitlines(), ["FAIL file", "FAIL reply"])
+        self.assertEqual(output.splitlines(), ["FAIL file", "FAIL reply", "FAIL events"])
 
     def test_old_eval_flags_still_reach_the_evaluator(self):
         with mock.patch.object(evaluator, "main", return_value=7) as old:
