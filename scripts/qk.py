@@ -236,6 +236,8 @@ def _log_run(args, ledger):
     directory = Path(args.state_dir).resolve()
     if not directory.is_dir():
         raise ValueError("--state-dir is not a directory: %s" % args.state_dir)
+    if not (directory / "state.json").is_file():
+        raise ValueError("--state-dir has no state.json; the record points readers to it")
     ledger._outside_repository(directory)
     run = ledger.record_run(state, directory, producer=args.producer)
     findings = sum(record["kind"] == "finding" and run["id"] in record["refs"] for record in ledger.records())
@@ -898,6 +900,12 @@ def _print_card(shown, run, snapshot, level, rule, runs, records):
     history_line = "  History: %s %d/%d done/total (informational)" % (kind, done, len(history))
     if stopped:
         _brief_line("  Next: qk run status %s, then qk run abort %s" % (data["run_id"], data["run_id"]))
+        _brief_line(history_line)
+        return
+    if blocked and data.get("producer"):
+        # qk run resume/abort only find runs under qk-run's own state root.
+        _brief_line("  Next: resume or abort run %s with %s, which recorded it" % (
+            data.get("run_id", run["id"]), data["producer"]), "--id " + run["id"])
         _brief_line(history_line)
         return
     if blocked:

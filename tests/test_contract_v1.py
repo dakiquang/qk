@@ -116,6 +116,7 @@ class ContractTests(unittest.TestCase):
 
     def log_run(self, text):
         (self.root / "tool").mkdir(exist_ok=True)
+        (self.root / "tool" / "state.json").write_text("{}")
         with mock.patch("sys.stdin", io.StringIO(text)):
             return self.cli("log", "run", "--producer", "other-tool 1.2.0", "--state-dir",
                             str(self.root / "tool"), "--json")

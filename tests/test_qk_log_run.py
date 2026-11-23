@@ -29,6 +29,7 @@ class LogRunTests(unittest.TestCase):
         self.root = Path(directory.name).resolve()
         self.state_dir = self.root / "tool-state" / "job-1"
         self.state_dir.mkdir(parents=True)
+        (self.state_dir / "state.json").write_text("{}")
         settings = mock.patch.dict(os.environ, {"QK_STATE_DIR": str(self.root / "ledger"),
                                                 "XDG_STATE_HOME": str(self.root / "state")})
         settings.start()
@@ -104,6 +105,7 @@ class LogRunTests(unittest.TestCase):
             "empty producer": {"producer": ""},
             "multi-line producer": {"producer": "a\nb"},
             "missing state dir": {"state_dir": self.root / "missing"},
+            "state dir without state.json": {"state_dir": self.root},
         }
         for name, arguments in cases.items():
             with self.subTest(name):
@@ -115,6 +117,7 @@ class LogRunTests(unittest.TestCase):
     def test_state_dir_inside_a_repository_is_rejected(self):
         repository = self.root / "repo"
         (repository / "state").mkdir(parents=True)
+        (repository / "state" / "state.json").write_text("{}")
         subprocess.run(["git", "init", "-q", str(repository)], check=True)
         status, _, errors = self.log(state_dir=repository / "state")
         self.assertEqual(status, 2)
@@ -126,6 +129,11 @@ class LogRunTests(unittest.TestCase):
         self.assertEqual(status, 0)
         data = ledger.records()[0]["data"]
         self.assertEqual((data["status"], data["blocked_at"]), ("blocked", "verifying"))
+        status, output, _ = self.cli("brief")
+        self.assertEqual(status, 0)
+        self.assertIn("Next: resume or abort run %s with other-tool 1.2.0, which recorded it" % self.state["id"],
+                      output)
+        self.assertNotIn("qk run resume", output)
 
     def test_recorded_run_reads_back_through_show_stats_and_brief(self):
         reply = json.loads(self.log()[1])
