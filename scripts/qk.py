@@ -294,8 +294,10 @@ def _eval_step(argv):
         case = _eval_case(evaluator, args.case)
         if args.step == "prepare":
             root = Path(args.dir).resolve()
-            if (root / "repo").exists():
-                raise ValueError("%s already exists" % (root / "repo"))
+            outputs = ["repo"] + (["plan.md", "review.diff"] if case["skill"] == evaluator.REVIEW else [])
+            for name in outputs:
+                if (root / name).exists() or (root / name).is_symlink():
+                    raise ValueError("%s already exists" % (root / name))
             root.mkdir(parents=True, exist_ok=True)
             workdir = evaluator.prepare(case, root)
             reply = {"contract": CONTRACT, "case": case["name"], "skill": case["skill"], "write": case["write"],
@@ -311,16 +313,23 @@ def _eval_step(argv):
             workdir = Path(args.workdir).resolve()
             if not workdir.is_dir():
                 raise ValueError("WORKDIR is not a directory: %s" % args.workdir)
+            for flag, value in (("--final", args.final), ("--events", args.events)):
+                if value and not Path(value).is_file():
+                    raise ValueError("%s is not a file: %s" % (flag, value))
             with tempfile.TemporaryDirectory(prefix="qk-eval-grader-") as private:
-                # Grade from a private copy, as qk eval does, so nothing in the working tree can change the graders.
-                grader = Path(private) / case["name"]
+                # The same layout qk eval grades: private graders, a throwaway copy of the working tree (graders may
+                # stage and reset files), and the final reply with events.jsonl beside it (some graders read it).
+                private = Path(private)
+                grader = private / "case"
                 shutil.copytree(case["dir"], grader, ignore=shutil.ignore_patterns("__pycache__"))
-                final = Path(args.final).resolve() if args.final else Path(private) / "final.md"
-                if not args.final:
-                    final.write_text("", encoding="utf-8")
-                elif not final.is_file():
-                    raise ValueError("--final is not a file: %s" % args.final)
-                criteria = evaluator.grade(dict(case, dir=grader), workdir, final)
+                tree = private / "work"
+                shutil.copytree(workdir, tree, symlinks=True)
+                final = private / "out" / "final.md"
+                final.parent.mkdir()
+                final.write_text(Path(args.final).read_text(encoding="utf-8") if args.final else "", encoding="utf-8")
+                if args.events:
+                    shutil.copy2(args.events, final.parent / "events.jsonl")
+                criteria = evaluator.grade(dict(case, dir=grader), tree, final)
             if args.events:
                 touched = evaluator.touched_case_files(Path(args.events))
                 criteria.append({"name": "clean", "passed": not touched,
