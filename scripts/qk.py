@@ -9,8 +9,10 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from urllib.parse import urlparse
@@ -21,7 +23,7 @@ VERSION = "0.9.0"
 # External tools may rely on these commands' flags, JSON fields and exit codes.
 # Removing or renaming any of them needs a new CONTRACT number.
 CONTRACT = 1
-CONTRACT_COMMANDS = ("contract", "show", "lesson list")
+CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family")
 
 
 def _text(value):
@@ -56,7 +58,7 @@ def _since(value):
 
 
 def _parser():
-    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,contract,run,eval} ...")
+    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,contract,agent,run,eval} ...")
     commands = parser.add_subparsers(dest="command", required=True)
     show = commands.add_parser("show", help="read recorded evidence")
     show.add_argument("--kind")
@@ -106,6 +108,30 @@ def _parser():
     decide.add_argument("--reason", metavar="TEXT")
     contract = commands.add_parser("contract", help="print the CLI contract version for external tools")
     contract.add_argument("--json", action="store_true")
+    agent = commands.add_parser("agent", help="run one isolated agent turn for an external tool")
+    agents = agent.add_subparsers(dest="agent_command", required=True)
+    turn = agents.add_parser("run", help="one non-interactive turn; prompt on stdin; never touches git")
+    turn.add_argument("--spec", required=True, metavar="RUNTIME:MODEL")
+    turn.add_argument("--cwd", required=True, metavar="DIR")
+    access = turn.add_mutually_exclusive_group(required=True)
+    access.add_argument("--write", action="store_true", help="the agent may edit files under --cwd")
+    access.add_argument("--read-only", action="store_true", help="no edits and no MCP")
+    turn.add_argument("--add-dir", action="append", default=[], metavar="DIR")
+    turn.add_argument("--timeout", type=int, metavar="SECONDS", help="default: the runner's")
+    turn.add_argument("--read-only-mcp", action="append", default=[], metavar="NAME",
+                      help="MCP server a read-only turn may call")
+    turn.add_argument("--no-result-contract", action="store_true",
+                      help="do not ask for or parse a qk-result block")
+    turn.add_argument("--no-git-rules", action="store_true",
+                      help="with --write, do not append the no-git and clean-up rules")
+    turn.add_argument("--lessons", choices=("plan", "impl", "review"), metavar="STAGE",
+                      help="append active lessons for this stage (plan, impl or review)")
+    turn.add_argument("--repo", default="", metavar="NAME", help="repository name for --lessons scope")
+    turn.add_argument("--events", metavar="FILE", help="append the runtime's raw JSON events here")
+    turn.add_argument("--json", action="store_true")
+    kin = agents.add_parser("family", help="print the model family of a runtime:model spec")
+    kin.add_argument("spec", metavar="SPEC")
+    kin.add_argument("--json", action="store_true")
     commands.add_parser("run", help="existing runner (argv passed unchanged)")
     commands.add_parser("eval", help="existing evaluator (argv passed unchanged)")
     return parser
@@ -117,6 +143,76 @@ def _contract(args):
     else:
         print("contract %d qk %s commands: %s" % (CONTRACT, VERSION, ", ".join(CONTRACT_COMMANDS)))
     return 0
+
+
+def _family(runner, spec):
+    try:
+        return runner.family(spec)
+    except SystemExit as error:  # the runner reports a bad spec by exiting
+        raise ValueError(str(error.code).replace("qk-run: ", "", 1)) from None
+
+
+def _agent_family(args):
+    kin = _family(importlib.import_module("qk_run"), args.spec)
+    print(json.dumps({"contract": CONTRACT, "spec": args.spec, "family": kin}) if args.json else kin)
+    return 0
+
+
+def _agent_run(args):
+    """One agent turn with the runner's isolation. It reports; the caller owns git and what happens next."""
+    runner = importlib.import_module("qk_run")
+    kin = _family(runner, args.spec)
+    cwd = Path(args.cwd)
+    if not cwd.is_dir():
+        raise ValueError("--cwd is not a directory: %s" % args.cwd)
+    timeout = runner.DEFAULT_TIMEOUT if args.timeout is None else args.timeout
+    if timeout < 1:
+        raise ValueError("--timeout must be at least 1 second")
+    prompt = sys.stdin.read()
+    if not prompt.strip():
+        raise ValueError("the prompt on stdin is empty")
+    parts, lessons = [prompt.rstrip("\n")], []
+    if args.write and not args.no_git_rules:
+        parts += [runner.CLEAN, runner.NO_GIT]
+    if args.lessons:
+        ledger = importlib.import_module("qk_ledger")
+        chosen = ledger.lessons_for(args.lessons, args.repo)
+        lessons = [lesson_id for lesson_id, _ in chosen]
+        if chosen:
+            parts.append(ledger.lessons_block(chosen).rstrip("\n"))
+    if not args.no_result_contract:
+        parts.append(runner.RESULT_CONTRACT)
+    # The runtime keeps its private home and last-message file here; it is removed when the turn ends.
+    scratch = Path(tempfile.mkdtemp(prefix="qk-agent-"))
+    status, reason, result, text, usage = "done", "", None, "", None
+    started = time.monotonic()
+    try:
+        try:
+            text, usage = runner.call_agent(
+                args.spec, "\n".join(parts), cwd, args.write, timeout, [scratch, *args.add_dir],
+                events=Path(args.events) if args.events else scratch / "events.jsonl",
+                progress=lambda message: print(_text(message), file=sys.stderr, flush=True),
+                read_only_mcp=args.read_only_mcp)
+            if not args.no_result_contract:
+                result = runner.read_result(text)
+                status = result["status"]
+                if status != "done":
+                    reason = str(result.get("reason") or result.get("summary") or "")
+        except runner.Blocked as error:
+            status, reason = "blocked", str(error)
+            usage = getattr(error, "usage", None) or usage
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    if args.json:
+        print(json.dumps({"contract": CONTRACT, "status": status, "reason": reason, "family": kin,
+                          "spec": args.spec, "result": result, "text": text, "usage": usage,
+                          "lessons": lessons, "events": args.events,
+                          "seconds": int(time.monotonic() - started)}, ensure_ascii=True))
+    else:
+        print(text)
+        if status != "done":
+            print("qk: %s: %s" % (status, _text(reason)), file=sys.stderr)
+    return 0 if status == "done" else 2
 
 
 def _data(record):
@@ -897,6 +993,15 @@ def main(argv=None):
     args = _parser().parse_args(argv)
     if args.command == "contract":
         return _contract(args)
+    if args.command == "agent":
+        try:
+            return (_agent_run if args.agent_command == "run" else _agent_family)(args)
+        except ValueError as error:  # rejected input: nothing ran
+            print("qk: %s" % _text(error), file=sys.stderr)
+            return 2
+        except OSError as error:
+            print("qk: %s" % _text(error), file=sys.stderr)
+            return 1
     try:
         ledger = importlib.import_module("qk_ledger")
         if args.command == "lesson":

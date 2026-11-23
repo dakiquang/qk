@@ -16,6 +16,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+import fake_runtimes
+
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -24,6 +26,16 @@ qk = importlib.import_module("qk")
 ledger = importlib.import_module("qk_ledger")
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "contract"
+# One call per contract command, using the flags the contract documents; `--json` is appended.
+SAMPLE_ARGV = {
+    "contract": [],
+    "show": ["--kind", "run", "--id", "abc", "--repo", "project", "--since", "7d"],
+    "lesson list": [],
+    "agent run": ["--spec", "codex:", "--cwd", ".", "--read-only", "--add-dir", "a", "--timeout", "60",
+                  "--read-only-mcp", "tracker", "--no-result-contract", "--no-git-rules", "--lessons", "review",
+                  "--repo", "project", "--events", "events.jsonl"],
+    "agent family": ["codex:"],
+}
 
 
 def fixture(name):
@@ -74,10 +86,35 @@ class ContractTests(unittest.TestCase):
         self.assertEqual((status, errors), (0, ""))
         self.assertTrue(output.startswith("contract 1 qk %s " % qk.VERSION), output)
 
-    def test_every_contract_command_accepts_json(self):
-        for command in self.json("contract", "--json")["commands"]:
+    def test_every_contract_command_parses_with_its_documented_flags(self):
+        commands = self.json("contract", "--json")["commands"]
+        self.assertEqual(sorted(set(commands) - set(SAMPLE_ARGV)), [], "add a sample call for each new command")
+        for command in commands:
             with self.subTest(command=command):
-                self.assertEqual(self.cli(*command.split(), "--json")[0], 0)
+                args = qk._parser().parse_args(command.split() + SAMPLE_ARGV[command] + ["--json"])
+                self.assertTrue(args.json)
+
+    def agent_run(self, **extra):
+        settings = {"PATH": fake_runtimes.path_with(self.root / "bin"), "HOME": str(self.root)}
+        with mock.patch.dict(os.environ, dict(settings, **extra)), mock.patch("sys.stdin", io.StringIO("Task.")):
+            status, output, _ = self.cli("agent", "run", "--spec", "claude:", "--cwd", str(self.root),
+                                         "--read-only", "--json")
+        return status, json.loads(output)
+
+    def test_agent_run_keeps_fields_statuses_and_exit_codes(self):
+        sample = fixture("agent-run.json")
+        status, actual = self.agent_run()
+        self.assert_keeps_fields(actual, sample)
+        self.assert_keeps_fields(actual["result"], sample["result"])
+        self.assert_keeps_fields(actual["usage"], sample["usage"])
+        self.assertEqual((status, actual["status"], actual["contract"]), (0, "done", 1))
+        for reported in ("blocked", "needs_input"):
+            self.assertEqual(self.agent_run(FAKE_STATUS=reported)[0], 2, reported)
+        self.assertEqual(self.agent_run(FAKE_STATUS=reported)[1]["status"], reported)
+
+    def test_agent_family_keeps_fields(self):
+        sample = fixture("agent-family.json")
+        self.assertEqual(self.json("agent", "family", sample["spec"], "--json"), sample)
 
     def test_show_json_keeps_record_fields(self):
         sample = fixture("show-record.json")
