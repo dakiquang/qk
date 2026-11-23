@@ -36,6 +36,8 @@ SAMPLE_ARGV = {
                   "--repo", "project", "--events", "events.jsonl"],
     "agent family": ["codex:"],
     "log run": ["--producer", "other-tool 1.2.0", "--state-dir", "state"],
+    "eval prepare": ["csv-export", "dir"],
+    "eval grade": ["csv-export", "dir/repo", "--final", "final.md", "--events", "events.jsonl"],
 }
 
 
@@ -92,7 +94,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(sorted(set(commands) - set(SAMPLE_ARGV)), [], "add a sample call for each new command")
         for command in commands:
             with self.subTest(command=command):
-                args = qk._parser().parse_args(command.split() + SAMPLE_ARGV[command] + ["--json"])
+                words = command.split() + SAMPLE_ARGV[command] + ["--json"]
+                # `qk eval` steps have their own parser; the old `qk eval` flags go to the evaluator unchanged.
+                parser = qk._eval_parser() if words[0] == "eval" else qk._parser()
+                args = parser.parse_args(words[1:] if words[0] == "eval" else words)
                 self.assertTrue(args.json)
 
     def agent_run(self, **extra):
@@ -130,6 +135,15 @@ class ContractTests(unittest.TestCase):
         run = self.json("show", "--kind", "run", "--json")[0]
         self.assertEqual((run["id"], run["data"]["producer"]), (actual["id"], "other-tool 1.2.0"))
         self.assertEqual(self.log_run("{}")[0], 2)
+
+    def test_eval_prepare_and_grade_keep_fields(self):
+        prepared = self.json("eval", "prepare", "csv-export", str(self.root / "case"), "--json")
+        self.assert_keeps_fields(prepared, fixture("eval-prepare.json"))
+        graded = self.json("eval", "grade", "csv-export", prepared["workdir"], "--json")
+        sample = fixture("eval-grade.json")
+        self.assert_keeps_fields(graded, sample)
+        for item in graded["criteria"]:
+            self.assert_keeps_fields(item, sample["criteria"][0])
 
     def test_agent_family_keeps_fields(self):
         sample = fixture("agent-family.json")

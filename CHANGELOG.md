@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows
   `qk show`, `qk stats` and `qk brief`. The run record carries the caller's `producer` label, and a blocked
   card names that producer instead of suggesting `qk run resume`. `--state-dir` must hold the caller's
   `state.json`. Rejected input exits 2 and records nothing; the same input twice adds nothing.
+- `qk eval prepare CASE DIR --json` builds a case's repository in `DIR/repo` (with its task, or for a review case
+  the plan and diff copied next to it) and `qk eval grade CASE WORKDIR [--final FILE] [--events FILE] --json` runs
+  the case's `check.py` from a private copy and reports `criteria` and `passed`. Neither runs an agent, writes the
+  baseline or records anything, so another tool can measure itself on the same cases with the same grading. The old
+  `qk eval --case/--skill/--all` flags are unchanged.
 - `qk decide RUN_ID merge|leave|abort-later|resume-later [--method M]` records a brief decision without a terminal,
   for example from an agent in a chat acting on the user's stated choice, with the same merge checks and choices as
   the card. Decisions record `via` (`brief` or `decide`), and `qk-run` agents are told never to merge or record
