@@ -913,10 +913,14 @@ def uses_conventional_commits(subjects):
     return sum(1 for s in subjects if CONVENTIONAL_RE.match(s)) * 2 > len(subjects)
 
 
-def conventional_title(title, subjects):
+DOCS_FILE_RE = re.compile(r"(?:^|/)docs?/|\.(?:md|mdx|rst|adoc)$", re.IGNORECASE)
+
+
+def conventional_title(title, subjects, files=()):
     """Prefix a type and lowercase the first letter (acronyms excepted) when the history is conventional.
 
-    A non-conventional `<word>: ` prefix (e.g. a project or ticket name) is dropped before the type is added."""
+    A non-conventional `<word>: ` prefix (e.g. a project or ticket name) is dropped before the type is added.
+    When the first word names no type, a change to documentation files only is `docs`, otherwise `feat`."""
     if not uses_conventional_commits(subjects) or CONVENTIONAL_RE.match(title):
         return clip_title(title)
     prefix = FOREIGN_PREFIX_RE.match(title)
@@ -927,14 +931,16 @@ def conventional_title(title, subjects):
     word = re.sub(r"[^a-z]", "", first.lower())
     second = first[1:2]
     subject = title if second.isupper() or second.isdigit() else title[:1].lower() + title[1:]
-    return clip_title(f"{TITLE_TYPES.get(word, 'feat')}: {subject}")
+    default = "docs" if files and all(DOCS_FILE_RE.search(path) for path in files) else "feat"
+    return clip_title(f"{TITLE_TYPES.get(word, default)}: {subject}")
 
 
 def commit_title(state):
     """Plan title, typed when most of the base branch's last 20 non-merge subjects are conventional."""
-    subjects = git(Path(state["worktree"]), "log", "-n", "20", "--no-merges", "--format=%s",
-                   state["base_sha"]).splitlines()
-    return conventional_title(plan_title(state), subjects)
+    worktree = Path(state["worktree"])
+    subjects = git(worktree, "log", "-n", "20", "--no-merges", "--format=%s", state["base_sha"]).splitlines()
+    files = set(git(worktree, "diff", "--name-only", "-z", state["base_sha"]).split("\0")) - {""}
+    return conventional_title(plan_title(state), subjects, files | untracked(worktree))
 
 
 def pr_body(state):

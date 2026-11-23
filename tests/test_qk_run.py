@@ -574,6 +574,15 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(qk_run.conventional_title(title, most), expected, title)
         self.assertEqual(qk_run.conventional_title("Add greeting", []), "Add greeting")
         self.assertLessEqual(len(qk_run.conventional_title("Add " + "x" * 68, most)), 72)
+        move = "Move blocked-card paragraph above terminal heading"  # the first overnight PR was typed feat
+        for files, expected in (({"docs/en/overnight.md", "docs/vi/overnight.md"}, "docs: "),
+                                ({"README.md", "CHANGELOG.md", "doc/guide.rst"}, "docs: "),
+                                ({"docs/en/overnight.md", "scripts/qk.py"}, "feat: "),
+                                ({"requirements.txt"}, "feat: "), (set(), "feat: ")):
+            with self.subTest(files=sorted(files)):
+                self.assertEqual(qk_run.conventional_title(move, most, files), expected + "move" + move[4:])
+        self.assertEqual(qk_run.conventional_title("Fix typo in guide", most, {"docs/guide.md"}),
+                         "fix: fix typo in guide")  # a named type still wins
 
     def test_titles_cut_at_word_boundary_and_drop_foreign_prefix(self):
         half = ["feat: x"] * 10 + ["plain"] * 10

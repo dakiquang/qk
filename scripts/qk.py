@@ -620,19 +620,21 @@ MERGE_PERMISSIONS = {"ADMIN", "MAINTAIN", "WRITE"}  # GitHub viewerPermission va
 
 
 def _merge(url, commit, method=None):
-    """Merge only the recorded commit; return (ok, head, reason). With `method` None, ask when several are
-    allowed (EOF at that prompt propagates); with "", use the only allowed method or refuse."""
+    """Merge only the recorded commit; return (ok, head, reason, merged). With `method` None, ask when several
+    are allowed (Enter picks the first, squash when allowed; EOF propagates); with "", use the only allowed method
+    or refuse. `merged` is False when GitHub accepted the merge but the PR is not merged yet (a merge queue or
+    auto-merge finishes it), None when its state could not be read."""
     head = None
     try:
         url = _pr_url(url)
         if not commit:
-            return False, None, "run has no recorded commit"
+            return False, None, "run has no recorded commit", None
         payload = json.loads(_gh(["pr", "view", url, "--json", "headRefOid"], 60))
         head = payload.get("headRefOid") if isinstance(payload, dict) else None
         if not _head_sha(head):
             raise ValueError("invalid PR head SHA")
         if head != commit:
-            return False, head, "PR head %s differs from recorded commit %s" % (head, commit)
+            return False, head, "PR head %s differs from recorded commit %s" % (head, commit), None
         parsed = urlparse(url)
         owner, name = parsed.path.split("/")[1:3]
         # HOST/OWNER/REPO keeps the lookup on the PR's own host (GitHub Enterprise included).
@@ -644,24 +646,32 @@ def _merge(url, commit, method=None):
         if settings["viewerPermission"] not in MERGE_PERMISSIONS:  # check before asking for a method
             return False, head, ("the active gh account cannot merge in %s/%s (viewerPermission=%s); rerun with "
                                  "GH_TOKEN=\"$(gh auth token --user <account>)\" in front of the qk command" % (
-                                     owner, name, settings["viewerPermission"]))
+                                     owner, name, settings["viewerPermission"])), None
         methods = [method for method, field in MERGE_METHODS if settings.get(field) is True]
         if not methods:
-            return False, head, "repository allows no merge method"
+            return False, head, "repository allows no merge method", None
         if method is None:
             method = methods[0]
-            if len(methods) > 1:
-                method = input("Merge method [%s]: " % "/".join(methods)).strip().lower()
+            if len(methods) > 1:  # "merge" here means a merge commit; Enter keeps the first, usually squash
+                method = input("Merge method [%s] (merge = merge commit; Enter: %s): " % (
+                    "/".join(methods), methods[0])).strip().lower() or methods[0]
         elif method == "":
             if len(methods) > 1:
-                return False, head, "the repository allows %s; pass --method" % ", ".join(methods)
+                return False, head, "the repository allows %s; pass --method" % ", ".join(methods), None
             method = methods[0]
         if method not in methods:
-            return False, head, "merge method must be one of " + ", ".join(methods)
+            return False, head, "merge method must be one of " + ", ".join(methods), None
         _gh(["pr", "merge", url, "--" + method, "--match-head-commit", commit], 120)
-        return True, head, ""
     except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
-        return False, head, str(error)
+        return False, head, str(error), None
+    try:  # a merge queue or auto-merge makes `gh pr merge` succeed before the PR is merged
+        state = json.loads(_gh(["pr", "view", url, "--json", "state"], 60))
+        merged = state.get("state") == "MERGED" if isinstance(state, dict) and state.get("state") else None
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        merged = None
+    reason = {True: "", False: "GitHub accepted the merge, but the PR is not merged yet (merge queue or auto-merge)",
+              None: "GitHub accepted the merge; the PR state could not be read"}[merged]
+    return True, head, reason, merged
 
 
 def _ask(run, snapshot, blocked, ledger):
@@ -692,10 +702,12 @@ def _ask(run, snapshot, blocked, ledger):
                     print(_text(line.expandtabs()))
                 continue
             if not blocked and answer == "y":
-                merged, head, reason = _merge(data.get("pr_url"), data.get("commit"))
-                if not merged:
+                accepted, head, reason, merged = _merge(data.get("pr_url"), data.get("commit"))
+                if not accepted:
                     print("qk brief: not merged: %s" % _text(reason), file=sys.stderr)
                     continue
+                if reason:
+                    print("qk brief: %s" % _text(reason), file=sys.stderr)
                 choice = "merge"
             elif answer in choices:
                 choice = choices[answer]
@@ -704,7 +716,8 @@ def _ask(run, snapshot, blocked, ledger):
         except EOFError:
             print()
             return False
-        _record_decision(ledger, run, choice, head, decided_at, elapsed, "brief")
+        _record_decision(ledger, run, choice, head, decided_at, elapsed, "brief",
+                         merged if choice == "merge" else None)
         return True
 
 
@@ -717,13 +730,14 @@ def _choices(data):
     return ("merge", "leave")
 
 
-def _record_decision(ledger, run, choice, head, decided_at, elapsed, via):
+def _record_decision(ledger, run, choice, head, decided_at, elapsed, via, merged=None):
     """`source=user` attributes the choice to the user; it is not proof of who typed it. `via` records the path:
     "brief" for a key pressed at a card on a terminal, "decide" for a command run on the user's stated choice."""
     data = _data(run)
     record = ledger.append("decision", {
         "choice": choice, "pr_url": data.get("pr_url") or None, "run_key": _run_key(run),
-        "run_id": data.get("run_id"), "head": head, "decided_at": decided_at, "elapsed_s": elapsed, "via": via},
+        "run_id": data.get("run_id"), "head": head, "decided_at": decided_at, "elapsed_s": elapsed, "via": via,
+        **({"merged": merged} if choice == "merge" else {})},
         repo=run.get("repo", ""), task_kind=run.get("task_kind", ""), refs=[run["id"]], source="user")
     print(_text("Recorded %s: %s" % (choice, record["id"])))
     return record
@@ -866,11 +880,15 @@ def _decide(args, records, ledger):
         return 1
     head, decided_at = snapshot.get("head_sha"), _now()  # the choice was made before any GitHub call
     if args.choice == "merge":
-        merged, head, reason = _merge(data.get("pr_url"), data.get("commit"), args.method or "")
-        if not merged:
+        accepted, head, reason, merged = _merge(data.get("pr_url"), data.get("commit"), args.method or "")
+        if not accepted:
             print("qk decide: not merged: %s" % _text(reason), file=sys.stderr)
             return 1
-    _record_decision(ledger, run, args.choice, head, decided_at, None, "decide")  # no card display to time
+        if reason:
+            print("qk decide: %s" % _text(reason), file=sys.stderr)
+    else:
+        merged = None
+    _record_decision(ledger, run, args.choice, head, decided_at, None, "decide", merged)  # no card display to time
     return 0
 
 
