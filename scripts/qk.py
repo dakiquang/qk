@@ -17,6 +17,11 @@ from urllib.parse import urlparse
 
 
 PR_FIELDS = "url,title,state,mergedAt,closedAt,mergedBy,headRefOid"
+VERSION = "0.9.0"
+# External tools may rely on these commands' flags, JSON fields and exit codes.
+# Removing or renaming any of them needs a new CONTRACT number.
+CONTRACT = 1
+CONTRACT_COMMANDS = ("contract", "show", "lesson list")
 
 
 def _text(value):
@@ -51,7 +56,7 @@ def _since(value):
 
 
 def _parser():
-    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,run,eval} ...")
+    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,contract,run,eval} ...")
     commands = parser.add_subparsers(dest="command", required=True)
     show = commands.add_parser("show", help="read recorded evidence")
     show.add_argument("--kind")
@@ -99,9 +104,19 @@ def _parser():
     decide.add_argument("id", metavar="ID")
     decide.add_argument("status", choices=("active", "dismissed", "retired", "promoted"), metavar="STATUS")
     decide.add_argument("--reason", metavar="TEXT")
+    contract = commands.add_parser("contract", help="print the CLI contract version for external tools")
+    contract.add_argument("--json", action="store_true")
     commands.add_parser("run", help="existing runner (argv passed unchanged)")
     commands.add_parser("eval", help="existing evaluator (argv passed unchanged)")
     return parser
+
+
+def _contract(args):
+    if args.json:
+        print(json.dumps({"contract": CONTRACT, "qk": VERSION, "commands": list(CONTRACT_COMMANDS)}))
+    else:
+        print("contract %d qk %s commands: %s" % (CONTRACT, VERSION, ", ".join(CONTRACT_COMMANDS)))
+    return 0
 
 
 def _data(record):
@@ -880,6 +895,8 @@ def main(argv=None):
         module = importlib.import_module("qk_" + argv[0])
         return module.main(argv[1:])
     args = _parser().parse_args(argv)
+    if args.command == "contract":
+        return _contract(args)
     try:
         ledger = importlib.import_module("qk_ledger")
         if args.command == "lesson":
