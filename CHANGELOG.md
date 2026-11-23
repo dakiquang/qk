@@ -26,11 +26,12 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - A merge that GitHub accepts into a merge queue or auto-merge is no longer reported as merged: the brief and
-  `qk decide` say so and record `merged=false` (`merged=true` when the PR is merged).
+  `qk decide` say so and record `merged=false` (`merged=true` when the PR is merged); a PR found closed without
+  being merged is reported as such.
 - The merge-method prompt explains that `merge` means a merge commit, and Enter keeps the first allowed method
   (squash when allowed).
-- `qk-run` types a title `docs:` instead of `feat:` when every changed file is documentation and the plan title's
-  first word names no type.
+- `qk-run` types a title `docs:` instead of `feat:` when every changed file is documentation (Markdown,
+  reStructuredText, AsciiDoc, or under a top-level `doc/` or `docs/`) and the plan title's first word names no type.
 - `qk brief` checks that the active `gh` account can merge (`viewerPermission` of write or above) before asking for a
   merge method, and says how to rerun with `GH_TOKEN`; before, it asked for a method and then failed at `gh pr merge`.
 - `qk brief` raises a card to high only for remaining blocker or important findings; run records keep a

@@ -666,11 +666,14 @@ def _merge(url, commit, method=None):
         return False, head, str(error), None
     try:  # a merge queue or auto-merge makes `gh pr merge` succeed before the PR is merged
         state = json.loads(_gh(["pr", "view", url, "--json", "state"], 60))
-        merged = state.get("state") == "MERGED" if isinstance(state, dict) and state.get("state") else None
+        found = state.get("state") if isinstance(state, dict) else None
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
-        merged = None
-    reason = {True: "", False: "GitHub accepted the merge, but the PR is not merged yet (merge queue or auto-merge)",
-              None: "GitHub accepted the merge; the PR state could not be read"}[merged]
+        found = None
+    merged = found == "MERGED" if found else None
+    reason = ("" if merged else
+              "GitHub accepted the merge, but the PR is closed without being merged" if found == "CLOSED" else
+              "GitHub accepted the merge, but the PR is not merged yet (merge queue or auto-merge)" if found else
+              "GitHub accepted the merge; the PR state could not be read")
     return True, head, reason, merged
 
 

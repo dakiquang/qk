@@ -578,7 +578,8 @@ class RunnerTest(unittest.TestCase):
         for files, expected in (({"docs/en/overnight.md", "docs/vi/overnight.md"}, "docs: "),
                                 ({"README.md", "CHANGELOG.md", "doc/guide.rst"}, "docs: "),
                                 ({"docs/en/overnight.md", "scripts/qk.py"}, "feat: "),
-                                ({"requirements.txt"}, "feat: "), (set(), "feat: ")):
+                                ({"requirements.txt"}, "feat: "), (set(), "feat: "),
+                                ({"lib/docs/generator.py"}, "feat: "), ({"docs/conf.py"}, "docs: ")):
             with self.subTest(files=sorted(files)):
                 self.assertEqual(qk_run.conventional_title(move, most, files), expected + "move" + move[4:])
         self.assertEqual(qk_run.conventional_title("Fix typo in guide", most, {"docs/guide.md"}),

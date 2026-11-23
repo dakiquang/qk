@@ -913,7 +913,7 @@ def uses_conventional_commits(subjects):
     return sum(1 for s in subjects if CONVENTIONAL_RE.match(s)) * 2 > len(subjects)
 
 
-DOCS_FILE_RE = re.compile(r"(?:^|/)docs?/|\.(?:md|mdx|rst|adoc)$", re.IGNORECASE)
+DOCS_FILE_RE = re.compile(r"^docs?/|\.(?:md|mdx|rst|adoc)$", re.IGNORECASE)  # top-level doc(s)/ only
 
 
 def conventional_title(title, subjects, files=()):

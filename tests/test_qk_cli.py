@@ -1038,6 +1038,7 @@ class CliTests(unittest.TestCase):
     def test_merge_accepted_but_queued_is_recorded_as_not_merged(self):
         self.decision(self.run_record())
         for pr_state, merged, note in (("OPEN", False, "not merged yet (merge queue or auto-merge)"),
+                                       ("CLOSED", False, "the PR is closed without being merged"),
                                        ("", None, "the PR state could not be read")):
             with self.subTest(state=pr_state):
                 calls, gh = self.fake_gh(state=pr_state)
