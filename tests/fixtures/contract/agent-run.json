@@ -1,0 +1,13 @@
+{
+  "contract": 1,
+  "status": "done",
+  "reason": "",
+  "family": "anthropic",
+  "spec": "claude:",
+  "result": {"status": "done", "summary": "What changed.", "files": [], "evidence": [], "reason": "", "findings": []},
+  "text": "The agent's final reply, including its qk-result block.",
+  "usage": {"input": 15, "cached": 4, "output": 7},
+  "lessons": [],
+  "events": null,
+  "seconds": 12
+}

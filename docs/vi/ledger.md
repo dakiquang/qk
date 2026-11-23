@@ -16,7 +16,7 @@ qk --help
 
 Chọn đích chưa tồn tại; không ghi đè lệnh khác. Đưa `~/.local/bin` vào `PATH` của agent. Alias dùng được trong terminal tương tác của bạn nhưng có thể không tồn tại trong shell của agent. Cần Python 3.9+; sync PR còn cần `gh` đăng nhập tài khoản có quyền đọc repo. Script runner và eval cũ vẫn dùng được.
 
-Bắt đầu bằng `qk show --help`, `qk sync --help` hoặc `qk brief --help`. `qk run --help` và `qk eval --help` chuyển tới [runner](runner.md) và [bộ đo](evals.md) hiện có.
+Bắt đầu bằng `qk show --help`, `qk sync --help` hoặc `qk brief --help`. `qk run --help` và `qk eval --help` chuyển tới [runner](runner.md) và [bộ đo](evals.md) hiện có. Công cụ ngoài qk chỉ dùng các lệnh trong [hợp đồng CLI](cli-contract.md): `qk log run` ghi một run do chúng dừng để run hiện ở đây như một run của qk-run.
 
 ## Nơi lưu và dữ liệu riêng
 

@@ -8,6 +8,27 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `qk contract [--json]` prints the CLI contract version, the qk version and the commands external tools may
+  rely on. `tests/test_contract_v1.py` fails when a promised command or JSON field disappears.
+- `qk agent run --spec RUNTIME:MODEL --cwd DIR (--write | --read-only) --json < prompt` runs one non-interactive
+  agent turn with the runner's isolation and prints its status, parsed `qk-result`, final text and token usage.
+  It never touches git; exit 0 is done, 2 is blocked or rejected input. `qk agent family SPEC` prints the model
+  family the runner uses to keep the implementer and reviewer apart.
+- `qk agent run` handles SIGTERM: it stops the agent's process group, removes its scratch directory and reports
+  `blocked` ("stopped by SIGTERM") with exit 2. Before, the agent kept running after the command was killed.
+- `qk log run --producer NAME --state-dir DIR --json < state.json` records a run that another tool stopped
+  (`done`, `blocked` or `aborted`) and its findings through the projection `qk-run` uses, so it shows in
+  `qk show`, `qk stats` and `qk brief`. The run record carries the caller's `producer` label, and a blocked
+  card names that producer instead of suggesting `qk run resume`. `--state-dir` must hold the caller's
+  `state.json`. Rejected input exits 2 and records nothing; the same input twice adds nothing.
+- `qk eval prepare CASE DIR --json` builds a case's repository in `DIR/repo` (with its task, or for a review case
+  the plan and diff copied next to it) and `qk eval grade CASE WORKDIR [--final FILE] [--events FILE] --json` runs
+  the case's `check.py` from a private copy, on a throwaway copy of the working tree and with the events beside
+  the final reply as `qk eval` lays them out, and reports `criteria` and `passed`. Neither runs an agent, writes the
+  baseline or records anything, so another tool can measure itself on the same cases with the same grading. The old
+  `qk eval --case/--skill/--all` flags are unchanged.
+- CLI contract guide (`docs/{en,vi}/cli-contract.md`): the commands, JSON fields, exit codes and versioning rules
+  that tools outside qk may rely on, linked from the ledger and eval guides.
 - `qk decide RUN_ID merge|leave|abort-later|resume-later [--method M]` records a brief decision without a terminal,
   for example from an agent in a chat acting on the user's stated choice, with the same merge checks and choices as
   the card. Decisions record `via` (`brief` or `decide`), and `qk-run` agents are told never to merge or record

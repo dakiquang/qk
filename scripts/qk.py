@@ -9,14 +9,23 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from urllib.parse import urlparse
 
 
 PR_FIELDS = "url,title,state,mergedAt,closedAt,mergedBy,headRefOid"
+VERSION = "0.9.0"
+# External tools may rely on these commands' flags, JSON fields and exit codes.
+# Removing or renaming any of them needs a new CONTRACT number.
+CONTRACT = 1
+CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family", "log run", "eval prepare",
+                     "eval grade")
 
 
 def _text(value):
@@ -51,7 +60,7 @@ def _since(value):
 
 
 def _parser():
-    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,run,eval} ...")
+    parser = argparse.ArgumentParser(usage="%(prog)s [-h] {show,stats,log,sync,brief,decide,lesson,contract,agent,run,eval} ...")
     commands = parser.add_subparsers(dest="command", required=True)
     show = commands.add_parser("show", help="read recorded evidence")
     show.add_argument("--kind")
@@ -63,11 +72,16 @@ def _parser():
     stats.add_argument("--task-kind")
     stats.add_argument("--by", choices=("kind", "task_kind", "runtime"), default="kind")
     stats.add_argument("--public", action="store_true", help="counts only; omit private labels")
-    log = commands.add_parser("log", help="record a model claim")
+    log = commands.add_parser("log", help="record a model claim or a stopped run")
     kinds = log.add_subparsers(dest="log_kind", required=True)
     claim = kinds.add_parser("claim", help="attach a claim to existing evidence")
     claim.add_argument("--about", required=True)
     claim.add_argument("--text", required=True)
+    stopped = kinds.add_parser("run", help="record a run another tool stopped; its state as JSON on stdin")
+    stopped.add_argument("--producer", required=True, metavar="NAME", help="the recording tool and its version")
+    stopped.add_argument("--state-dir", required=True, metavar="DIR",
+                         help="the caller's directory for this run, outside any repository; it identifies the run")
+    stopped.add_argument("--json", action="store_true")
     sync = commands.add_parser("sync", help="read PR state using gh; never change PRs")
     sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
     brief = commands.add_parser("brief", help="summarize open/unknown PRs; on a terminal, ask per card")
@@ -99,9 +113,243 @@ def _parser():
     decide.add_argument("id", metavar="ID")
     decide.add_argument("status", choices=("active", "dismissed", "retired", "promoted"), metavar="STATUS")
     decide.add_argument("--reason", metavar="TEXT")
+    contract = commands.add_parser("contract", help="print the CLI contract version for external tools")
+    contract.add_argument("--json", action="store_true")
+    agent = commands.add_parser("agent", help="run one isolated agent turn for an external tool")
+    agents = agent.add_subparsers(dest="agent_command", required=True)
+    turn = agents.add_parser("run", help="one non-interactive turn; prompt on stdin; never touches git")
+    turn.add_argument("--spec", required=True, metavar="RUNTIME:MODEL")
+    turn.add_argument("--cwd", required=True, metavar="DIR")
+    access = turn.add_mutually_exclusive_group(required=True)
+    access.add_argument("--write", action="store_true", help="the agent may edit files under --cwd")
+    access.add_argument("--read-only", action="store_true", help="no edits and no MCP")
+    turn.add_argument("--add-dir", action="append", default=[], metavar="DIR")
+    turn.add_argument("--timeout", type=int, metavar="SECONDS", help="default: the runner's")
+    turn.add_argument("--read-only-mcp", action="append", default=[], metavar="NAME",
+                      help="MCP server a read-only turn may call")
+    turn.add_argument("--no-result-contract", action="store_true",
+                      help="do not ask for or parse a qk-result block")
+    turn.add_argument("--no-git-rules", action="store_true",
+                      help="with --write, do not append the no-git and clean-up rules")
+    turn.add_argument("--lessons", choices=("plan", "impl", "review"), metavar="STAGE",
+                      help="append active lessons for this stage (plan, impl or review)")
+    turn.add_argument("--repo", default="", metavar="NAME", help="repository name for --lessons scope")
+    turn.add_argument("--events", metavar="FILE", help="append the runtime's raw JSON events here")
+    turn.add_argument("--json", action="store_true")
+    kin = agents.add_parser("family", help="print the model family of a runtime:model spec")
+    kin.add_argument("spec", metavar="SPEC")
+    kin.add_argument("--json", action="store_true")
     commands.add_parser("run", help="existing runner (argv passed unchanged)")
     commands.add_parser("eval", help="existing evaluator (argv passed unchanged)")
     return parser
+
+
+def _contract(args):
+    if args.json:
+        print(json.dumps({"contract": CONTRACT, "qk": VERSION, "commands": list(CONTRACT_COMMANDS)}))
+    else:
+        print("contract %d qk %s commands: %s" % (CONTRACT, VERSION, ", ".join(CONTRACT_COMMANDS)))
+    return 0
+
+
+def _family(runner, spec):
+    try:
+        return runner.family(spec)
+    except SystemExit as error:  # the runner reports a bad spec by exiting
+        raise ValueError(str(error.code).replace("qk-run: ", "", 1)) from None
+
+
+def _agent_family(args):
+    kin = _family(importlib.import_module("qk_run"), args.spec)
+    print(json.dumps({"contract": CONTRACT, "spec": args.spec, "family": kin}) if args.json else kin)
+    return 0
+
+
+def _agent_run(args):
+    """One agent turn with the runner's isolation. It reports; the caller owns git and what happens next."""
+    runner = importlib.import_module("qk_run")
+    kin = _family(runner, args.spec)
+    # The runtime starts inside --cwd and also receives these paths, so a relative one would resolve twice.
+    cwd = Path(args.cwd).resolve()
+    extra_dirs = [Path(directory).resolve() for directory in args.add_dir]
+    if not cwd.is_dir():
+        raise ValueError("--cwd is not a directory: %s" % args.cwd)
+    timeout = runner.DEFAULT_TIMEOUT if args.timeout is None else args.timeout
+    if timeout < 1:
+        raise ValueError("--timeout must be at least 1 second")
+    prompt = sys.stdin.read()
+    if not prompt.strip():
+        raise ValueError("the prompt on stdin is empty")
+    parts, lessons = [prompt.rstrip("\n")], []
+    if args.write and not args.no_git_rules:
+        parts += [runner.CLEAN, runner.NO_GIT]
+    if args.lessons:
+        ledger = importlib.import_module("qk_ledger")
+        chosen = ledger.lessons_for(args.lessons, args.repo)
+        lessons = [lesson_id for lesson_id, _ in chosen]
+        if chosen:
+            parts.append(ledger.lessons_block(chosen).rstrip("\n"))
+    if not args.no_result_contract:
+        parts.append(runner.RESULT_CONTRACT)
+    # The runtime keeps its private home and last-message file here; it is removed when the turn ends.
+    scratch = Path(tempfile.mkdtemp(prefix="qk-agent-"))
+    status, reason, result, text, usage = "done", "", None, "", None
+    started = time.monotonic()
+    stopping = []
+
+    def stop(number, frame):
+        # The caller ended the turn: raise once so call_agent stops the agent's process group and the scratch
+        # directory is removed. A repeated signal while that clean-up runs is ignored.
+        if not stopping:
+            stopping.append(number)
+            raise runner.Blocked("stopped by %s; agent stopped" % signal.Signals(number).name)
+
+    previous = signal.signal(signal.SIGTERM, stop)
+    try:
+        try:
+            text, usage = runner.call_agent(
+                args.spec, "\n".join(parts), cwd, args.write, timeout, [scratch, *extra_dirs],
+                events=Path(args.events) if args.events else scratch / "events.jsonl",
+                progress=lambda message: print(_text(message), file=sys.stderr, flush=True),
+                read_only_mcp=args.read_only_mcp)
+            if not args.no_result_contract:
+                result = runner.read_result(text)
+                status = result["status"]
+                if status != "done":
+                    reason = str(result.get("reason") or result.get("summary") or "")
+        except runner.Blocked as error:
+            status, reason = "blocked", str(error)
+            usage = getattr(error, "usage", None) or usage
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+        signal.signal(signal.SIGTERM, previous)
+    if args.json:
+        print(json.dumps({"contract": CONTRACT, "status": status, "reason": reason, "family": kin,
+                          "spec": args.spec, "result": result, "text": text, "usage": usage,
+                          "lessons": lessons, "events": args.events,
+                          "seconds": int(time.monotonic() - started)}, ensure_ascii=True))
+    else:
+        print(text)
+        if status != "done":
+            print("qk: %s: %s" % (status, _text(reason)), file=sys.stderr)
+    return 0 if status == "done" else 2
+
+
+def _log_run(args, ledger):
+    """Record a stopped run for a tool other than qk-run, through the same projection qk-run uses."""
+    try:
+        state = json.loads(sys.stdin.read())
+    except ValueError as error:
+        raise ValueError("stdin is not valid JSON: %s" % error) from None
+    if not isinstance(state, dict):
+        raise ValueError("stdin must be a JSON object")
+    repo = state.get("repo")
+    if not isinstance(repo, str) or not Path(repo).is_absolute():
+        raise ValueError("repo must be the absolute path of the repository")
+    directory = Path(args.state_dir).resolve()
+    if not directory.is_dir():
+        raise ValueError("--state-dir is not a directory: %s" % args.state_dir)
+    if not (directory / "state.json").is_file():
+        raise ValueError("--state-dir has no state.json; the record points readers to it")
+    ledger._outside_repository(directory)
+    run = ledger.record_run(state, directory, producer=args.producer)
+    findings = sum(record["kind"] == "finding" and run["id"] in record["refs"] for record in ledger.records())
+    print(json.dumps({"contract": CONTRACT, "id": run["id"], "findings": findings}) if args.json else run["id"])
+    return 0
+
+
+def _eval_parser():
+    parser = argparse.ArgumentParser(prog="qk eval", description="dry eval steps for external tools; no agent runs")
+    steps = parser.add_subparsers(dest="step", required=True)
+    prepare = steps.add_parser("prepare", help="build a case's repository in DIR/repo")
+    prepare.add_argument("case", metavar="CASE")
+    prepare.add_argument("dir", metavar="DIR", help="created if missing; DIR/repo must not exist")
+    prepare.add_argument("--json", action="store_true")
+    grade = steps.add_parser("grade", help="run a case's check.py on a working directory")
+    grade.add_argument("case", metavar="CASE")
+    grade.add_argument("workdir", metavar="WORKDIR")
+    grade.add_argument("--final", metavar="FILE", help="the agent's final reply (default: empty)")
+    grade.add_argument("--events", metavar="FILE",
+                       help="the turn's raw events; adds the clean criterion that qk eval itself grades")
+    grade.add_argument("--json", action="store_true")
+    return parser
+
+
+def _eval_case(evaluator, name):
+    directory = evaluator.CASES / name
+    if "/" in name or name.startswith(".") or not (directory / "case.json").is_file():
+        raise ValueError("unknown case %r" % name)
+    try:
+        return evaluator.load_case(directory)
+    except SystemExit as error:  # the evaluator reports a broken case by exiting
+        raise ValueError(str(error.code).replace("qk-eval: ", "", 1)) from None
+
+
+def _eval_step(argv):
+    """`qk eval prepare` and `qk eval grade`: the evaluator's own case setup and grading, without an agent turn,
+    baseline or ledger record. The caller runs the agent and records its own measurement."""
+    args = _eval_parser().parse_args(argv)
+    evaluator = importlib.import_module("qk_eval")
+    try:
+        case = _eval_case(evaluator, args.case)
+        if args.step == "prepare":
+            root = Path(args.dir).resolve()
+            outputs = ["repo"] + (["plan.md", "review.diff"] if case["skill"] == evaluator.REVIEW else [])
+            for name in outputs:
+                if (root / name).exists() or (root / name).is_symlink():
+                    raise ValueError("%s already exists" % (root / name))
+            root.mkdir(parents=True, exist_ok=True)
+            workdir = evaluator.prepare(case, root)
+            reply = {"contract": CONTRACT, "case": case["name"], "skill": case["skill"], "write": case["write"],
+                     "workdir": str(workdir), "task": None, "plan": None, "diff": None}
+            if case["skill"] == evaluator.REVIEW:
+                # Copies outside the case directory: a turn that reads the case directory fails `clean`.
+                for name in ("plan", "diff"):
+                    source = case["dir"] / ("plan.md" if name == "plan" else "review.diff")
+                    reply[name] = str(shutil.copy2(source, root / source.name))
+            else:
+                reply["task"] = str(workdir / "task.md")
+        else:
+            workdir = Path(args.workdir).resolve()
+            if not workdir.is_dir():
+                raise ValueError("WORKDIR is not a directory: %s" % args.workdir)
+            for flag, value in (("--final", args.final), ("--events", args.events)):
+                if value and not Path(value).is_file():
+                    raise ValueError("%s is not a file: %s" % (flag, value))
+            with tempfile.TemporaryDirectory(prefix="qk-eval-grader-") as private:
+                # The same layout qk eval grades: private graders, a throwaway copy of the working tree (graders may
+                # stage and reset files), and the final reply with events.jsonl beside it (some graders read it).
+                private = Path(private)
+                grader = private / "case"
+                shutil.copytree(case["dir"], grader, ignore=shutil.ignore_patterns("__pycache__"))
+                tree = private / "work"
+                shutil.copytree(workdir, tree, symlinks=True)
+                final = private / "out" / "final.md"
+                final.parent.mkdir()
+                final.write_text(Path(args.final).read_text(encoding="utf-8") if args.final else "", encoding="utf-8")
+                if args.events:
+                    shutil.copy2(args.events, final.parent / "events.jsonl")
+                criteria = evaluator.grade(dict(case, dir=grader), tree, final)
+            if args.events:
+                touched = evaluator.touched_case_files(Path(args.events))
+                criteria.append({"name": "clean", "passed": not touched,
+                                 "detail": "events name the case directory: %s" % touched[0] if touched else ""})
+            reply = {"contract": CONTRACT, "case": case["name"], "criteria": criteria,
+                     "passed": all(item["passed"] for item in criteria)}
+    except ValueError as error:
+        print("qk: %s" % _text(error), file=sys.stderr)
+        return 2
+    except (OSError, subprocess.SubprocessError) as error:
+        print("qk: %s" % _text(error), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(reply, ensure_ascii=True))
+    elif args.step == "prepare":
+        print(reply["workdir"])
+    else:
+        for item in reply["criteria"]:
+            print(_text("%s %s %s" % ("PASS" if item["passed"] else "FAIL", item["name"], item["detail"])).rstrip())
+    return 0  # a case that fails its criteria is a result, not an error: read `passed`
 
 
 def _data(record):
@@ -778,6 +1026,12 @@ def _print_card(shown, run, snapshot, level, rule, runs, records):
         _brief_line("  Next: qk run status %s, then qk run abort %s" % (data["run_id"], data["run_id"]))
         _brief_line(history_line)
         return
+    if blocked and data.get("producer"):
+        # qk run resume/abort only find runs under qk-run's own state root.
+        _brief_line("  Next: resume or abort run %s with %s, which recorded it" % (
+            data.get("run_id", run["id"]), data["producer"]), "--id " + run["id"])
+        _brief_line(history_line)
+        return
     if blocked:
         _brief_line("  Next: qk run resume %s after fixing the cause, or qk run abort %s" % (
             data.get("run_id", run["id"]), data.get("run_id", run["id"])), "--id " + run["id"])
@@ -897,10 +1151,25 @@ def _decide(args, records, ledger):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["eval"] and argv[1:2] and argv[1] in ("prepare", "grade"):
+        return _eval_step(argv[1:])
     if argv and argv[0] in {"run", "eval"}:
         module = importlib.import_module("qk_" + argv[0])
         return module.main(argv[1:])
     args = _parser().parse_args(argv)
+    if args.command == "contract":
+        return _contract(args)
+    if args.command == "agent" or (args.command == "log" and args.log_kind == "run"):
+        try:
+            if args.command == "log":
+                return _log_run(args, importlib.import_module("qk_ledger"))
+            return (_agent_run if args.agent_command == "run" else _agent_family)(args)
+        except (ValueError, TypeError) as error:  # rejected input: nothing ran, nothing was recorded
+            print("qk: %s" % _text(error), file=sys.stderr)
+            return 2
+        except OSError as error:
+            print("qk: %s" % _text(error), file=sys.stderr)
+            return 1
     try:
         ledger = importlib.import_module("qk_ledger")
         if args.command == "lesson":

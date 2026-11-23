@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "id": "176f6163d0bb",
+  "kind": "finding",
+  "at": "2026-11-23T06:07:44.303287+00:00",
+  "source": "model",
+  "recorded_by": "code",
+  "repo": "project",
+  "task_kind": "",
+  "refs": [],
+  "data": {"severity": "P1"}
+}
