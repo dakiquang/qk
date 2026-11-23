@@ -15,6 +15,8 @@ python3 scripts/qk_eval.py --all --runtime codex: --update-baseline
 
 Pick exactly one of `--case NAME`, `--skill NAME` (every case of that skill, or `runner-review`) and `--all`. `--runtime` takes the same `runtime:model` spec as [qk-run](runner.md). `--timeout` limits each agent turn (default 1800 s). An unknown case, or a selection with no cases, exits 2. Requires Python 3.9+ and `git`.
 
+Another tool can measure itself on the same cases with `qk eval prepare` and `qk eval grade`, which build and grade a case without running an agent, writing the baseline or recording anything; see the [CLI contract](cli-contract.md).
+
 ## Cases
 
 Cases live in `evals/cases/<name>/`. Each one runs as a single agent turn in a fresh temporary git repository: the case's `repo/` is committed as the base, and the agent works there.

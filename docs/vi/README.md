@@ -23,6 +23,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 
 ## Tham khảo
 
+- [Hợp đồng CLI](cli-contract.md): các lệnh có phiên bản mà công cụ khác được dựa vào để chạy một lượt agent, ghi một run và chấm một bài eval.
 - [Runtime](runtimes.md): mức hỗ trợ, thiết lập chỉ-gọi-đích-danh, nơi đăng ký hook, đặc điểm đã thấy và cách chọn model.
 - [Bằng chứng kiểm thử](evidence.md): bản ghi theo ngày về những gì đã kiểm, trên phiên bản nào, kèm checklist kiểm thủ công.
 

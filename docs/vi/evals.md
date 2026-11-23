@@ -15,6 +15,8 @@ python3 scripts/qk_eval.py --all --runtime codex: --update-baseline
 
 Chọn đúng một trong `--case NAME`, `--skill NAME` (mọi case của skill đó, hoặc `runner-review`) và `--all`. `--runtime` nhận spec `runtime:model` giống [qk-run](runner.md). `--timeout` giới hạn mỗi lượt agent (mặc định 1800 giây). Case không tồn tại, hoặc lựa chọn không có case nào, thoát với mã 2. Cần Python 3.9+ và `git`.
 
+Công cụ khác có thể tự đo trên cùng bộ bài bằng `qk eval prepare` và `qk eval grade`: hai lệnh này dựng và chấm một bài mà không chạy agent, không ghi baseline và không ghi sổ; xem [hợp đồng CLI](cli-contract.md).
+
 ## Các case
 
 Case nằm ở `evals/cases/<tên>/`. Mỗi case chạy một lượt agent trong một repo git tạm mới: `repo/` của case được commit làm base, và agent làm việc ở đó.
