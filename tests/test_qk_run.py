@@ -1467,6 +1467,7 @@ class AgentStreamTest(unittest.TestCase):
         with self.assertRaises(qk_run.Blocked) as caught:
             self.call(timeout=1)
         self.assertEqual(str(caught.exception), "omp:anthropic/x timed out after 1s; agent stopped")
+        self.assertIsNone(caught.exception.usage)
         pid = int(pid_file.read_text())
         gone = False
         while time.monotonic() - started < 4.5 and not gone:
@@ -1477,6 +1478,27 @@ class AgentStreamTest(unittest.TestCase):
                 gone = True
         self.assertTrue(gone, "grandchild survived the timeout")
         self.assertLess(time.monotonic() - started, 5)
+
+    def test_failed_agent_keeps_usage(self):
+        turn = json.dumps({"type": "turn_end", "message": {"role": "assistant",
+                                                           "usage": {"input": 3, "output": 2, "cacheRead": 10}}})
+        self.fake_agent(f"import sys\nprint({turn!r}, flush=True)\nsys.exit(1)\n")
+        with self.assertRaises(qk_run.Blocked) as caught:
+            self.call()
+        self.assertIn("exited 1", str(caught.exception))
+        self.assertEqual(caught.exception.usage, {"input": 13, "cached": 10, "output": 2})
+
+    def test_timeouts_keep_usage_before_and_after_stream_closes(self):
+        turn = json.dumps({"type": "turn_end", "message": {"role": "assistant",
+                                                           "usage": {"input": 3, "output": 2, "cacheRead": 10}}})
+        for close_stdout in (False, True):
+            with self.subTest(close_stdout=close_stdout):
+                self.fake_agent(f"import os, time\nprint({turn!r}, flush=True)\n"
+                                + ("os.close(1)\n" if close_stdout else "") + "time.sleep(60)\n")
+                with self.assertRaises(qk_run.Blocked) as caught:
+                    self.call(timeout=1)
+                self.assertEqual(str(caught.exception), "omp:anthropic/x timed out after 1s; agent stopped")
+                self.assertEqual(caught.exception.usage, {"input": 13, "cached": 10, "output": 2})
 
     def test_agent_command_isolates_skills_and_read_only_mcp(self):
         def command(spec, write, read_only_mcp=()):

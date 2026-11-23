@@ -99,10 +99,11 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual((status, data["status"]), (0, "done"))
 
     def test_runtime_failures_are_blocked_with_a_reason(self):
-        status, data = self.turn(FAKE_EXIT="3")
+        status, data = self.turn(FAKE_EXIT="1")
         self.assertEqual((status, data["status"]), (2, "blocked"))
-        self.assertIn("exited 3", data["reason"])
+        self.assertIn("exited 1", data["reason"])
         self.assertIsNone(data["limit"])
+        self.assertEqual(data["usage"], {"input": 15, "cached": 4, "output": 7, "cost_usd": 0.25})
         status, data = self.turn("--timeout", "1", FAKE_SLEEP="30")
         self.assertEqual((status, data["status"]), (2, "blocked"))
         self.assertIn("timed out after 1s", data["reason"])

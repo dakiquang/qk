@@ -558,7 +558,9 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
                 now = time.monotonic()
                 if now >= deadline:
                     stop_agent(proc)
-                    raise Blocked(f"{spec} timed out after {timeout}s; agent stopped")
+                    blocked = Blocked(f"{spec} timed out after {timeout}s; agent stopped")
+                    blocked.usage = usage
+                    raise blocked
                 if now >= quiet_since + HEARTBEAT_SECONDS:
                     progress(f"still running ({int(now - start)}s, last: {last})")
                     quiet_since = now
@@ -600,7 +602,9 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
             proc.wait(timeout=max(deadline - time.monotonic(), 0))
         except subprocess.TimeoutExpired:
             stop_agent(proc)
-            raise Blocked(f"{spec} timed out after {timeout}s; agent stopped")
+            blocked = Blocked(f"{spec} timed out after {timeout}s; agent stopped")
+            blocked.usage = usage
+            raise blocked
     finally:
         if proc.poll() is None:
             stop_agent(proc)
@@ -613,7 +617,9 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
         stderr = "".join(line for line in errors if line)
         message = f"{spec} exited {proc.returncode}: {(stderr or text).strip()[-800:]}"
         limit = limit_of(runtime, f"{stderr}\n{text}")
-        raise Limited(message, limit) if limit else Blocked(message)
+        blocked = Limited(message, limit) if limit else Blocked(message)
+        blocked.usage = usage
+        raise blocked
     return text, usage
 
 
