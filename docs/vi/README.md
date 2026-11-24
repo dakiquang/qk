@@ -15,6 +15,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 
 - [Runner qk-run](runner.md): tự động hoá tuỳ chọn từ yêu cầu đến PR ready-for-review, với một cổng duyệt plan.
 - [Chạy qua đêm](overnight.md): xếp hàng plan đã duyệt buổi tối, chạy lần lượt qua đêm, đọc `qk brief` buổi sáng.
+- [Trạng thái trong runtime](runtime-status.md): trạng thái run, lời nhắc buổi sáng và quyết định ngay trong chat của omp, Claude Code và Codex.
 - [qk-eval](evals.md): kiểm trước/sau chấm bằng code khi bạn sửa một skill hoặc bước review của runner.
 - [Sổ bằng chứng và CLI](ledger.md): bằng chứng cục bộ, kết luận model và hồ sơ quyết định PR, có thể quyết ngay trong terminal.
 - [Lesson](lessons.md): quy tắc về lỗi AI lặp lại, đo trước khi dùng, chỉ nạp khi có `--lessons`.
@@ -38,6 +39,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 | [qk/debug](skills/qk-debug.md) | Tìm nguyên nhân gốc có bằng chứng |
 | [qk/test](skills/qk-test.md) | Kiểm chứng độc lập |
 | [qk/handoff](skills/qk-handoff.md) | Bàn giao sang phiên mới hoặc nhận lại |
+| [qk/morning](skills/qk-morning.md) | Đọc brief buổi sáng trong chat và ghi quyết định |
 | [qk/agent-coord](skills/qk-agent-coord.md) | Giao việc có giới hạn cho agent/model chỉ định |
 | [qk/release-notes](skills/qk-release-notes.md) | Soạn nháp release notes và changelog |
 | [qk/dogfood](skills/qk-dogfood.md) | Đề xuất cải thiện instruction tối thiểu từ bằng chứng, không áp dụng |

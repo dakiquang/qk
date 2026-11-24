@@ -25,8 +25,9 @@ Mỗi lệnh trong hợp đồng làm một việc rồi kết thúc. Không l�
 | `qk agent family SPEC [--json]` | Họ model của một spec `runtime:model` |
 | `qk log run …` | Ghi một run do công cụ khác dừng |
 | `qk eval prepare …`, `qk eval grade …` | Dựng và chấm một bài eval mà không chạy agent |
+| `qk brief --json`, `qk brief --pending` | Đọc các thẻ của brief mà không hỏi gì và không gọi mạng. `--json`: `{"contract": 1, "cards": [...]}`; mỗi thẻ có `run_id`, `repo`, `title`, `pr_url`, `status`, `level`, `rule`, `lines` (đúng chữ của brief), `choices` (các lựa chọn `qk decide` nhận) và `decided`. `--pending`: một dòng khi còn thẻ chờ quyết, không thì không in gì |
 
-`qk brief` và `qk decide` dành cho người quyết; công cụ không gọi chúng.
+`qk brief` không kèm hai cờ này, và `qk decide`, dành cho người quyết. Công cụ chỉ chạy `qk decide` theo đúng lựa chọn người đó nói ra ([Chạy qua đêm](overnight.md#quyết-định-ngay-trong-terminal)).
 
 ### `qk agent run`
 

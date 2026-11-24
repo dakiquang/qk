@@ -51,6 +51,7 @@ Phần lớn bộ kit giúp AI tự làm được nhiều hơn. qk trả lại c
 | [qk/debug](docs/vi/skills/qk-debug.md) | Cách tái hiện, nguyên nhân gốc đã kiểm và cách sửa nhỏ nhất được đề xuất |
 | [qk/test](docs/vi/skills/qk-test.md) | Kiểm độc lập, phân loại lỗi và chỉ ra chỗ chưa kiểm |
 | [qk/handoff](docs/vi/skills/qk-handoff.md) | Lưu ngữ cảnh phiên, hoặc nhận lại kèm kiểm độ lệch |
+| [qk/morning](docs/vi/skills/qk-morning.md) | Đọc brief buổi sáng trong chat và ghi quyết định |
 | [qk/agent-coord](docs/vi/skills/qk-agent-coord.md) | Một việc có giới hạn chạy trên đúng agent và model bạn nêu, kết quả được kiểm |
 | [qk/commit](docs/vi/skills/qk-commit.md) | Commit đúng phạm vi; chỉ push và mở PR khi được yêu cầu, sau bước kiểm account |
 | [qk/release-notes](docs/vi/skills/qk-release-notes.md) | Nháp release notes và changelog truy được nguồn, không bao giờ tự đăng |

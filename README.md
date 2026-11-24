@@ -51,6 +51,7 @@ Read the [philosophy](docs/en/philosophy.md) for what each principle does and do
 | [qk/debug](docs/en/skills/qk-debug.md) | A reproduction, a verified root cause and the smallest proposed fix |
 | [qk/test](docs/en/skills/qk-test.md) | Independent checks, classified failures and verification gaps |
 | [qk/handoff](docs/en/skills/qk-handoff.md) | Session context saved, or resumed with drift checks |
+| [qk/morning](docs/en/skills/qk-morning.md) | The morning brief read in the chat, with your decisions recorded |
 | [qk/agent-coord](docs/en/skills/qk-agent-coord.md) | A bounded task run on the agent and model you name, with the result checked |
 | [qk/commit](docs/en/skills/qk-commit.md) | Scoped commits; push and PR only when asked, after an account check |
 | [qk/release-notes](docs/en/skills/qk-release-notes.md) | Traceable release-note and changelog drafts, never published |

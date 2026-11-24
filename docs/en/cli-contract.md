@@ -25,8 +25,9 @@ Each contract command does one thing and exits. None of them runs another in seq
 | `qk agent family SPEC [--json]` | Model family of a `runtime:model` spec |
 | `qk log run …` | Record a run another tool stopped |
 | `qk eval prepare …`, `qk eval grade …` | Build and grade an eval case without running an agent |
+| `qk brief --json`, `qk brief --pending` | Read the brief's cards without asking anything or calling the network. `--json`: `{"contract": 1, "cards": [...]}`; each card has `run_id`, `repo`, `title`, `pr_url`, `status`, `level`, `rule`, `lines` (the brief's own text), `choices` (what `qk decide` accepts) and `decided`. `--pending`: one line when cards wait for a decision, otherwise nothing |
 
-`qk brief` and `qk decide` are for the person who decides; tools do not call them.
+`qk brief` without these flags, and `qk decide`, are for the person who decides. A tool runs `qk decide` only on the person's own stated choice ([Overnight runs](overnight.md#deciding-from-the-terminal)).
 
 ### `qk agent run`
 

@@ -1,0 +1,5 @@
+interface:
+  display_name: "qk morning"
+  short_description: "Read the morning brief and record decisions"
+policy:
+  allow_implicit_invocation: false

@@ -21,6 +21,8 @@ python3 scripts/qk_run.py approve <id> --later
 caffeinate -i python3 scripts/qk_run.py drain --until 07:00 --notify
 ```
 
+`status` without an id lists the runs worth watching: working ones with their stage and step (`qk 3f9c implementing 3/7 · 12m`), runs left mid-stage (`stopped at …`), plans waiting for approval, runs waiting for a usage limit and the queue (`+2 queued`). `--line` prints one line each and nothing when there is nothing to show; `--json` prints `{"contract": 1, "items": [...]}`. It only reads state files, so a runtime's status line can call it; see [Runtime status](runtime-status.md).
+
 A run stopped by a runtime's usage limit records `limited` (runtime and reset time); with `--until`, drain waits for the reset and resumes it. See [Overnight](overnight.md#night).
 
 The [unified CLI](ledger.md) exposes the same commands as `qk run …`. `start --task-kind LABEL` adds an optional history label; it grants no authority. Stopped runs contribute summaries to the local ledger; a ledger write failure warns without changing the run outcome.

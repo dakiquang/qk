@@ -15,6 +15,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 
 - [qk-run runner](runner.md): opt-in automation from a request to a ready-for-review PR, with one plan-approval gate.
 - [Overnight runs](overnight.md): queue approved plans in the evening, drain them overnight, read `qk brief` in the morning.
+- [Runtime status](runtime-status.md): run status, a morning reminder and in-chat decisions inside omp, Claude Code and Codex.
 - [qk-eval](evals.md): code-graded before/after checks when you change a skill or the runner's review step.
 - [Evidence ledger and CLI](ledger.md): local evidence, model claims and a PR decision brief you can act on from the terminal.
 - [Lessons](lessons.md): measured rules about repeated AI mistakes, used only with `--lessons`.
@@ -38,6 +39,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 | [qk/debug](skills/qk-debug.md) | Find a root cause with evidence |
 | [qk/test](skills/qk-test.md) | Run independent verification |
 | [qk/handoff](skills/qk-handoff.md) | Hand work to a fresh session, or resume it |
+| [qk/morning](skills/qk-morning.md) | Read the morning brief in the chat and record your decisions |
 | [qk/agent-coord](skills/qk-agent-coord.md) | Give a bounded task to a named agent and model |
 | [qk/release-notes](skills/qk-release-notes.md) | Draft release notes and changelog entries |
 | [qk/dogfood](skills/qk-dogfood.md) | Propose minimal instruction improvements from work evidence, without applying them |

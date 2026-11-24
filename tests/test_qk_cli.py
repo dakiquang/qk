@@ -1181,6 +1181,104 @@ class CliTests(unittest.TestCase):
             (directory / "run.lock").write_text("")
         return directory
 
+    def runner_status(self, *argv):
+        runner = importlib.import_module("qk_run")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), \
+                mock.patch.object(subprocess, "run", side_effect=AssertionError("status must not run commands")):
+            status = runner.main(["status", *argv])
+        return status, output.getvalue()
+
+    def test_run_status_lists_active_runs_for_status_lines(self):
+        import fcntl
+        self.assertEqual(self.runner_status("--line"), (0, ""))
+        self.assertEqual(json.loads(self.runner_status("--json")[1]), {"contract": 1, "items": []})
+        held = self.stopped_state("20261124-010000-aaaa", stage="verifying", lock=True)
+        state = json.loads((held / "state.json").read_text())
+        state["updated"] = (datetime.now().replace(microsecond=0)).isoformat()
+        (held / "state.json").write_text(json.dumps(state))
+        fresh = datetime.now().replace(microsecond=0).isoformat()
+        for run_id, stage in (("20261124-020000-bbbb", "implementing"), ("20261124-030000-cccc", "awaiting_approval"),
+                              ("20261120-030000-old1", "planning")):
+            directory = self.stopped_state(run_id, stage=stage)
+            state = json.loads((directory / "state.json").read_text())
+            state["updated"] = fresh if not run_id.endswith("old1") else "2026-11-20T03:00:00"
+            (directory / "state.json").write_text(json.dumps(state))
+        limited = self.stopped_state("20261124-040000-dddd", stage="blocked")
+        state = json.loads((limited / "state.json").read_text())
+        reset = datetime(2026, 11, 24, 23, 50).astimezone()
+        state.update(blocked_at="reviewing", limited={"runtime": "claude", "reset_at": reset.astimezone(
+            __import__("datetime").timezone.utc).isoformat()})  # recorded in another zone than this machine's
+        (limited / "state.json").write_text(json.dumps(state))
+        self.stopped_state("20261124-050000-eeee", stage="queued")
+        for stage in ("done", "aborted", "blocked"):
+            self.stopped_state("20261124-060000-" + stage, stage=stage)
+        with (held / "run.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            status, output = self.runner_status("--line")
+            items = json.loads(self.runner_status("--json")[1])["items"]
+        self.assertEqual(status, 0)
+        self.assertEqual(output.splitlines(), ["qk aaaa verifying 4/7 · 0m", "qk bbbb stopped at implementing",
+                                               "qk cccc waits: approve plan",
+                                               "qk dddd waiting claude limit until 23:50 +1 queued"])
+        self.assertEqual([(item["id"][-4:], item["running"], item["step"], item["waiting_for"]) for item in items],
+                         [("old1", False, 2, None), ("aaaa", True, 4, None), ("bbbb", False, 3, None),
+                          ("cccc", False, 0, {"person": "approve plan"}),
+                          ("dddd", False, 5, {"limit": "claude", "until": "23:50"}), ("eeee", False, 0, None)])
+        self.assertTrue(all(len(line) <= 80 for line in output.splitlines()))
+        self.assertFalse((self.root / "state" / "qk-run" / "20261124-020000-bbbb" / "run.lock").exists())
+        second = self.stopped_state("20261124-021000-ffff", stage="verifying")
+        state = json.loads((second / "state.json").read_text())
+        state["updated"] = fresh
+        (second / "state.json").write_text(json.dumps(state))
+        lines = self.runner_status("--line")[1].splitlines()  # runs left mid-stage (the lock is free now) share a line
+        self.assertEqual(lines, ["qk cccc waits: approve plan", "qk dddd waiting claude limit until 23:50",
+                                 "qk 3 runs stopped mid-stage (qk run status --json) +1 queued"])
+        self.assertFalse(any("stopped at" in line for line in lines))
+        with self.assertRaises(SystemExit):
+            self.runner_status("20261124-020000-bbbb", "--line")
+
+    def test_run_status_line_stays_within_its_budget(self):
+        import time
+        runner = importlib.import_module("qk_run")
+        for index in range(50):
+            self.stopped_state("20261124-%06d-%04d" % (index, index), stage=("done", "implementing")[index % 2])
+        timings = []
+        for _ in range(5):
+            started = time.perf_counter()
+            [runner.status_line(item) for item in runner.status_items()]
+            timings.append(time.perf_counter() - started)
+        self.assertLess(sorted(timings)[2], 0.05)
+
+    def test_brief_json_and_pending_are_offline_and_match_the_cards(self):
+        self.assertEqual(self.cli("brief", "--pending"), (0, "", ""))
+        self.assertEqual(json.loads(self.cli("brief", "--json")[1]), {"contract": 1, "cards": []})
+        self.assertFalse((self.root / "ledger").exists(), "a status hook must not create the ledger")
+        merged = self.run_record("merged", pr_url=URL + "1")
+        self.decision(merged, "MERGED")
+        self.run_record("open", pr_url=URL + "2", task="Open change")
+        self.run_record("blocked", status="blocked", pr_url="", task="Repair run")
+        self.stopped_state("stopped-run")
+        with mock.patch.object(subprocess, "run", side_effect=AssertionError("brief must be offline")):
+            status, output, errors = self.cli("brief", "--json")
+            _, text, _ = self.cli("brief")
+            _, pending, _ = self.cli("brief", "--pending")
+        self.assertEqual((status, errors), (0, ""))
+        cards = json.loads(output)["cards"]
+        self.assertEqual({card["run_id"]: card["choices"] for card in cards},
+                         {"open": ["merge", "leave"], "blocked": ["abort-later", "resume-later"],
+                          "stopped-run": ["abort-later"]})
+        self.assertEqual([line for card in cards for line in card["lines"]], text.splitlines())
+        self.assertFalse(any(card["decided"] for card in cards))
+        self.assertRegex(pending, r"^qk: 3 runs to decide \(latest \d\d:\d\d\): qk sync && qk brief\n$")
+        with mock.patch.object(qk, "_merge", side_effect=AssertionError("leave never merges")):
+            self.assertEqual(self.cli("decide", "open", "leave")[0], 0)
+        cards = json.loads(self.cli("brief", "--json")[1])["cards"]
+        self.assertEqual([card["run_id"] for card in cards if card["decided"]], ["open"])
+        self.assertIn("qk: 2 runs to decide", self.cli("brief", "--pending")[1])
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            qk.main(["brief", "--json", "--pending"])
+
     def test_brief_shows_runs_left_mid_stage_without_a_process(self):
         import fcntl
         self.stopped_state("no-lock-file")

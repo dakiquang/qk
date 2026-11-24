@@ -21,6 +21,8 @@ python3 scripts/qk_run.py approve <id> --later
 caffeinate -i python3 scripts/qk_run.py drain --until 07:00 --notify
 ```
 
+`status` không kèm id liệt kê các run đáng theo dõi: run đang chạy cùng bước hiện tại (`qk 3f9c implementing 3/7 · 12m`), run dừng giữa chừng (`stopped at …`), plan chờ duyệt, run chờ hạn mức và hàng đợi (`+2 queued`). `--line` in mỗi run một dòng, không có gì thì không in; `--json` in `{"contract": 1, "items": [...]}`. Lệnh chỉ đọc file trạng thái, nên status line của runtime gọi được; xem [Trạng thái trong runtime](runtime-status.md).
+
 Run dừng vì runtime chạm giới hạn hạn mức ghi `limited` (runtime và giờ mở lại); khi có `--until`, drain chờ tới giờ mở lại rồi chạy tiếp nó. Xem [Qua đêm](overnight.md#ban-đêm).
 
 [CLI chung](ledger.md) có cùng lệnh qua `qk run …`. `start --task-kind LABEL` thêm nhãn lịch sử tuỳ chọn, không trao quyền. Run đã dừng đóng góp tóm tắt vào sổ cục bộ; lỗi ghi sổ chỉ cảnh báo, không đổi kết quả run.
