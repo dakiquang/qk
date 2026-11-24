@@ -1245,6 +1245,7 @@ class CliTests(unittest.TestCase):
     def test_brief_json_and_pending_are_offline_and_match_the_cards(self):
         self.assertEqual(self.cli("brief", "--pending"), (0, "", ""))
         self.assertEqual(json.loads(self.cli("brief", "--json")[1]), {"contract": 1, "cards": []})
+        self.assertFalse((self.root / "ledger").exists(), "a status hook must not create the ledger")
         merged = self.run_record("merged", pr_url=URL + "1")
         self.decision(merged, "MERGED")
         self.run_record("open", pr_url=URL + "2", task="Open change")

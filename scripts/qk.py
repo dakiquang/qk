@@ -1243,7 +1243,9 @@ def main(argv=None):
             print(_text("%s source=%s recorded_by=%s" % (
                 record["id"], record["source"], record["recorded_by"])))
             return 0
-        records = ledger.records()
+        read_only = args.command == "brief" and (args.json or args.pending)
+        # A status hook runs these on every session start: never create the ledger directory or its lock for them.
+        records = [] if read_only and not ledger.store_path().is_file() else ledger.records()
         if args.command == "brief":
             return _brief(args, records, ledger)
         if args.command == "decide":

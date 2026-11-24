@@ -43,6 +43,20 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout.splitlines()),
                          (0, ["qk 3f9c implementing 3/7", "harness aaea46 · eval review.run"]))
 
+    def test_a_timeout_stops_everything_the_command_started(self):
+        marker = self.root / "late"
+        self.commands.write_text(f"sh -c 'sleep 2; touch {marker}'; true\n")  # a child that outlives a killed shell
+        self.assertEqual(self.lines().stdout, "")
+        time.sleep(2.5)
+        self.assertFalse(marker.exists(), "the timed-out command kept running")
+
+    def test_the_cache_is_not_shared_across_state_directories(self):
+        self.commands.write_text('echo "state=$QK_RUN_STATE_DIR"\n')
+        self.environment["QK_RUN_STATE_DIR"] = "/one"
+        self.assertEqual(self.lines().stdout, "state=/one\n")
+        self.environment["QK_RUN_STATE_DIR"] = "/two"
+        self.assertEqual(self.lines().stdout, "state=/two\n")
+
     def test_status_lines_are_cached_per_command_list(self):
         counter = self.root / "count"
         self.commands.write_text(f"echo x >> {counter}; echo line\n")

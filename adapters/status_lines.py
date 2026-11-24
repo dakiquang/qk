@@ -10,6 +10,7 @@ gets one second; a command that fails, times out or prints nothing adds nothing.
 import hashlib
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -30,17 +31,32 @@ def commands():
 
 
 def run(command):
+    """The command's non-empty lines, or none. It runs in its own process group, so a timeout stops the shell and
+    everything it started."""
     try:
-        proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=TIMEOUT,
-                              stdin=subprocess.DEVNULL)
-    except (subprocess.TimeoutExpired, OSError):
+        proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                stdin=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
         return []
-    return [line for line in proc.stdout.splitlines() if line.strip()] if proc.returncode == 0 else []
+    try:
+        output, _ = proc.communicate(timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        proc.communicate()
+        return []
+    return [line for line in output.splitlines() if line.strip()] if proc.returncode == 0 else []
 
 
 def lines():
     listed = commands()
-    key = hashlib.sha256("\n".join(listed).encode("utf-8")).hexdigest()[:12]
+    # The commands and the settings that choose what they read: two sessions on different state directories
+    # must not share a cache.
+    scope = [*listed, *(f"{name}={os.environ.get(name, '')}" for name in sorted(os.environ)
+                         if name.startswith("QK_") or name in ("XDG_STATE_HOME", "HOME"))]
+    key = hashlib.sha256("\n".join(scope).encode("utf-8")).hexdigest()[:12]
     cache = Path(tempfile.gettempdir()) / f"qk-status-lines.{os.getuid()}.{key}"
     ttl = float(os.environ.get("QK_STATUS_TTL", "5"))
     try:
