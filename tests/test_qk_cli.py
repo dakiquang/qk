@@ -1227,6 +1227,14 @@ class CliTests(unittest.TestCase):
                           ("dddd", False, 5, {"limit": "claude", "until": "23:50"}), ("eeee", False, 0, None)])
         self.assertTrue(all(len(line) <= 80 for line in output.splitlines()))
         self.assertFalse((self.root / "state" / "qk-run" / "20261124-020000-bbbb" / "run.lock").exists())
+        second = self.stopped_state("20261124-021000-ffff", stage="verifying")
+        state = json.loads((second / "state.json").read_text())
+        state["updated"] = fresh
+        (second / "state.json").write_text(json.dumps(state))
+        lines = self.runner_status("--line")[1].splitlines()  # runs left mid-stage (the lock is free now) share a line
+        self.assertEqual(lines, ["qk cccc waits: approve plan", "qk dddd waiting claude limit until 23:50",
+                                 "qk 3 runs stopped mid-stage (qk run status --json) +1 queued"])
+        self.assertFalse(any("stopped at" in line for line in lines))
         with self.assertRaises(SystemExit):
             self.runner_status("20261124-020000-bbbb", "--line")
 

@@ -1528,7 +1528,11 @@ def cmd_status(args):
             print(json.dumps({"contract": 1, "items": items}, ensure_ascii=False))
             return 0
         queued = sum(item["stage"] == "queued" for item in items)
-        lines = [status_line(item) for item in items if item["stage"] != "queued" and recent(item)]
+        shown = [item for item in items if item["stage"] != "queued" and recent(item)]
+        idle = [item for item in shown if not item["running"] and not item["waiting_for"]]
+        lines = [status_line(item) for item in shown if item not in idle or len(idle) == 1]
+        if len(idle) > 1:  # runs left mid-stage: one line, the details are in `qk run status --json`
+            lines.append("qk %d runs stopped mid-stage (qk run status --json)" % len(idle))
         if queued:
             if lines:
                 lines[-1] = (lines[-1] + " +%d queued" % queued)[:80]

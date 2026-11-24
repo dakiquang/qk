@@ -81,6 +81,10 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(reply["systemMessage"], "qk: 2 runs to decide (latest 07:02): qk sync && qk brief")
         self.assertEqual(reply["hookSpecificOutput"]["hookEventName"], "SessionStart")
         self.assertIn("qk-morning", reply["hookSpecificOutput"]["additionalContext"])
+        self.pending("")
+        self.commands.write_text("for i in 1 2 3 4 5; do echo line$i; done\n")
+        reply = json.loads(self.run_adapter(*hook, stdin="{}").stdout)
+        self.assertEqual(reply, {"systemMessage": "line1; line2; line3; +2 more"})  # no tokens without waiting cards
 
     def test_claude_status_line_keeps_the_wrapped_output_first(self):
         self.commands.write_text("echo 'qk 3f9c verifying 4/7'\n")

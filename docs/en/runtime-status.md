@@ -6,7 +6,7 @@ See what the runner (and any other tool you list) is doing from inside omp, Clau
 
 Each adapter reads the same commands:
 
-- `qk run status --line`: one line per run that is working, stopped mid-stage, waiting for plan approval or for a usage limit, plus `+N queued`. Status lines leave out runs nobody touched for a day; `--json` lists them all. See [Runner](runner.md#use).
+- `qk run status --line`: one line per run that is working, stopped mid-stage, waiting for plan approval or for a usage limit, plus `+N queued`. Status lines leave out runs nobody touched for a day, and several runs left mid-stage share one line; `--json` lists them all. See [Runner](runner.md#use).
 - `qk brief --pending`: one line when cards wait for a decision, otherwise nothing. `qk brief --json` gives the cards to a skill or an extension. See [CLI contract](cli-contract.md#commands).
 - `adapters/status_lines.py`: runs every command listed in `~/.config/qk/status-commands`, one per line (default: `qk run status --line`). Each command gets 1 second; output is cached for 5 seconds. Add other tools' status commands to that file; for example, qk-harness has `qk-harness status --line`.
 
@@ -22,8 +22,9 @@ Nothing below is installed for you. Each step changes your own runtime settings,
 
 ```bash
 ln -s <qk>/adapters/omp/qk-status.ts ~/.omp/agent/extensions/qk-status.ts
-ln -s <qk>/skills/qk-morning ~/.omp/agent/skills/qk-morning
 ```
+
+Install the `qk-morning` skill like the other qk skills ([Getting started](getting-started.md)); omp reads `~/.agents/skills`.
 
 The extension sets a `qk` status entry from `status_lines.py` every 15 seconds and after each agent turn. When a session starts with cards waiting, it shows a notification. `/qk-brief` runs `qk sync`, then shows each card in a select dialog with exactly the choices `qk decide` accepts, plus `skip`. It asks for the merge method only when the repository allows several. Other extensions (for example Orca's) keep working.
 
@@ -42,11 +43,9 @@ In `~/.claude/settings.json`, wrap the status line you already have. The words a
 }
 ```
 
-```bash
-ln -s <qk>/skills/qk-morning ~/.claude/skills/qk-morning
-```
+Install the `qk-morning` skill like the other qk skills ([Getting started](getting-started.md)).
 
-The status line prints your current line first, then one line per qk item. The hook prints nothing when nothing waits. Otherwise it shows the reminder to you (`systemMessage`) and adds the same line, plus a pointer to `qk-morning`, to the session's context. That is the only part that costs tokens. Whether the desktop app's Code tab shows the custom status line has not been checked yet.
+The status line prints your current line first, then one line per qk item. The hook prints nothing when nothing waits. Otherwise it shows you the reminder and up to three status lines (`systemMessage`). Only when cards wait for a decision does it add that one line, plus a pointer to `qk-morning`, to the session's context: the only part that costs tokens. Whether the desktop app's Code tab shows the custom status line has not been checked yet.
 
 ## Codex
 
@@ -56,11 +55,7 @@ In `~/.codex/hooks.json`:
 {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "python3 <qk>/adapters/session_start.py"}]}]}}
 ```
 
-```bash
-ln -s <qk>/skills/qk-morning ~/.codex/skills/qk-morning
-```
-
-Codex skips new or changed hooks until you trust them with `/hooks`. Codex shows `systemMessage` as a warning line. Keep your existing `notify` setting as it is; this adapter does not use it.
+Codex reads the `qk-morning` skill from `~/.agents/skills` ([Getting started](getting-started.md)). Codex skips new or changed hooks until you trust them with `/hooks`. Codex shows `systemMessage` as a warning line. Keep your existing `notify` setting as it is; this adapter does not use it.
 
 ## Morning
 

@@ -29,15 +29,18 @@ def pending():
 def main():
     if not sys.stdin.isatty():
         sys.stdin.read()
-    parts = [text for text in [pending(), *status_lines.lines()] if text]
+    waiting = pending()
+    status = status_lines.lines()
+    shown = status[:3] + (["+%d more" % (len(status) - 3)] if len(status) > 3 else [])
+    parts = [text for text in [waiting, *shown] if text]
     if not parts:
         return 0
-    message = "; ".join(parts)
-    hint = " Use the qk-morning skill to read the cards and record decisions." if parts[0].startswith(
-        "qk: ") and "to decide" in parts[0] else ""
-    print(json.dumps({"systemMessage": message,
-                      "hookSpecificOutput": {"hookEventName": "SessionStart",
-                                             "additionalContext": message + "." + hint}}, ensure_ascii=False))
+    reply = {"systemMessage": "; ".join(parts)}
+    if waiting:  # the only part that costs tokens: the model hears about cards waiting for a decision, nothing else
+        reply["hookSpecificOutput"] = {
+            "hookEventName": "SessionStart",
+            "additionalContext": waiting + ". Use the qk-morning skill to read the cards and record decisions."}
+    print(json.dumps(reply, ensure_ascii=False))
     return 0
 
 
