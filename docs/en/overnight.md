@@ -37,6 +37,8 @@ qk sync
 qk brief
 ```
 
+Or read the same cards in omp, Claude Code or Codex with the [qk-morning](skills/qk-morning.md) skill; the [runtime adapters](runtime-status.md) remind you at session start when cards wait.
+
 `qk sync` reads PR state with `gh` and prints `Decision snapshots: N recorded; N unchanged; N failures.` (exit 1 on any failure). `qk brief` prints one card per run. A card for a run that is not blocked shows:
 
 - a title line ending in `RISK: <level> — <rule>; full: qk show --id <id>` (a rule longer than 100 characters is cut);

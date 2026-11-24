@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `qk run status` without an id lists the runs worth watching (working with their step, stopped mid-stage,
+  waiting for plan approval or a usage limit, queued); `--line` prints one line each for a runtime's status line
+  and `--json` the same as data.
+- `qk brief --json` gives the cards with the choices `qk decide` accepts, and `qk brief --pending` prints one line
+  when cards wait for a decision; both are offline and in the CLI contract.
+- Runtime adapters in `adapters/`: a shared status-line reader, a session-start reminder for Claude Code and Codex,
+  a status line wrapper for Claude Code and an extension for omp with `/qk-brief`.
+- `qk-morning` skill: read the brief's cards in the chat and record your decisions with `qk decide`.
+
 ## [0.10.0] - 2026-11-24
 
 ### Added

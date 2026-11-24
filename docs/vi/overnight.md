@@ -37,6 +37,8 @@ qk sync
 qk brief
 ```
 
+Hoặc đọc cùng các thẻ đó trong omp, Claude Code hay Codex bằng skill [qk-morning](skills/qk-morning.md); [adapter runtime](runtime-status.md) nhắc bạn lúc mở phiên khi có thẻ chờ.
+
 `qk sync` đọc trạng thái PR bằng `gh` và in `Decision snapshots: N recorded; N unchanged; N failures.` (thoát 1 khi có lỗi). `qk brief` in một thẻ cho mỗi run. Thẻ của run không bị chặn hiện:
 
 - dòng tiêu đề kết thúc bằng `RISK: <level> — <rule>; full: qk show --id <id>` (quy tắc dài quá 100 ký tự bị cắt);
