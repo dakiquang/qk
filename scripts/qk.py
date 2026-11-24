@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 
 PR_FIELDS = "url,title,state,mergedAt,closedAt,mergedBy,headRefOid"
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 # External tools may rely on these commands' flags, JSON fields and exit codes.
 # Removing or renaming any of them needs a new CONTRACT number.
 CONTRACT = 1
