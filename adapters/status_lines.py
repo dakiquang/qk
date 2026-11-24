@@ -45,7 +45,8 @@ def run(command):
             os.killpg(proc.pid, signal.SIGKILL)
         except OSError:
             pass
-        proc.communicate()
+        proc.stdout.close()  # a child that left the group may still hold the pipe: do not wait for it
+        proc.wait()
         return []
     return [line for line in output.splitlines() if line.strip()] if proc.returncode == 0 else []
 
