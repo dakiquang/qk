@@ -36,7 +36,7 @@ qk 3 runs stopped mid-stage (qk run status --json)
 harness aaea46 · waits: approve plan
 harness aaea46 · claude limit until 23:50
 harness aaea46 · task api stopped mid-step · qk-harness run
-harness 7 jobs stopped (qk-harness status)
+harness 7 jobs not running (qk-harness status)
 ```
 
 omp shows the same lines in its status bar, joined with ` | `:
@@ -45,20 +45,20 @@ omp shows the same lines in its status bar, joined with ` | `:
 qk 3f9c implementing 3/7 · 12m | harness aaea46 · review.run eval · 1/2 tasks
 ```
 
-Reminder when a session starts (Claude Code's message, Codex's warning line, omp's notification):
+Reminder when a session starts (Claude Code's message, Codex's warning line):
 
 ```text
-qk: 3 runs to decide (latest 07:09): qk sync && qk brief; harness 7 jobs stopped (qk-harness status)
+qk: 3 runs to decide (latest 07:09): qk sync && qk brief; harness 7 jobs not running (qk-harness status)
 ```
 
-Only `qk: 3 runs to decide …` reaches the model's context, followed by `Use the qk-morning skill to read the cards and record decisions.` With nothing waiting, nothing is added.
+omp's notification carries only the first part: `qk: 3 runs to decide (latest 07:09): qk sync && qk brief (or /qk-brief here)`. Only `qk: 3 runs to decide …` reaches the model's context, followed by `Use the qk-morning skill to read the cards and record decisions.` With nothing waiting, nothing is added.
 
 One card in `qk-morning` (the brief's own lines), then the question:
 
 ```text
 #1 project: Add CSV export (https://github.com/example/project/pull/10)  RISK: medium — never synced; full: qk show --id 0b837bbf8f5d
-  Done: run 20261124-010203-abcdef status=done; 2 files, +72/-7; impl=codex:… review=claude:; PR=UNKNOWN; synced=never / unknown
-  Evidence: verify: 2 checks (exit=0:2 nonzero:0 unknown:0); review: remaining=0, queued-for-fix=0
+  Done: run 20261124-010203-abcdef status=done; 2 files, +72/-7; impl=codex:… review=claude:; PR=UNKNOWN; synced=never / unknown; full: qk show --id 0b837bbf8f5d
+  Evidence: verify: 2 checks (exit=0:2 nonzero:0 unknown:0); review: remaining=0, queued-for-fix=0; UNKNOWN commit comparison / not verified; full: qk show --id 0b837bbf8f5d
   Unchecked: remaining findings=0; claims (not independent verification): no recorded model claims
   History: feature 7/8 done/total (informational)
   Decision: human decision required; sync state is a recorded observation, not approval.
