@@ -1,0 +1,22 @@
+{
+ "contract": 1,
+ "cards": [
+  {
+   "run_id": "20261124-010203-abcdef",
+   "repo": "project",
+   "title": "Add the thing",
+   "pr_url": "https://github.com/example/project/pull/10",
+   "status": "done",
+   "level": "medium",
+   "rule": "never synced",
+   "lines": [
+    "#1 project: Add the thing (https://github.com/example/project/pull/10)  RISK: medium — never synced"
+   ],
+   "choices": [
+    "merge",
+    "leave"
+   ],
+   "decided": false
+  }
+ ]
+}

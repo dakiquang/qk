@@ -1431,7 +1431,111 @@ def resume(state):
     return advance(state)
 
 
+def lock_held(directory):
+    """Whether a runner holds `<run>/run.lock` now. Probes without waiting and never creates the file."""
+    try:
+        import fcntl  # POSIX only, like the runner
+    except ImportError:
+        return False
+    try:
+        descriptor = os.open(str(directory / "run.lock"), os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(descriptor)
+
+
+def status_items():
+    """Runs worth a status line, oldest first: working (or stopped mid-stage), waiting for plan approval, queued,
+    or blocked by a usage limit. Reads state files only: no git, no network, no ledger write."""
+    steps = list(STAGES)
+    items = []
+    for path in sorted(state_root().glob("*/state.json")):
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        stage = state.get("stage") if isinstance(state, dict) else None
+        limited = state.get("limited") if stage == "blocked" else None
+        if stage not in STAGES and stage not in ("awaiting_approval", "queued") and not limited:
+            continue
+        running = stage in STAGES and lock_held(path.parent)
+        waiting = None
+        if stage == "awaiting_approval":
+            waiting = {"person": "approve plan"}
+        elif limited:
+            reset = str(limited.get("reset_at") or "")
+            waiting = {"limit": limited.get("runtime", "?"), "until": reset[11:16] or None}
+        step = steps.index(stage) + 1 if stage in STAGES else 0
+        if limited and state.get("blocked_at") in STAGES:
+            step = steps.index(state["blocked_at"]) + 1
+        items.append({"source": "qk-run", "id": state.get("id", path.parent.name),
+                      "title": str(state.get("task", ""))[:60], "stage": stage, "step": step, "steps": len(steps),
+                      "since": state.get("updated"), "waiting_for": waiting, "running": running,
+                      "next": None if running else ("qk run approve %s" % path.parent.name if stage == "awaiting_approval"
+                                                    else "qk run status %s" % path.parent.name)})
+    return items
+
+
+STATUS_LINE_HOURS = 24
+
+
+def recent(item, now=None):
+    """Whether a status line should show the item: it runs, waits for a usage limit, or changed in the last day.
+    `--json` lists every item; status lines leave out runs nobody touched for a day."""
+    if item["running"] or (item["waiting_for"] or {}).get("limit"):
+        return True
+    try:
+        since = datetime.fromisoformat(item["since"])
+    except (TypeError, ValueError):
+        return False
+    now = now or (datetime.now(since.tzinfo) if since.tzinfo else datetime.now())
+    return now - since < timedelta(hours=STATUS_LINE_HOURS)
+
+
+def status_line(item, now=None):
+    """One line of at most 80 characters for a runtime status line."""
+    short = item["id"][-4:]
+    if item["waiting_for"] and "limit" in item["waiting_for"]:
+        until = item["waiting_for"]["until"]
+        text = "qk %s waiting %s limit%s" % (short, item["waiting_for"]["limit"], " until " + until if until else "")
+    elif item["stage"] == "awaiting_approval":
+        text = "qk %s waits: approve plan" % short
+    elif not item["running"]:
+        text = "qk %s stopped at %s" % (short, item["stage"])
+    else:
+        text = "qk %s %s %d/%d" % (short, item["stage"], item["step"], item["steps"])
+        try:
+            minutes = int(((now or datetime.now()) - datetime.fromisoformat(item["since"])).total_seconds() // 60)
+            text += " · %dm" % max(minutes, 0)
+        except (TypeError, ValueError):
+            pass
+    return text[:80]
+
+
 def cmd_status(args):
+    if args.id is None:
+        items = status_items()
+        if args.json:
+            print(json.dumps({"contract": 1, "items": items}, ensure_ascii=False))
+            return 0
+        queued = sum(item["stage"] == "queued" for item in items)
+        lines = [status_line(item) for item in items if item["stage"] != "queued" and recent(item)]
+        if queued:
+            if lines:
+                lines[-1] = (lines[-1] + " +%d queued" % queued)[:80]
+            else:
+                lines.append("qk %d queued" % queued)
+        if lines:
+            print("\n".join(lines))
+        return 0
+    if args.line or args.json:
+        sys.exit("qk-run: --line and --json list all runs; leave out the run id")
     state = load(args.id)
     keys = ("id", "stage", "reason", "limited", "branch", "worktree", "fix_rounds", "pr_url", "commit")
     print(json.dumps({k: state[k] for k in keys if k in state}, ensure_ascii=False, indent=2))
@@ -1472,7 +1576,11 @@ def main(argv=None):
     start.set_defaults(func=cmd_start)
     for name, func in (("approve", cmd_approve), ("resume", cmd_resume), ("status", cmd_status), ("abort", cmd_abort)):
         command = sub.add_parser(name)
-        command.add_argument("id")
+        command.add_argument("id", nargs="?" if name == "status" else None)
+        if name == "status":
+            output = command.add_mutually_exclusive_group()
+            output.add_argument("--line", action="store_true", help="without an id: one line per active run")
+            output.add_argument("--json", action="store_true", help="without an id: active runs as JSON")
         if name == "approve":
             command.add_argument("--later", action="store_true", help="queue the approved run for drain")
         command.set_defaults(func=func)

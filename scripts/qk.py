@@ -2,9 +2,11 @@
 """Local evidence reads, read-only PR snapshots and terminal-confirmed brief decisions."""
 
 import argparse
+import contextlib
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 import importlib
+import io
 import json
 import os
 from pathlib import Path
@@ -25,7 +27,7 @@ VERSION = "0.10.0"
 # Removing or renaming any of them needs a new CONTRACT number.
 CONTRACT = 1
 CONTRACT_COMMANDS = ("contract", "show", "lesson list", "agent run", "agent family", "log run", "eval prepare",
-                     "eval grade")
+                     "eval grade", "brief")
 
 
 def _text(value):
@@ -86,6 +88,10 @@ def _parser():
     sync.add_argument("--backfill", action="store_true", help="first import stopped runs and saved eval attempts")
     brief = commands.add_parser("brief", help="summarize open/unknown PRs; on a terminal, ask per card")
     brief.add_argument("--repo")
+    output = brief.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="the cards and their choices as JSON; never asks")
+    output.add_argument("--pending", action="store_true",
+                        help="one line when cards wait for a decision, else nothing; never asks")
     decide = commands.add_parser("decide", help="record one brief decision without a terminal; merge checks the head")
     decide.add_argument("run_id", metavar="RUN_ID")
     decide.add_argument("choice", choices=("merge", "leave", "abort-later", "resume-later"))
@@ -1117,10 +1123,53 @@ def _cards(records, repo=None):
     return cards
 
 
+def _decided(run, records):
+    """Whether the user recorded a choice on this run's card since its latest record."""
+    return any(_user_decision(record) and _data(record).get("run_key") == _run_key(run)
+               and record.get("at", "") >= run.get("at", "") for record in records)
+
+
+def _brief_json(cards, runs, records):
+    """The cards as data for a tool that shows them in its own interface: the brief's own lines, unchanged, and
+    the choices `qk decide` accepts for each. Prints nothing else and makes no network call."""
+    items = []
+    for shown, (run, snapshot, level, rule) in enumerate(cards, 1):
+        data = _data(run)
+        text = io.StringIO()
+        with contextlib.redirect_stdout(text):
+            _print_card(shown, run, snapshot, level, rule, runs, records)
+        items.append({"run_id": data.get("run_id") or run["id"], "repo": run.get("repo", ""),
+                      "title": snapshot.get("title") or data.get("task") or "", "pr_url": data.get("pr_url"),
+                      "status": data.get("status"), "level": level, "rule": rule,
+                      "lines": text.getvalue().splitlines(), "choices": list(_choices(data)),
+                      "decided": _decided(run, records)})
+    print(json.dumps({"contract": CONTRACT, "cards": items}, ensure_ascii=False))
+    return 0
+
+
+def _brief_pending(cards, records):
+    """One line when cards wait for a decision, else nothing: for a runtime's session-start hook."""
+    waiting = [run for run, *_ in cards if not _decided(run, records)]
+    if not waiting:
+        return 0
+    latest = ""
+    try:
+        latest = " (latest %s)" % datetime.fromisoformat(max(run.get("at", "") for run in waiting)).astimezone(
+        ).strftime("%H:%M")
+    except ValueError:
+        pass
+    print("qk: %d run%s to decide%s: qk sync && qk brief" % (len(waiting), "" if len(waiting) == 1 else "s", latest))
+    return 0
+
+
 def _brief(args, records, ledger):
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
     runs = _latest_runs(records)
     cards = _cards(records, args.repo)
+    if args.json:
+        return _brief_json(cards, runs, records)
+    if args.pending:
+        return _brief_pending(cards, records)
     for shown, (run, snapshot, level, rule) in enumerate(cards, 1):
         _print_card(shown, run, snapshot, level, rule, runs, records)
         if interactive:

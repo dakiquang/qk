@@ -38,6 +38,7 @@ SAMPLE_ARGV = {
     "log run": ["--producer", "other-tool 1.2.0", "--state-dir", "state"],
     "eval prepare": ["csv-export", "dir"],
     "eval grade": ["csv-export", "dir/repo", "--final", "final.md", "--events", "events.jsonl"],
+    "brief": ["--repo", "project"],
 }
 
 
@@ -156,6 +157,18 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assert_keeps_fields(records[0], sample)
         self.assertEqual((records[0]["v"], records[0]["data"]), (sample["v"], sample["data"]))
+
+    def test_brief_json_keeps_card_fields(self):
+        sample = fixture("brief.json")
+        card = sample["cards"][0]
+        ledger.append("run", {"run_id": card["run_id"], "run_key": str(self.root / "run"), "status": card["status"],
+                              "task": card["title"], "pr_url": card["pr_url"], "commit": "a" * 40},
+                      repo=card["repo"])
+        actual = self.json("brief", "--json")
+        self.assert_keeps_fields(actual, sample)
+        self.assertEqual(len(actual["cards"]), 1)
+        self.assert_keeps_fields(actual["cards"][0], card)
+        self.assertEqual(actual["cards"][0]["choices"], card["choices"])
 
     def test_lesson_list_json_is_a_list(self):
         self.assertEqual(self.json("lesson", "list", "--json"), [])
