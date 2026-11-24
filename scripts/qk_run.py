@@ -1469,8 +1469,11 @@ def status_items():
         if stage == "awaiting_approval":
             waiting = {"person": "approve plan"}
         elif limited:
-            reset = str(limited.get("reset_at") or "")
-            waiting = {"limit": limited.get("runtime", "?"), "until": reset[11:16] or None}
+            try:  # the reset time in this machine's zone, whatever zone the runtime's message named
+                until = datetime.fromisoformat(str(limited.get("reset_at"))).astimezone().strftime("%H:%M")
+            except ValueError:
+                until = None
+            waiting = {"limit": limited.get("runtime", "?"), "until": until}
         step = steps.index(stage) + 1 if stage in STAGES else 0
         if limited and state.get("blocked_at") in STAGES:
             step = steps.index(state["blocked_at"]) + 1

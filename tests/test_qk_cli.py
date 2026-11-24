@@ -1206,7 +1206,9 @@ class CliTests(unittest.TestCase):
             (directory / "state.json").write_text(json.dumps(state))
         limited = self.stopped_state("20261124-040000-dddd", stage="blocked")
         state = json.loads((limited / "state.json").read_text())
-        state.update(blocked_at="reviewing", limited={"runtime": "claude", "reset_at": "2026-11-24T23:50:00+07:00"})
+        reset = datetime(2026, 11, 24, 23, 50).astimezone()
+        state.update(blocked_at="reviewing", limited={"runtime": "claude", "reset_at": reset.astimezone(
+            __import__("datetime").timezone.utc).isoformat()})  # recorded in another zone than this machine's
         (limited / "state.json").write_text(json.dumps(state))
         self.stopped_state("20261124-050000-eeee", stage="queued")
         for stage in ("done", "aborted", "blocked"):
