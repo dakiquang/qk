@@ -24,6 +24,13 @@ Duyệt plan vào buổi tối, để [runner](runner.md) chạy lần lượt t
 caffeinate -i qk run drain --until 07:00 --notify
 ```
 
+Một đêm mà hạn mức Claude chặn hai run, drain chờ tới giờ mở lại và mọi run đều xong, sẽ kết thúc như sau (các dòng tiến độ của từng run nằm phía trên):
+
+```text
+claude limited; 2 runs waiting until 23:52.
+Drain: 4 done, 0 blocked, 0 left queued.
+```
+
 - Mỗi lần một run, run xếp hàng sớm nhất trước. `drain` thứ hai thoát với `another drain is already running`.
 - `--until 07:00` nghĩa là 07:00 kế tiếp sau thời điểm hiện tại. Hạn chỉ được kiểm trước khi bắt đầu một run: run đang chạy vẫn chạy xong, rồi drain in `Deadline reached; N queued runs left.` Run chưa bắt đầu vẫn nằm trong hàng đợi cho lần drain sau.
 - `--notify` hiện một thông báo cho mỗi run bị chặn và một thông báo tổng kết. Thông báo lỗi chỉ in cảnh báo.
