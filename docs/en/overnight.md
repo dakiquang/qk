@@ -24,6 +24,13 @@ Approve plans in the evening, let the [runner](runner.md) work through them one 
 caffeinate -i qk run drain --until 07:00 --notify
 ```
 
+A night where Claude's limit stopped two runs, the drain waited for the reset and every run finished, ends like this (each run's own progress lines come before):
+
+```text
+claude limited; 2 runs waiting until 23:52.
+Drain: 4 done, 0 blocked, 0 left queued.
+```
+
 - One run at a time, oldest queued first. A second `drain` exits with `another drain is already running`.
 - `--until 07:00` means the next 07:00 after now. The deadline is checked only before a run starts: the run in progress finishes, then drain prints `Deadline reached; N queued runs left.` Runs not started stay queued for the next drain.
 - `--notify` shows one notification for each blocked run and one for the summary. A failed notification only prints a warning.

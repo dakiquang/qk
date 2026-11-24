@@ -54,7 +54,7 @@ Output:
  "seconds": 12}
 ```
 
-`status` is `done`, `blocked` or `needs_input`. A missing runtime, a timeout, a non-zero exit and an isolation breach are all `blocked` with a `reason`. `result` is `null` when the result contract is off or the reply has no valid block. `usage` is `null` when the runtime reports no tokens and may lack `cost_usd` (Codex reports none). `limit` is `null` unless the runtime exited because of its usage limit; then `status` is still `blocked` and `limit` is `{"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00", "message": "…"}`, where `reset_at` is ISO 8601 or `null` when the message names no reset time.
+`status` is `done`, `blocked` or `needs_input`. A missing runtime, a timeout, a non-zero exit and an isolation breach are all `blocked` with a `reason`. `result` is `null` when the result contract is off or the reply has no valid block. `usage` is `null` when the runtime reports no tokens and may lack `cost_usd` (Codex reports none); a turn that fails or times out keeps the usage read before it stopped. `limit` is `null` unless the runtime exited because of its usage limit; then `status` is still `blocked` and `limit` is `{"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00", "message": "…"}`, where `reset_at` is ISO 8601 or `null` when the message names no reset time.
 
 ### `qk agent family SPEC`
 

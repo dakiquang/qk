@@ -54,7 +54,7 @@ qk agent run --spec RUNTIME:MODEL --cwd DIR (--write | --read-only)
  "seconds": 12}
 ```
 
-`status` là `done`, `blocked` hoặc `needs_input`. Thiếu runtime, quá giờ, thoát mã khác 0 và vi phạm cô lập đều là `blocked` kèm `reason`. `result` là `null` khi tắt hợp đồng kết quả hoặc câu trả lời không có khối hợp lệ. `usage` là `null` khi runtime không báo token, và có thể thiếu `cost_usd` (Codex không báo). `limit` là `null` trừ khi runtime thoát vì chạm giới hạn hạn mức; khi đó `status` vẫn là `blocked` và `limit` là `{"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00", "message": "…"}`, trong đó `reset_at` theo ISO 8601, hoặc `null` khi thông báo không ghi giờ mở lại.
+`status` là `done`, `blocked` hoặc `needs_input`. Thiếu runtime, quá giờ, thoát mã khác 0 và vi phạm cô lập đều là `blocked` kèm `reason`. `result` là `null` khi tắt hợp đồng kết quả hoặc câu trả lời không có khối hợp lệ. `usage` là `null` khi runtime không báo token, và có thể thiếu `cost_usd` (Codex không báo); lượt lỗi hoặc quá giờ vẫn giữ phần usage đã đọc được trước khi dừng. `limit` là `null` trừ khi runtime thoát vì chạm giới hạn hạn mức; khi đó `status` vẫn là `blocked` và `limit` là `{"runtime": "claude", "reset_at": "2026-11-23T23:50:00+07:00", "message": "…"}`, trong đó `reset_at` theo ISO 8601, hoặc `null` khi thông báo không ghi giờ mở lại.
 
 ### `qk agent family SPEC`
 
