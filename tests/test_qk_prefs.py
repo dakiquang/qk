@@ -1,6 +1,7 @@
 import json
 import os
 import stat
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -129,19 +130,23 @@ class Hook(unittest.TestCase):
             self.skipTest("latency budget is checked on a local machine only")
         # Interpreter startup differs a lot between Python builds, so the budget is
         # the hook's cost on top of a bare start of the same interpreter.
-        def p95(command, stdin):
-            samples = []
-            for _ in range(20):
-                start = time.perf_counter()
-                subprocess.run(command, input=stdin, capture_output=True, text=True, timeout=30)
-                samples.append(time.perf_counter() - start)
-            samples.sort()
-            return samples[int(len(samples) * 0.95) - 1]
+        def elapsed(command, stdin):
+            start = time.perf_counter()
+            subprocess.run(command, input=stdin, capture_output=True, text=True, timeout=30)
+            return time.perf_counter() - start
 
+        # Each hook run is paired with a bare run right before it, so a burst of machine
+        # load hits both sides of a pair; the median ignores the pairs it skews.
         payload = json.dumps({"prompt": "From now on use pnpm"})
-        bare = p95([sys.executable, "-I", "-S", "-c", "pass"], "")
-        hook = p95([sys.executable, "-I", "-S", str(SCRIPT), "hook"], payload)
-        self.assertLess(hook - bare, 0.05, f"hook p95 {hook * 1000:.0f} ms, bare {bare * 1000:.0f} ms")
+        bare = [sys.executable, "-I", "-S", "-c", "pass"]
+        hook = [sys.executable, "-I", "-S", str(SCRIPT), "hook"]
+        extra = []
+        for _ in range(21):
+            b = elapsed(bare, "")
+            h = elapsed(hook, payload)
+            extra.append(h - b)
+        cost = statistics.median(extra)
+        self.assertLess(cost, 0.05, f"hook median extra {cost * 1000:.0f} ms over {len(extra)} pairs")
 
 
 class Store(unittest.TestCase):
