@@ -8,6 +8,18 @@ A clear request or approved plan implemented, verified and self-reviewed.
 
 Use this for a clear request with completion criteria, or an approved plan. It is the implementation command, not another planning layer.
 
+```mermaid
+flowchart TB
+    in(["Clear request or approved plan"]) --> read["Read the plan, rules and code<br/>recheck assumptions that moved"]
+    read --> impl["Smallest in-scope change<br/>unrelated local work kept"]
+    impl --> verify["Run the repository's checks<br/>exercise the changed behaviour"]
+    verify -- "introduced failure" --> impl
+    verify --> review["Self-review the diff<br/>scope, secrets, leftovers"]
+    review --> report(["Report: changes, real commands, unverified"])
+    impl -. "scope or public API would change" .-> ask{{"You decide"}}
+    report -. "independent view: you call" .-> next["qk/test, qk/agent-coord, pr-orchestrator"]
+```
+
 ## Example input
 
 ```text

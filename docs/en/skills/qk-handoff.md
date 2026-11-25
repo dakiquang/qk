@@ -8,6 +8,17 @@ Session context saved, or resumed with drift checks.
 
 Use this before switching sessions or agents, and when resuming a saved handoff. It preserves decisions and evidence, not a transcript or authority to act.
 
+```mermaid
+flowchart TB
+    in(["qk/handoff"]) --> mode{"Mode"}
+    mode -- "write" --> w["Goal, status, decisions, traps,<br/>evidence, remaining work"]
+    w --> file[("plans/handoff-date-slug.md<br/>no secrets")]
+    mode -- "resume" --> r["Read the handoff and its sources"]
+    r --> drift["Check branch, revision, files, plan drift"]
+    drift --> rep["What holds, what changed,<br/>permissions to ask for again"]
+    rep --> you{{"You confirm the next step"}}
+```
+
 ## Examples
 
 ```text

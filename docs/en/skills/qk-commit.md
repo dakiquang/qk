@@ -8,6 +8,22 @@ Scoped commits; push and PR only when asked, after an account check.
 
 Invoke `qk/commit` when finished work should become a commit. Name the authorized steps: `commit`, `commit push`, or `commit push pr`. The skill reads the status and diff, excludes unrelated or sensitive files, scans the content to be committed, and follows the repository's commit-message convention. It reports the SHA, files and real status of each requested step.
 
+```mermaid
+flowchart TB
+    in(["commit, commit push, or commit push pr"]) --> diff["Read status and diff"]
+    diff --> scope["Exclude unrelated and sensitive files<br/>scan what will be committed"]
+    scope --> commit["Commit in the repository's convention"]
+    commit --> push{"Push asked?"}
+    push -- "no" --> report
+    push -- "yes" --> pre{"Identity preflight<br/>active gh account"}
+    pre -- "fails" --> stop(["No push, reported"])
+    pre -- "passes" --> pushed["Push"]
+    pushed --> pr{"PR asked?"}
+    pr -- "yes" --> open["Open the PR: what, why, checks run"]
+    pr -- "no" --> report
+    open --> report(["Report SHA, files, each step"])
+```
+
 ## Example input
 
 ```text

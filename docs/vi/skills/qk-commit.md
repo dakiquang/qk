@@ -8,6 +8,22 @@ Commit đúng phạm vi; chỉ push và mở PR khi được yêu cầu, sau bư
 
 Gọi `qk/commit` khi công việc đã xong cần được commit. Nêu rõ các bước được phép: `commit`, `commit push` hoặc `commit push pr`. Skill đọc status và diff, loại file không liên quan hoặc nhạy cảm, quét nội dung sắp commit và theo quy ước commit message của repo. Báo cáo có SHA, danh sách file và trạng thái thật của từng bước được yêu cầu.
 
+```mermaid
+flowchart TB
+    in(["commit, commit push, hoặc commit push pr"]) --> diff["Đọc status và diff"]
+    diff --> scope["Loại file không liên quan và nhạy cảm<br/>quét nội dung sẽ commit"]
+    scope --> commit["Commit theo quy ước của repository"]
+    commit --> push{"Có yêu cầu push?"}
+    push -- "không" --> report
+    push -- "có" --> pre{"Kiểm danh tính<br/>tài khoản gh đang active"}
+    pre -- "không đạt" --> stop(["Không push, báo lại"])
+    pre -- "đạt" --> pushed["Push"]
+    pushed --> pr{"Có yêu cầu PR?"}
+    pr -- "có" --> open["Mở PR: thay đổi gì, vì sao, đã kiểm gì"]
+    pr -- "không" --> report
+    open --> report(["Báo SHA, file, từng bước"])
+```
+
 ## Ví dụ đầu vào
 
 ```text

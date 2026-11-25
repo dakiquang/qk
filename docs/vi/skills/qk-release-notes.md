@@ -8,6 +8,19 @@ Nháp release notes và changelog truy được nguồn, không bao giờ tự �
 
 Dùng để chuyển khoảng tag, danh sách PR đã merge hoặc phiên bản sắp ra thành ghi chú cho người dùng. Đây là soạn nháp, không phải lệnh phát hành.
 
+```mermaid
+flowchart TB
+    in(["Dải tag, danh sách PR hoặc phiên bản"]) --> read["Đọc commit và PR<br/>đọc diff khi tiêu đề không đủ"]
+    read --> group["Nhóm: thêm mới, thay đổi, sửa lỗi, lưu ý nâng cấp"]
+    group --> trace["Mỗi dòng truy về một commit hoặc PR<br/>bỏ thay đổi chỉ nội bộ"]
+    trace --> ev{"Có bằng chứng CI hoặc lệnh thật?"}
+    ev -- "có" --> with["Có mục đã kiểm"]
+    ev -- "không" --> without["Không có mục đã kiểm"]
+    with --> draft[("File nháp, hoặc mục Unreleased")]
+    without --> draft
+    draft --> you{{"Bạn duyệt; phát hành là bước riêng"}}
+```
+
 ## Ví dụ đầu vào
 
 ```text

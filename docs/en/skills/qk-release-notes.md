@@ -8,6 +8,19 @@ Traceable release-note and changelog drafts, never published.
 
 Use this to turn a tag range, merged PR list or upcoming version into user-facing release notes. It drafts text; it is not the release command.
 
+```mermaid
+flowchart TB
+    in(["Tag range, PR list or version"]) --> read["Read commits and PRs<br/>diffs when titles are not enough"]
+    read --> group["Group: added, changed, fixed, upgrade notes"]
+    group --> trace["Every line traces to a commit or PR<br/>internal-only changes left out"]
+    trace --> ev{"Real CI or command evidence?"}
+    ev -- "yes" --> with["With a verified section"]
+    ev -- "no" --> without["Without a verified section"]
+    with --> draft[("Draft file, or the Unreleased section")]
+    without --> draft
+    draft --> you{{"You review; release is a separate step"}}
+```
+
 ## Example input
 
 ```text

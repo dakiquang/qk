@@ -8,6 +8,23 @@ Independent checks, classified failures and verification gaps.
 
 Use this for independent or broader verification: before merge, after another agent's changes, or in a different environment. It does not replace cook's own verification and is not automatically required after every change.
 
+```mermaid
+flowchart TB
+    in(["Change to verify"]) --> disc["Discover commands<br/>repository docs, CI, manifests"]
+    disc --> focused["Checks for the changed part"]
+    focused --> wide{"Requested, or shared interfaces touched?"}
+    wide -- "yes" --> broad["Broader suite"]
+    wide -- "no" --> classify
+    broad --> classify{"Classify each failure"}
+    classify --> new["New"]
+    classify --> base["Baseline, with evidence"]
+    classify --> flaky["Flaky, at most two reruns"]
+    new --> table(["Commands, exit codes, untested gaps"])
+    base --> table
+    flaky --> table
+    table -. "new failure: you call" .-> debug["qk/debug"]
+```
+
 ## Example input
 
 ```text

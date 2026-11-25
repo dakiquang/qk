@@ -46,7 +46,7 @@ qk là bộ skill mở rộng Claude Code, Codex và omp. Mỗi skill là một 
 | [qk/prefs](skills/qk-prefs.md) | Duyệt đề xuất sở thích đã ghi và áp dụng mục bạn đồng ý |
 | [qk/commit](skills/qk-commit.md) | Commit đúng phạm vi; chỉ push và mở PR khi được yêu cầu |
 
-Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), một dự án riêng.
+Review/chấm điểm PR dùng skill đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), một dự án riêng. Việc có nhiều task chạy bằng dự án đồng hành [qk-harness](https://github.com/dakiquang/qk-harness), dựng trên [CLI contract](cli-contract.md).
 
 ## Nguyên tắc
 

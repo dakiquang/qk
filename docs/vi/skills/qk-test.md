@@ -8,6 +8,23 @@ Kiểm độc lập, phân loại lỗi và chỉ ra chỗ chưa kiểm.
 
 Dùng để kiểm độc lập hoặc rộng hơn: trước merge, sau thay đổi của agent khác hoặc ở môi trường khác. Không thay kiểm chứng trong cook và không bắt buộc sau mọi thay đổi.
 
+```mermaid
+flowchart TB
+    in(["Thay đổi cần kiểm"]) --> disc["Tìm lệnh kiểm<br/>docs của repo, CI, manifest"]
+    disc --> focused["Kiểm phần đã đổi"]
+    focused --> wide{"Được yêu cầu, hoặc chạm interface dùng chung?"}
+    wide -- "có" --> broad["Bộ test rộng hơn"]
+    wide -- "không" --> classify
+    broad --> classify{"Phân loại từng lỗi"}
+    classify --> new["Mới"]
+    classify --> base["Có sẵn, kèm bằng chứng"]
+    classify --> flaky["Chập chờn, chạy lại tối đa hai lần"]
+    new --> table(["Lệnh, exit code, phần chưa kiểm"])
+    base --> table
+    flaky --> table
+    table -. "lỗi mới: bạn gọi" .-> debug["qk/debug"]
+```
+
 ## Ví dụ đầu vào
 
 ```text

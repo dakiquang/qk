@@ -8,6 +8,19 @@ Cách tái hiện, nguyên nhân gốc đã kiểm và cách sửa nhỏ nhất 
 
 Dùng khi có triệu chứng nhưng chưa biết nguyên nhân đã kiểm. Cung cấp lỗi nguyên văn, input, môi trường và từ khi nào xảy ra. Lỗi công cụ/đăng nhập không được biến thành bản vá code sản phẩm.
 
+```mermaid
+flowchart TB
+    sym(["Triệu chứng<br/>lỗi chính xác, đầu vào, môi trường"]) --> repro["Bản tái hiện nhỏ nhất"]
+    repro --> hyp["Các giả thuyết"]
+    hyp --> exp{"Thí nghiệm phân biệt"}
+    exp -- "bị bác" --> hyp
+    exp -- "đứng vững" --> cause["Nguyên nhân gốc, bằng chứng file:line"]
+    cause --> fix["Bản sửa nhỏ nhất đề xuất<br/>và lệnh để kiểm nó"]
+    fix --> you{{"Bạn quyết"}}
+    you -. "sửa đi: bạn gọi" .-> cook["qk/cook"]
+    cause -. "đã yêu cầu sửa ngay từ đầu" .-> inline["Sửa luôn, chạy lại bản tái hiện<br/>và các kiểm tra hồi quy"]
+```
+
 ## Ví dụ đầu vào
 
 ```text

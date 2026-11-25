@@ -8,6 +8,18 @@ Duyệt từng đề xuất sở thích đã ghi; chỉ ghi những mục đư�
 
 Gọi skill khi bạn muốn xem lại các sở thích lâu dài mà [hook ghi nhận sở thích](../preference-hook.md) đã thu được ("từ nay…", "mặc định…") và quyết từng mục: mục nào thành chỉ dẫn, và ghi vào đâu. Nếu chưa bật hook hoặc không có đề xuất nào đang chờ thì skill không có gì để làm. Bảo agent "nhớ" một điều không kích hoạt skill này.
 
+```mermaid
+flowchart TB
+    hook(["Preference hook<br/>ghi các yêu cầu từ nay về sau"]) --> store[("Kho đề xuất")]
+    store --> table["Bảng đề xuất đang chờ<br/>mỗi cái một đích gợi ý"]
+    table --> you{{"Bạn quyết từng cái"}}
+    you -- "áp dụng" --> edit["Sửa nhỏ nhất ở đích đã duyệt"] --> applied["Đánh dấu applied, kèm đích"]
+    you -- "bỏ" --> dismissed["Đánh dấu dismissed"]
+    you -- "chưa chắc" --> pending["Vẫn chờ"]
+    applied --> report(["Báo đúng các dòng đã ghi"])
+    dismissed --> report
+```
+
 ## Ví dụ đầu vào
 
 ```text

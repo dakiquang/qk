@@ -8,6 +8,19 @@ A plan created, audited or revised, with checkable completion criteria.
 
 Use this before a change that needs explicit scope, decisions and verifiable completion criteria. A small change gets a short plan; phases are for genuine complexity, not ceremony.
 
+```mermaid
+flowchart TB
+    in(["Request or plan path"]) --> mode{"Mode"}
+    mode -- "create" --> c["Write plans/slug.md<br/>goal, decisions, steps, verification"]
+    mode -- "audit" --> a["Findings only, plan unchanged<br/>blocker, important, nit"]
+    mode -- "revise" --> r["Apply the findings you accepted<br/>remove contradictions"]
+    c --> file[("Plan file")]
+    r --> file
+    a --> you
+    file --> you{{"You approve or revise"}}
+    you -. "approved: you call" .-> cook["qk/cook plan path"]
+```
+
 ## Modes and examples
 
 ```text

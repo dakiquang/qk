@@ -33,6 +33,23 @@ Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:ant
 
 ## Stages
 
+```mermaid
+flowchart TB
+    pre["preflight<br/>clean checkout, push permission, new worktree"] --> planning["planning<br/>read-only qk/plan with a qk-verify block"]
+    planning --> gate{{"You approve plan.md<br/>the only gate"}}
+    gate -- "revise" --> planning
+    gate -- "approve" --> impl["implementing<br/>qk/cook in the worktree"]
+    impl --> verify{"verifying<br/>the runner runs qk-verify"}
+    verify -- "checks pass" --> review{"reviewing<br/>another model family, read-only"}
+    verify -- "checks fail" --> fixing["fixing<br/>one round"]
+    review -- "no blocker/important finding on changed files" --> publish["publishing<br/>commit, push, ready-for-review PR"]
+    review -- "blocker/important findings" --> fixing
+    fixing --> verify
+    verify -- "still failing after the round" --> blocked(["blocked<br/>fix by hand, then resume"])
+    review -- "still found after the round" --> blocked
+    publish --> pr(["You review and merge"])
+```
+
 1. **preflight** — refuses a dirty primary checkout (never stashes), checks push permission for the active `gh` account on GitHub origin, discovers the base branch, creates a worktree on a new branch `qk/<slug>-<id>`.
 2. **planning** — read-only `qk/plan`; the runner saves the plan, which must contain a `qk-verify` block of repository commands.
 3. **awaiting_approval** — the only human gate. You may edit `plan.md` before approving; `approve` re-reads it, prints the verify commands that will run and freezes it as `approved-plan.md`. The reviewer, the fix round and the PR use that frozen copy, and the run blocks if it changes.
@@ -70,7 +87,7 @@ Read-only guard: in a read-only stage, the first tool call whose name contains `
 - A worktree is not a sandbox. Implementing agents run with their runtime's write mode (`claude --permission-mode acceptEdits` with Bash allowed, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), so they can still reach files and network outside the repository.
 - Success is defined by the plan's `qk-verify` commands and one cross-model review; weak commands mean weak evidence.
 - The commit and PR title use the approved plan's title, and the PR body includes the whole approved plan. In a repository that follows Conventional Commits, the type comes from the plan title's first word (`fix`, `docs`, `test`, `refactor` and their variants); otherwise it is `docs` when every changed file is documentation (Markdown, reStructuredText or AsciiDoc, or under a top-level `doc/` or `docs/`) and `feat` for anything else; a plan title that is already conventional is kept as written; a non-conventional `<word>: ` prefix (a project name, but also a ticket prefix such as `ABC-123: ` or a capitalised `Fix: `) is dropped before the type is added; merge commits are not counted. Titles longer than 72 characters are cut at a word boundary. Other conventions (scopes, other casing rules) are not detected, so edit the plan title before `approve` or adjust the title when merging.
-- One task per run. `drain` runs queued runs one at a time and refuses a second `drain`; there is no daemon. It does not stop you from running `approve` without `--later` or `resume` in another terminal meanwhile, which would run two tasks at once.
+- One task per run; work that splits into several tasks runs on [qk-harness](https://github.com/dakiquang/qk-harness). `drain` runs queued runs one at a time and refuses a second `drain`; there is no daemon. It does not stop you from running `approve` without `--later` or `resume` in another terminal meanwhile, which would run two tasks at once.
 - omp MCP is stopped only after its first call in a read-only stage: that call has already run when the guard stops the agent.
 - `--read-only-mcp` matches by prefix, so `aws` also allows `aws-mcp`; use full server names.
 - Under the private Codex home, tools that Codex runs do not see your `~/.gitconfig`, `gh` login or other configuration in your home directory.

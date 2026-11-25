@@ -33,6 +33,23 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 
 ## Các bước
 
+```mermaid
+flowchart TB
+    pre["preflight<br/>checkout sạch, quyền push, worktree mới"] --> planning["planning<br/>qk/plan chỉ đọc, có khối qk-verify"]
+    planning --> gate{{"Bạn duyệt plan.md<br/>cổng duy nhất"}}
+    gate -- "revise" --> planning
+    gate -- "approve" --> impl["implementing<br/>qk/cook trong worktree"]
+    impl --> verify{"verifying<br/>runner tự chạy qk-verify"}
+    verify -- "check đạt" --> review{"reviewing<br/>model họ khác, chỉ đọc"}
+    verify -- "check hỏng" --> fixing["fixing<br/>một vòng"]
+    review -- "không có finding blocker/important ở file đã đổi" --> publish["publishing<br/>commit, push, PR sẵn sàng review"]
+    review -- "có finding blocker/important" --> fixing
+    fixing --> verify
+    verify -- "vẫn hỏng sau vòng sửa" --> blocked(["blocked<br/>sửa tay rồi resume"])
+    review -- "vẫn còn finding sau vòng sửa" --> blocked
+    publish --> pr(["Bạn review và merge"])
+```
+
 1. **preflight** — từ chối checkout chính còn thay đổi chưa commit (không stash), kiểm quyền push của tài khoản `gh` đang hoạt động với origin trên GitHub, tìm nhánh base, tạo worktree trên nhánh mới `qk/<slug>-<id>`.
 2. **planning** — `qk/plan` chỉ đọc; runner lưu plan, plan phải có khối `qk-verify` chứa lệnh kiểm của repo.
 3. **awaiting_approval** — cổng người duy nhất. Có thể sửa `plan.md` trước khi duyệt; `approve` đọc lại file, in các lệnh kiểm sẽ chạy và đóng băng thành `approved-plan.md`. Reviewer, vòng sửa và PR dùng bản đóng băng này; bản đó bị sửa thì run dừng.
@@ -70,7 +87,7 @@ Chốt chặn bước chỉ đọc: ở bước chỉ đọc, lời gọi công 
 - Worktree không phải sandbox. Agent triển khai chạy ở chế độ ghi của runtime (`claude --permission-mode acceptEdits` cho phép Bash, `codex exec --sandbox workspace-write`, `omp --approval-mode yolo`), nên vẫn có thể chạm file và mạng ngoài repo.
 - Thành công được định nghĩa bằng lệnh `qk-verify` của plan và một lần review chéo model; lệnh kiểm yếu thì bằng chứng yếu.
 - Commit và PR lấy tiêu đề của plan đã duyệt; phần thân PR chứa toàn bộ plan đã duyệt. Với repo theo Conventional Commits, type lấy từ từ đầu tiên của tiêu đề plan (`fix`, `docs`, `test`, `refactor` và các biến thể); nếu không, type là `docs` khi mọi file đổi đều là tài liệu (Markdown, reStructuredText hay AsciiDoc, hoặc nằm trong thư mục `doc/` hay `docs/` ở gốc repo), còn lại là `feat`; tiêu đề plan đã đúng quy ước thì giữ nguyên; tiền tố `<từ>: ` không theo quy ước (tên dự án, cả tiền tố ticket như `ABC-123: ` hay `Fix: ` viết hoa) bị bỏ trước khi thêm type; commit merge không được tính. Tiêu đề dài hơn 72 ký tự được cắt ở ranh giới từ. Các quy ước khác (scope, quy tắc viết hoa khác) không được nhận diện, nên hãy sửa tiêu đề plan trước khi `approve` hoặc chỉnh tiêu đề khi merge.
-- Mỗi run một việc. `drain` chạy lần lượt các run trong hàng đợi và từ chối `drain` thứ hai; không có daemon. Nó không chặn bạn chạy `approve` không có `--later` hoặc `resume` ở terminal khác trong lúc đó, khi ấy sẽ có hai việc chạy cùng lúc.
+- Mỗi run một việc; việc chia được thành nhiều task thì chạy bằng [qk-harness](https://github.com/dakiquang/qk-harness). `drain` chạy lần lượt các run trong hàng đợi và từ chối `drain` thứ hai; không có daemon. Nó không chặn bạn chạy `approve` không có `--later` hoặc `resume` ở terminal khác trong lúc đó, khi ấy sẽ có hai việc chạy cùng lúc.
 - MCP của omp chỉ bị dừng sau lần gọi đầu tiên ở bước chỉ đọc: lần gọi đó đã chạy xong khi chốt chặn dừng agent.
 - `--read-only-mcp` khớp theo tiền tố, nên `aws` cũng cho qua `aws-mcp`; hãy ghi đủ tên server.
 - Trong home riêng của Codex, công cụ mà Codex chạy không thấy `~/.gitconfig`, đăng nhập `gh` hay cấu hình khác trong thư mục home của bạn.

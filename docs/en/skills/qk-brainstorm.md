@@ -8,6 +8,17 @@ Two to four approaches, their trade-offs and a recommendation.
 
 Use this when the direction is unclear, not when implementation is already decided. It compares 2–4 feasible options against the actual repository and constraints, including the simplest option and doing nothing or working manually.
 
+```mermaid
+flowchart TB
+    q(["Unclear direction"]) --> read["Read the repository and constraints"]
+    read --> opts["2 to 4 feasible options<br/>including the simplest and doing nothing"]
+    opts --> check["Check critical assumptions<br/>reject options that break a constraint"]
+    check --> rec["Options table, one recommendation<br/>and what would change it"]
+    rec --> you{{"You choose"}}
+    check -. "a critical fact is missing: you call" .-> research["qk/research"]
+    you -. "it needs a plan: you call" .-> plan["qk/plan"]
+```
+
 ## Example input
 
 ```text

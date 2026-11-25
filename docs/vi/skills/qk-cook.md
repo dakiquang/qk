@@ -8,6 +8,18 @@ Yêu cầu rõ hoặc plan đã duyệt được triển khai, kiểm chứng v�
 
 Dùng để triển khai yêu cầu đã rõ tiêu chí xong hoặc plan đã duyệt. Đây là lệnh làm việc, không thêm một tầng lập kế hoạch.
 
+```mermaid
+flowchart TB
+    in(["Yêu cầu rõ hoặc plan đã duyệt"]) --> read["Đọc plan, luật và code<br/>kiểm lại giả định đã lệch"]
+    read --> impl["Thay đổi nhỏ nhất trong phạm vi<br/>giữ nguyên việc dở không liên quan"]
+    impl --> verify["Chạy lệnh kiểm của repository<br/>chạy thử hành vi vừa đổi"]
+    verify -- "lỗi mới do mình gây ra" --> impl
+    verify --> review["Tự review diff<br/>phạm vi, secret, đồ thừa"]
+    review --> report(["Báo cáo: thay đổi, lệnh thật, chưa kiểm"])
+    impl -. "sẽ đổi phạm vi hoặc API công khai" .-> ask{{"Bạn quyết"}}
+    report -. "cần góc nhìn độc lập: bạn gọi" .-> next["qk/test, qk/agent-coord, pr-orchestrator"]
+```
+
 ## Ví dụ đầu vào
 
 ```text

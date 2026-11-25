@@ -8,6 +8,19 @@ Một việc có giới hạn chạy trên đúng agent và model bạn nêu, k�
 
 Dùng để lấy ý kiến thứ hai, review, triển khai cô lập hoặc chẩn đoán bằng **agent và model bạn chỉ định**. Coordinator giữ quyết định và kiểm chứng; output worker chưa phải sự thật đã kiểm.
 
+```mermaid
+flowchart TB
+    in(["Việc có giới hạn rõ"]) --> named{"Đã nêu agent và model?"}
+    named -- "chưa" --> askm{{"Hỏi bạn"}}
+    named -- "rồi" --> route{"Đường chạy giữ đúng agent và model<br/>subagent sẵn có, terminal Orca, CLI headless"}
+    route -- "không có, chưa login, hết hạn mức, thiếu model" --> blocked(["blocked, kèm lý do"])
+    route -- "có" --> snap["Ghi lại trạng thái checkout"]
+    snap --> worker["Worker chạy<br/>việc cần ghi thì có worktree riêng"]
+    worker --> after["So lại trạng thái checkout"]
+    after --> check["Kiểm từng finding<br/>nhận hoặc bác, kèm bằng chứng"]
+    check --> you{{"Bạn quyết việc tích hợp"}}
+```
+
 ## Ví dụ đầu vào
 
 ```text
