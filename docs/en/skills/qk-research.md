@@ -14,6 +14,7 @@ flowchart TB
     src --> settled{"Does the evidence settle it?"}
     settled -- "no, and a test is cheap" --> exp["Experiment in a temporary directory<br/>with a control"]
     settled -- "yes" --> label
+    settled -- "no, a test is costly" --> label
     exp --> label["Observations and inferences labelled<br/>conflicts and limits recorded"]
     label --> ans["Short answer with traceable evidence<br/>and how it changes the decision"]
     ans --> you{{"You decide"}}

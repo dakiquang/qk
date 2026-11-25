@@ -14,6 +14,7 @@ flowchart TB
     src --> settled{"Bằng chứng đã đủ để quyết?"}
     settled -- "chưa, và thử thì rẻ" --> exp["Thử nghiệm trong thư mục tạm<br/>có nhóm đối chứng"]
     settled -- "đủ" --> label
+    settled -- "chưa, thử thì tốn" --> label
     exp --> label["Tách quan sát và suy luận<br/>ghi mâu thuẫn và giới hạn"]
     label --> ans["Câu trả lời ngắn, bằng chứng truy được<br/>và nó đổi quyết định thế nào"]
     ans --> you{{"Bạn quyết"}}
