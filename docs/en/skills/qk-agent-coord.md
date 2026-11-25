@@ -8,6 +8,19 @@ A bounded task run on the agent and model you name, with the result checked.
 
 Use this for a bounded second opinion, review, isolated implementation or diagnosis by an agent **and model you name**. The coordinator owns decisions and validation; worker output is unverified evidence until checked.
 
+```mermaid
+flowchart TB
+    in(["Bounded task"]) --> named{"Agent and model named?"}
+    named -- "no" --> askm{{"Asks you"}}
+    named -- "yes" --> route{"A route that honours them<br/>native subagent, Orca terminal, headless CLI"}
+    route -- "none, login, quota, model" --> blocked(["blocked, with the reason"])
+    route -- "found" --> snap["Record the checkout state"]
+    snap --> worker["Worker runs<br/>writing work in its own worktree"]
+    worker --> after["Compare the checkout state"]
+    after --> check["Check each finding<br/>accept or reject with evidence"]
+    check --> you{{"You decide any integration"}}
+```
+
 ## Example input
 
 ```text

@@ -8,6 +8,17 @@ Hai đến bốn hướng đi, đánh đổi của từng hướng và một khu
 
 Dùng khi chưa chốt hướng đi, không phải khi đã biết chính xác cần triển khai gì. Skill so sánh 2–4 hướng khả thi dựa trên repo và ràng buộc thật; luôn xét hướng đơn giản nhất và phương án không làm hoặc làm thủ công.
 
+```mermaid
+flowchart TB
+    q(["Hướng đi chưa rõ"]) --> read["Đọc repository và các ràng buộc"]
+    read --> opts["2 đến 4 phương án khả thi<br/>gồm cách đơn giản nhất và không làm gì"]
+    opts --> check["Kiểm giả định then chốt<br/>loại phương án vi phạm ràng buộc"]
+    check --> rec["Bảng phương án, một khuyến nghị<br/>và điều sẽ làm đổi khuyến nghị"]
+    rec --> you{{"Bạn chọn"}}
+    check -. "thiếu dữ kiện then chốt: bạn gọi" .-> research["qk/research"]
+    you -. "cần plan: bạn gọi" .-> plan["qk/plan"]
+```
+
 ## Ví dụ đầu vào
 
 ```text

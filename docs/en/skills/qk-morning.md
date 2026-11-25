@@ -8,6 +8,19 @@ The morning brief read in the chat, with your decisions recorded.
 
 Use it after an overnight drain or a harness job, when `qk brief --pending` (or the session-start reminder from the [runtime adapters](../runtime-status.md)) says cards wait for a decision. It replaces typing in the terminal brief, not deciding.
 
+```mermaid
+flowchart TB
+    start(["qk/morning"]) --> sync["qk sync"] --> brief["qk brief --json"]
+    brief --> card["Next card<br/>the brief's own lines"]
+    card --> ask{{"You choose one of the card's choices, or skip"}}
+    ask -- "choice" --> decide["qk decide"]
+    ask -- "skip" --> more
+    ask -. "on request" .-> diff["gh pr diff"]
+    decide --> more{"More cards?"}
+    more -- "yes" --> card
+    more -- "no" --> report(["Four-line report"])
+```
+
 ## Example
 
 ```text

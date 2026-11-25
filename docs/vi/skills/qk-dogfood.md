@@ -8,6 +8,19 @@
 
 Gọi đích danh để học từ bằng chứng công việc và đề xuất cải thiện instruction nhỏ nhất có căn cứ. Yêu cầu review, retro hay debug thông thường không kích hoạt skill. Chỉ đề xuất, không phải trình cài skill, quét lịch sử hay engine áp dụng thay đổi.
 
+```mermaid
+flowchart TB
+    in(["Yêu cầu rõ ràng<br/>trọng tâm và đường dẫn bằng chứng"]) --> read["Đọc ngữ cảnh, bằng chứng<br/>và nguồn chỉ dẫn hiện tại"]
+    read --> cause{"Nhóm nguyên nhân"}
+    cause -- "chỉ dẫn sai, thiếu hoặc mơ hồ" --> bar{"Hai sự kiện độc lập,<br/>hoặc một lần người dùng sửa gắn với nó?"}
+    cause -- "agent sai, môi trường, bằng chứng yếu" --> keep["Không đổi, kèm lý do"]
+    bar -- "không" --> keep
+    bar -- "có" --> prop["Đề xuất: bằng chứng, file:line,<br/>hunk trong chat, tác dụng phụ, đối chứng"]
+    prop --> report(["Báo cáo trong chat, không ghi gì"])
+    keep --> report
+    report -. "bạn giao việc sửa" .-> next["qk/plan revise, qk/cook"]
+```
+
 ## Ví dụ đầu vào
 
 ```text

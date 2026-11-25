@@ -8,6 +8,17 @@ Lưu ngữ cảnh phiên, hoặc nhận lại kèm kiểm độ lệch.
 
 Dùng trước khi chuyển phiên/agent và khi nhận lại bản bàn giao. Giữ quyết định và bằng chứng, không giữ toàn transcript hoặc chuyển quyền hành động.
 
+```mermaid
+flowchart TB
+    in(["qk/handoff"]) --> mode{"Chế độ"}
+    mode -- "write" --> w["Mục tiêu, trạng thái, quyết định, bẫy,<br/>bằng chứng, việc còn lại"]
+    w --> file[("plans/handoff-ngày-slug.md<br/>không chứa secret")]
+    mode -- "resume" --> r["Đọc handoff và các nguồn nó dẫn"]
+    r --> drift["Kiểm nhánh, revision, file, plan đã lệch chưa"]
+    drift --> rep["Điều còn đúng, điều đã đổi,<br/>quyền phải xin lại"]
+    rep --> you{{"Bạn xác nhận bước tiếp"}}
+```
+
 ## Ví dụ
 
 ```text

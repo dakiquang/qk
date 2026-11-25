@@ -8,6 +8,19 @@ A reproduction, a verified root cause and the smallest proposed fix.
 
 Use this when you have a symptom but not a verified cause. Supply the exact error, input, environment and when it started. A tool/authentication failure should not become a product-code patch.
 
+```mermaid
+flowchart TB
+    sym(["Symptom<br/>exact error, input, environment"]) --> repro["Smallest reproduction"]
+    repro --> hyp["Hypotheses"]
+    hyp --> exp{"Discriminating experiment"}
+    exp -- "disproved" --> hyp
+    exp -- "survives" --> cause["Root cause with file:line evidence"]
+    cause --> fix["Smallest proposed fix<br/>and the command that verifies it"]
+    fix --> you{{"You decide"}}
+    you -. "fix it: you call" .-> cook["qk/cook"]
+    cause -. "fix asked up front" .-> inline["Fix inline, rerun the reproduction<br/>and the regression checks"]
+```
+
 ## Example input
 
 ```text

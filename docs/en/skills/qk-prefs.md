@@ -8,6 +8,18 @@ Recorded preference proposals reviewed one by one; only approved ones are writte
 
 Call it when you want to go through the lasting preferences the [preference hook](../preference-hook.md) has collected ("from now on…", "by default…") and decide, one by one, which become instructions and where. Without the hook, or without pending proposals, there is nothing for it to do. Asking an agent to "remember" something does not invoke it.
 
+```mermaid
+flowchart TB
+    hook(["Preference hook<br/>records from now on requests"]) --> store[("Proposal store")]
+    store --> table["Pending proposals table<br/>with a suggested target each"]
+    table --> you{{"You decide each one"}}
+    you -- "apply" --> edit["Smallest edit to the approved target"] --> applied["Marked applied, with the target"]
+    you -- "dismiss" --> dismissed["Marked dismissed"]
+    you -- "unsure" --> pending["Stays pending"]
+    applied --> report(["Report the exact lines written"])
+    dismissed --> report
+```
+
 ## Example input
 
 ```text

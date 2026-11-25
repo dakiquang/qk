@@ -8,6 +8,19 @@ Plan được tạo, audit hoặc sửa, với tiêu chí xong kiểm được.
 
 Dùng trước thay đổi cần chốt phạm vi, quyết định và tiêu chí xong kiểm được. Việc nhỏ có plan ngắn; chỉ chia giai đoạn khi độ phức tạp thật sự cần.
 
+```mermaid
+flowchart TB
+    in(["Yêu cầu hoặc đường dẫn plan"]) --> mode{"Chế độ"}
+    mode -- "create" --> c["Viết plans/slug.md<br/>mục tiêu, quyết định, bước, cách kiểm"]
+    mode -- "audit" --> a["Chỉ báo finding, không sửa plan<br/>blocker, important, nit"]
+    mode -- "revise" --> r["Áp các finding bạn đã chấp nhận<br/>gỡ chỗ mâu thuẫn"]
+    c --> file[("File plan")]
+    r --> file
+    a --> you
+    file --> you{{"Bạn duyệt hoặc sửa"}}
+    you -. "đã duyệt: bạn gọi" .-> cook["qk/cook đường dẫn plan"]
+```
+
 ## Chế độ và ví dụ
 
 ```text

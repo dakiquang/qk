@@ -8,6 +8,19 @@ Evidence-based proposals to improve instructions, never applied.
 
 Explicitly ask it to learn from work evidence and propose the smallest justified instruction improvement. Ordinary review, retrospective and debugging requests do not invoke it. This is proposal-only, not a skill installer, history scanner or apply engine.
 
+```mermaid
+flowchart TB
+    in(["Explicit request<br/>focus and evidence paths"]) --> read["Read the context, the evidence<br/>and the current instruction source"]
+    read --> cause{"Cause group"}
+    cause -- "instruction faulty, missing or ambiguous" --> bar{"Two independent events,<br/>or one user correction tied to it?"}
+    cause -- "agent mistake, environment, weak evidence" --> keep["Not changed, with the reason"]
+    bar -- "no" --> keep
+    bar -- "yes" --> prop["Proposal: evidence, file:line,<br/>hunk in chat, side effects, control"]
+    prop --> report(["Chat report, nothing written"])
+    keep --> report
+    report -. "you assign an edit" .-> next["qk/plan revise, qk/cook"]
+```
+
 ## Example input
 
 ```text

@@ -8,6 +8,17 @@ A decision question answered from primary sources and controlled experiments.
 
 Use this for a factual question that can change a decision. Give the question, the alternatives it separates and the relevant version. It is not an open-ended collection of links.
 
+```mermaid
+flowchart TB
+    q(["Decision question<br/>alternatives and version"]) --> src["Primary sources<br/>code, versioned docs, changelog, issues"]
+    q --> exp["Experiment in a temporary directory<br/>with a control"]
+    src --> label["Observations and inferences labelled<br/>conflicts and limits recorded"]
+    exp --> label
+    label --> ans["Short answer with traceable evidence<br/>and how it changes the decision"]
+    ans --> you{{"You decide"}}
+    you -. "change the plan: you call" .-> plan["qk/plan revise"]
+```
+
 ## Example input
 
 ```text

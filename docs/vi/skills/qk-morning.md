@@ -8,6 +8,19 @@
 
 Dùng sau một đêm chạy drain hoặc một job harness, khi `qk brief --pending` (hoặc lời nhắc lúc mở phiên từ [adapter runtime](../runtime-status.md)) báo có thẻ chờ quyết. Skill thay việc gõ phím trong brief trên terminal, không thay việc quyết.
 
+```mermaid
+flowchart TB
+    start(["qk/morning"]) --> sync["qk sync"] --> brief["qk brief --json"]
+    brief --> card["Thẻ tiếp theo<br/>đúng các dòng của brief"]
+    card --> ask{{"Bạn chọn một lựa chọn của thẻ, hoặc bỏ qua"}}
+    ask -- "chọn" --> decide["qk decide"]
+    ask -- "bỏ qua" --> more
+    ask -. "khi bạn yêu cầu" .-> diff["gh pr diff"]
+    decide --> more{"Còn thẻ?"}
+    more -- "còn" --> card
+    more -- "hết" --> report(["Báo cáo bốn dòng"])
+```
+
 ## Ví dụ
 
 ```text
