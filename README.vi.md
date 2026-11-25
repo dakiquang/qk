@@ -69,6 +69,8 @@ Các công cụ tuỳ chọn đi kèm:
 
 Review và chấm điểm pull request nằm ở dự án đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 
+Việc chia được thành nhiều task làm song song thì chạy bằng dự án đồng hành [qk-harness](https://github.com/dakiquang/qk-harness): hợp đồng được review trước khi build, hai worker trên hai worktree riêng, một pull request sau khi tích hợp, và không bao giờ merge. Nó chỉ dùng qk qua [CLI contract](docs/vi/cli-contract.md). Việc một task thì `qk-run` vẫn rẻ và nhanh hơn.
+
 ## Tài liệu
 
 - [Bắt đầu](docs/vi/getting-started.md): cài, gọi, cập nhật, cố định bản phát hành, gỡ.

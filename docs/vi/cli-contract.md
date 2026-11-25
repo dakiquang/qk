@@ -4,7 +4,7 @@
 
 Một phần nhỏ của CLI `qk` là hợp đồng có phiên bản mà công cụ ngoài repo này được phép dựa vào: chạy một lượt agent có cô lập, ghi một run do chính công cụ đó dừng, và tự đo trên bộ bài eval của qk. Mọi phần khác của qk có thể đổi mà không báo trước. qk không biết ai gọi nó; bên gọi chỉ tự khai tên ở chỗ nó ghi vào sổ.
 
-Mỗi lệnh trong hợp đồng làm một việc rồi kết thúc. Không lệnh nào gọi lệnh khác theo trình tự hay giữ trạng thái nhiều bước, và không lệnh nào commit, push, mở pull request hay merge trong repository bạn đưa cho nó; commit duy nhất là commit nền mà `qk eval prepare` tạo trong repository bài mới do chính nó dựng. Điều phối là việc của bên gọi.
+Mỗi lệnh trong hợp đồng làm một việc rồi kết thúc. Không lệnh nào gọi lệnh khác theo trình tự hay giữ trạng thái nhiều bước, và không lệnh nào commit, push, mở pull request hay merge trong repository bạn đưa cho nó; commit duy nhất là commit nền mà `qk eval prepare` tạo trong repository bài mới do chính nó dựng. Điều phối là việc của bên gọi, ví dụ [qk-harness](https://github.com/dakiquang/qk-harness).
 
 ## Luật chung
 

@@ -8,7 +8,7 @@ Each adapter reads the same commands:
 
 - `qk run status --line`: one line per run that is working, stopped mid-stage, waiting for plan approval or for a usage limit, plus `+N queued`. Status lines leave out runs nobody touched for a day, and several runs left mid-stage share one line; `--json` lists them all. See [Runner](runner.md#use).
 - `qk brief --pending`: one line when cards wait for a decision, otherwise nothing. `qk brief --json` gives the cards to a skill or an extension. See [CLI contract](cli-contract.md#commands).
-- `adapters/status_lines.py`: runs every command listed in `~/.config/qk/status-commands`, one per line (default: `qk run status --line`). Each command gets 1 second; output is cached for 5 seconds. Add other tools' status commands to that file; for example, qk-harness has `qk-harness status --line`.
+- `adapters/status_lines.py`: runs every command listed in `~/.config/qk/status-commands`, one per line (default: `qk run status --line`). Each command gets 1 second; output is cached for 5 seconds. Add other tools' status commands to that file; for example, [qk-harness](https://github.com/dakiquang/qk-harness) has `qk-harness status --line`.
 
 Nothing below is installed for you. Each step changes your own runtime settings, so back them up first. The adapters add to what you already use and replace nothing.
 

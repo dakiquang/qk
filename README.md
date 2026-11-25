@@ -69,6 +69,8 @@ Opt-in tools sit beside the skills:
 
 Pull-request review and scoring live in the companion project [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 
+Work that splits into several tasks built side by side runs on the companion project [qk-harness](https://github.com/dakiquang/qk-harness): a contract reviewed before any build, two workers on separate worktrees, one integrated pull request, and never a merge. It drives qk only through the [CLI contract](docs/en/cli-contract.md). For a single task, `qk-run` stays cheaper and faster.
+
 ## Documentation
 
 - [Getting started](docs/en/getting-started.md): install, call, update, pin a release, uninstall.

@@ -46,7 +46,7 @@ qk is a set of agent skills that extends Claude Code, Codex and omp. Each skill 
 | [qk/prefs](skills/qk-prefs.md) | Review recorded preference proposals and apply the ones you approve |
 | [qk/commit](skills/qk-commit.md) | Commit scoped work; push and open a PR only when asked |
 
-Pull-request review and scoring are handled by the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), a separate project.
+Pull-request review and scoring are handled by the companion skill [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator), a separate project. Work with several tasks runs on the companion project [qk-harness](https://github.com/dakiquang/qk-harness), built on the [CLI contract](cli-contract.md).
 
 ## Principles
 

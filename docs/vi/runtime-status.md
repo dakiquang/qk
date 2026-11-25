@@ -8,7 +8,7 @@ Mọi adapter đọc chung các lệnh sau:
 
 - `qk run status --line`: mỗi run một dòng. Gồm run đang chạy, run dừng giữa chừng, run chờ duyệt plan hoặc chờ hạn mức, kèm `+N queued`. Status line bỏ qua run không ai động tới trong một ngày, và nhiều run dừng giữa chừng được gộp thành một dòng; `--json` liệt kê đủ. Xem [Runner](runner.md#cách-dùng).
 - `qk brief --pending`: một dòng khi có thẻ chờ quyết, không thì không in gì. `qk brief --json` đưa các thẻ cho skill hoặc extension. Xem [Hợp đồng CLI](cli-contract.md#các-lệnh).
-- `adapters/status_lines.py`: chạy từng lệnh liệt kê trong `~/.config/qk/status-commands`, mỗi dòng một lệnh (mặc định `qk run status --line`). Mỗi lệnh có 1 giây; kết quả được cache 5 giây. Thêm lệnh trạng thái của công cụ khác vào file này; ví dụ qk-harness có `qk-harness status --line`.
+- `adapters/status_lines.py`: chạy từng lệnh liệt kê trong `~/.config/qk/status-commands`, mỗi dòng một lệnh (mặc định `qk run status --line`). Mỗi lệnh có 1 giây; kết quả được cache 5 giây. Thêm lệnh trạng thái của công cụ khác vào file này; ví dụ [qk-harness](https://github.com/dakiquang/qk-harness) có `qk-harness status --line`.
 
 Không có bước nào dưới đây tự cài. Mỗi bước sửa cấu hình runtime của chính bạn, nên hãy sao lưu trước. Adapter chỉ thêm vào cái đang có, không thay thế gì.
 

@@ -4,7 +4,7 @@
 
 A small part of the `qk` CLI is a versioned contract that tools outside this repository may rely on: run one isolated agent turn, record a run they stopped, and measure themselves on qk's eval cases. Everything else in qk can change without notice. qk does not know who calls it; a caller names itself only where it writes to the ledger.
 
-Each contract command does one thing and exits. None of them runs another in sequence or keeps multi-step state, and none commits, pushes, opens a pull request or merges in a repository you give it; the only commit is the base commit `qk eval prepare` makes in the new case repository it creates. Orchestration belongs to the caller.
+Each contract command does one thing and exits. None of them runs another in sequence or keeps multi-step state, and none commits, pushes, opens a pull request or merges in a repository you give it; the only commit is the base commit `qk eval prepare` makes in the new case repository it creates. Orchestration belongs to the caller, such as [qk-harness](https://github.com/dakiquang/qk-harness).
 
 ## Rules
 
