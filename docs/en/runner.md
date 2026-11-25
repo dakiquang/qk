@@ -33,6 +33,21 @@ Requires Python 3.9+ and the `git` and `gh` CLIs. Defaults: implementer `omp:ant
 
 ## Stages
 
+```mermaid
+flowchart TB
+    pre["preflight<br/>clean checkout, push permission, new worktree"] --> planning["planning<br/>read-only qk/plan with a qk-verify block"]
+    planning --> gate{{"You approve plan.md<br/>the only gate"}}
+    gate -- "revise" --> planning
+    gate -- "approve" --> impl["implementing<br/>qk/cook in the worktree"]
+    impl --> verify["verifying<br/>the runner runs qk-verify"]
+    verify --> review{"reviewing<br/>another model family, read-only"}
+    review -- "green, no serious findings" --> publish["publishing<br/>commit, push, ready-for-review PR"]
+    review -- "failed checks or blocker/important findings" --> fixing["fixing<br/>one round"]
+    fixing --> verify
+    review -- "still failing after the round" --> blocked(["blocked<br/>fix by hand, then resume"])
+    publish --> pr(["You review and merge"])
+```
+
 1. **preflight** — refuses a dirty primary checkout (never stashes), checks push permission for the active `gh` account on GitHub origin, discovers the base branch, creates a worktree on a new branch `qk/<slug>-<id>`.
 2. **planning** — read-only `qk/plan`; the runner saves the plan, which must contain a `qk-verify` block of repository commands.
 3. **awaiting_approval** — the only human gate. You may edit `plan.md` before approving; `approve` re-reads it, prints the verify commands that will run and freezes it as `approved-plan.md`. The reviewer, the fix round and the PR use that frozen copy, and the run blocks if it changes.

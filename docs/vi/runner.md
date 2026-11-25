@@ -33,6 +33,21 @@ Cần Python 3.9+ cùng CLI `git` và `gh`. Mặc định: triển khai `omp:ant
 
 ## Các bước
 
+```mermaid
+flowchart TB
+    pre["preflight<br/>checkout sạch, quyền push, worktree mới"] --> planning["planning<br/>qk/plan chỉ đọc, có khối qk-verify"]
+    planning --> gate{{"Bạn duyệt plan.md<br/>cổng duy nhất"}}
+    gate -- "revise" --> planning
+    gate -- "approve" --> impl["implementing<br/>qk/cook trong worktree"]
+    impl --> verify["verifying<br/>runner tự chạy qk-verify"]
+    verify --> review{"reviewing<br/>model họ khác, chỉ đọc"}
+    review -- "xanh, không finding nghiêm trọng" --> publish["publishing<br/>commit, push, PR sẵn sàng review"]
+    review -- "check hỏng hoặc finding blocker/important" --> fixing["fixing<br/>một vòng"]
+    fixing --> verify
+    review -- "vẫn hỏng sau vòng sửa" --> blocked(["blocked<br/>sửa tay rồi resume"])
+    publish --> pr(["Bạn review và merge"])
+```
+
 1. **preflight** — từ chối checkout chính còn thay đổi chưa commit (không stash), kiểm quyền push của tài khoản `gh` đang hoạt động với origin trên GitHub, tìm nhánh base, tạo worktree trên nhánh mới `qk/<slug>-<id>`.
 2. **planning** — `qk/plan` chỉ đọc; runner lưu plan, plan phải có khối `qk-verify` chứa lệnh kiểm của repo.
 3. **awaiting_approval** — cổng người duy nhất. Có thể sửa `plan.md` trước khi duyệt; `approve` đọc lại file, in các lệnh kiểm sẽ chạy và đóng băng thành `approved-plan.md`. Reviewer, vòng sửa và PR dùng bản đóng băng này; bản đó bị sửa thì run dừng.

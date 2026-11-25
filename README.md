@@ -40,6 +40,30 @@ Most kits help AI do more on its own. qk hands back what you need to decide, thr
 
 Read the [philosophy](docs/en/philosophy.md) for what each principle does and does not mean. The [kit comparison](docs/en/evidence.md#kit-comparison) runs the same eval cases with no kit, Superpowers and qk.
 
+## How it works
+
+Skills run inside the runtime you already use, only when you call them. The opt-in `qk-run` and the companion `qk-harness` run agent turns through the same runtimes, open pull requests they never merge, and leave evidence that `qk brief` turns into your decisions.
+
+```mermaid
+flowchart TB
+    you(["You"])
+    you -- "call a skill by name" --> runtime
+    you -- "opt in: one task" --> runner["qk-run"]
+    you -- "opt in: several tasks" --> harness["qk-harness<br/>companion project"]
+    subgraph runtime ["Claude Code, Codex, omp"]
+        skills["qk skills<br/>loaded only when called"]
+    end
+    runner -- "agent turns" --> runtime
+    harness -- "qk agent run" --> runtime
+    runner -- "stopped runs" --> ledger[("Evidence ledger")]
+    harness -- "qk log run" --> ledger
+    runner -- "ready-for-review PR" --> pr["Pull request"]
+    harness -- "one PR per job" --> pr
+    ledger --> brief["qk sync, qk brief"]
+    brief --> decide{{"You decide<br/>merge, leave, abort later"}}
+    pr --> decide
+```
+
 ## Skills
 
 | Skill | Result |

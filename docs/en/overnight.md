@@ -4,6 +4,23 @@
 
 Approve plans in the evening, let the [runner](runner.md) work through them one at a time overnight, and decide on the results in the morning. You need `qk` on your `PATH` (see [Install from a clone](ledger.md#install-from-a-clone)), a primary checkout with no uncommitted changes, and macOS for `caffeinate` and `--notify`. Runner messages print the same subcommands as `qk-run …`; `qk run …` is the same command.
 
+```mermaid
+flowchart TB
+    subgraph evening ["Evening"]
+        direction LR
+        start["qk run start"] --> read["Read, edit plan.md"] --> queue["qk run approve --later"]
+    end
+    subgraph night ["Night"]
+        direction LR
+        drain["qk run drain --until 07:00"] --> runs["Runs one at a time<br/>waits out usage limits"] --> ledger[("Evidence ledger")]
+    end
+    subgraph morning ["Morning"]
+        direction LR
+        sync["qk sync"] --> brief["qk brief<br/>one card per run"] --> decide{{"merge, leave,<br/>abort later, resume later"}}
+    end
+    evening --> night --> morning
+```
+
 ## Evening
 
 1. Start each task. `start` prints the run id as `qk-run <id>`, then plans and stops with `Plan ready: …`:

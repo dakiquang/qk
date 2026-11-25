@@ -40,6 +40,30 @@ Phần lớn bộ kit giúp AI tự làm được nhiều hơn. qk trả lại c
 
 Đọc [triết lý](docs/vi/philosophy.md) để biết mỗi nguyên tắc nghĩa là gì và không có nghĩa là gì. [So sánh các kit](docs/vi/evidence.md#so-sánh-các-kit) chạy cùng bộ bài đo với không kit, Superpowers và qk.
 
+## Cách hoạt động
+
+Skill chạy trong runtime bạn đang dùng, và chỉ khi bạn gọi. `qk-run` (tự bật) và dự án đồng hành `qk-harness` chạy lượt agent qua chính các runtime đó, mở pull request nhưng không bao giờ merge, và để lại bằng chứng để `qk brief` biến thành quyết định của bạn.
+
+```mermaid
+flowchart TB
+    you(["Bạn"])
+    you -- "gọi skill theo tên" --> runtime
+    you -- "tự bật: một task" --> runner["qk-run"]
+    you -- "tự bật: nhiều task" --> harness["qk-harness<br/>dự án đồng hành"]
+    subgraph runtime ["Claude Code, Codex, omp"]
+        skills["skill qk<br/>chỉ nạp khi được gọi"]
+    end
+    runner -- "lượt agent" --> runtime
+    harness -- "qk agent run" --> runtime
+    runner -- "run đã dừng" --> ledger[("Sổ bằng chứng")]
+    harness -- "qk log run" --> ledger
+    runner -- "PR sẵn sàng review" --> pr["Pull request"]
+    harness -- "mỗi job một PR" --> pr
+    ledger --> brief["qk sync, qk brief"]
+    brief --> decide{{"Bạn quyết<br/>merge, leave, abort later"}}
+    pr --> decide
+```
+
 ## Skill
 
 | Skill | Kết quả |

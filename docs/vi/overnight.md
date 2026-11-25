@@ -4,6 +4,23 @@
 
 Duyệt plan vào buổi tối, để [runner](runner.md) chạy lần lượt từng run qua đêm, và quyết định kết quả vào buổi sáng. Bạn cần `qk` trên `PATH` (xem [Cài từ bản clone](ledger.md#cài-từ-bản-clone)), checkout chính không còn thay đổi chưa commit, và macOS cho `caffeinate` và `--notify`. Thông báo của runner in cùng lệnh con dưới dạng `qk-run …`; `qk run …` là cùng một lệnh.
 
+```mermaid
+flowchart TB
+    subgraph evening ["Buổi tối"]
+        direction LR
+        start["qk run start"] --> read["Đọc, sửa plan.md"] --> queue["qk run approve --later"]
+    end
+    subgraph night ["Ban đêm"]
+        direction LR
+        drain["qk run drain --until 07:00"] --> runs["Chạy lần lượt từng run<br/>chờ hết giới hạn hạn mức"] --> ledger[("Sổ bằng chứng")]
+    end
+    subgraph morning ["Buổi sáng"]
+        direction LR
+        sync["qk sync"] --> brief["qk brief<br/>mỗi run một thẻ"] --> decide{{"merge, leave,<br/>abort later, resume later"}}
+    end
+    evening --> night --> morning
+```
+
 ## Buổi tối
 
 1. Khởi động từng việc. `start` in id của run dưới dạng `qk-run <id>`, rồi lập plan và dừng với `Plan ready: …`:
