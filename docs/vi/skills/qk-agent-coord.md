@@ -15,7 +15,7 @@ flowchart TB
     named -- "rồi" --> route{"Đường chạy giữ đúng agent và model<br/>subagent sẵn có, terminal Orca, CLI headless"}
     route -- "không có, chưa login, hết hạn mức, thiếu model" --> blocked(["blocked, kèm lý do"])
     route -- "có" --> snap["Ghi lại trạng thái checkout"]
-    snap --> worker["Worker chạy<br/>việc ghi nằm trong worktree riêng"]
+    snap --> worker["Worker chạy<br/>việc cần ghi thì có worktree riêng"]
     worker --> after["So lại trạng thái checkout"]
     after --> check["Kiểm từng finding<br/>nhận hoặc bác, kèm bằng chứng"]
     check --> you{{"Bạn quyết việc tích hợp"}}

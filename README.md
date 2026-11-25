@@ -42,7 +42,7 @@ Read the [philosophy](docs/en/philosophy.md) for what each principle does and do
 
 ## How it works
 
-Skills run inside the runtime you already use, only when you call them. The opt-in `qk-run` and the companion `qk-harness` run agent turns through the same runtimes, open pull requests they never merge, and leave evidence that `qk brief` turns into your decisions.
+Skills run inside the runtime you already use, only when you call them or when a runner you started points an agent turn at one. The opt-in `qk-run` and the companion `qk-harness` run agent turns through the same runtimes, open pull requests they never merge, and leave evidence that `qk brief` turns into your decisions.
 
 ```mermaid
 flowchart TB
@@ -51,7 +51,7 @@ flowchart TB
     you -- "opt in: one task" --> runner["qk-run"]
     you -- "opt in: several tasks" --> harness["qk-harness<br/>companion project"]
     subgraph runtime ["Claude Code, Codex, omp"]
-        skills["qk skills<br/>loaded only when called"]
+        skills["qk skills<br/>loaded only when called by you or a runner"]
     end
     runner -- "agent turns" --> runtime
     harness -- "qk agent run" --> runtime
@@ -93,7 +93,7 @@ Opt-in tools sit beside the skills:
 
 Pull-request review and scoring live in the companion project [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 
-Work that splits into several tasks built side by side runs on the companion project [qk-harness](https://github.com/dakiquang/qk-harness): a contract reviewed before any build, two workers on separate worktrees, one integrated pull request, and never a merge. It drives qk only through the [CLI contract](docs/en/cli-contract.md). For a single task, `qk-run` stays cheaper and faster.
+Work that splits into several tasks built side by side runs on the companion project [qk-harness](https://github.com/dakiquang/qk-harness): by default a contract reviewed before any build and two workers on separate worktrees, then one integrated pull request, and never a merge. It drives qk only through the [CLI contract](docs/en/cli-contract.md). For a single task, `qk-run` stays cheaper and faster.
 
 ## Documentation
 

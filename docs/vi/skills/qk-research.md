@@ -11,9 +11,10 @@ Dùng cho câu hỏi thực tế có thể làm đổi quyết định. Nêu câ
 ```mermaid
 flowchart TB
     q(["Câu hỏi để quyết<br/>các phương án và phiên bản"]) --> src["Nguồn gốc<br/>code, docs đúng phiên bản, changelog, issue"]
-    q --> exp["Thử nghiệm trong thư mục tạm<br/>có nhóm đối chứng"]
-    src --> label["Tách quan sát và suy luận<br/>ghi mâu thuẫn và giới hạn"]
-    exp --> label
+    src --> settled{"Bằng chứng đã đủ để quyết?"}
+    settled -- "chưa, và thử thì rẻ" --> exp["Thử nghiệm trong thư mục tạm<br/>có nhóm đối chứng"]
+    settled -- "đủ" --> label
+    exp --> label["Tách quan sát và suy luận<br/>ghi mâu thuẫn và giới hạn"]
     label --> ans["Câu trả lời ngắn, bằng chứng truy được<br/>và nó đổi quyết định thế nào"]
     ans --> you{{"Bạn quyết"}}
     you -. "đổi plan: bạn gọi" .-> plan["qk/plan revise"]

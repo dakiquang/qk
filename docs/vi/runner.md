@@ -39,12 +39,14 @@ flowchart TB
     planning --> gate{{"Bạn duyệt plan.md<br/>cổng duy nhất"}}
     gate -- "revise" --> planning
     gate -- "approve" --> impl["implementing<br/>qk/cook trong worktree"]
-    impl --> verify["verifying<br/>runner tự chạy qk-verify"]
-    verify --> review{"reviewing<br/>model họ khác, chỉ đọc"}
-    review -- "xanh, không finding nghiêm trọng" --> publish["publishing<br/>commit, push, PR sẵn sàng review"]
-    review -- "check hỏng hoặc finding blocker/important" --> fixing["fixing<br/>một vòng"]
+    impl --> verify{"verifying<br/>runner tự chạy qk-verify"}
+    verify -- "check đạt" --> review{"reviewing<br/>model họ khác, chỉ đọc"}
+    verify -- "check hỏng" --> fixing["fixing<br/>một vòng"]
+    review -- "không có finding blocker/important ở file đã đổi" --> publish["publishing<br/>commit, push, PR sẵn sàng review"]
+    review -- "có finding blocker/important" --> fixing
     fixing --> verify
-    review -- "vẫn hỏng sau vòng sửa" --> blocked(["blocked<br/>sửa tay rồi resume"])
+    verify -- "vẫn hỏng sau vòng sửa" --> blocked(["blocked<br/>sửa tay rồi resume"])
+    review -- "vẫn còn finding sau vòng sửa" --> blocked
     publish --> pr(["Bạn review và merge"])
 ```
 

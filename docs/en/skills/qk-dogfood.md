@@ -13,7 +13,10 @@ flowchart TB
     in(["Explicit request<br/>focus and evidence paths"]) --> read["Read the context, the evidence<br/>and the current instruction source"]
     read --> cause{"Cause group"}
     cause -- "instruction faulty, missing or ambiguous" --> bar{"Two independent events,<br/>or one user correction tied to it?"}
-    cause -- "agent mistake, environment, weak evidence" --> keep["Not changed, with the reason"]
+    cause -- "agent mistake" --> small{"Could a small new instruction prevent it?"}
+    small -- "yes" --> bar
+    small -- "no, the rule was already clear" --> keep["Not changed, with the reason"]
+    cause -- "environment, one-off, weak evidence" --> keep
     bar -- "no" --> keep
     bar -- "yes" --> prop["Proposal: evidence, file:line,<br/>hunk in chat, side effects, control"]
     prop --> report(["Chat report, nothing written"])

@@ -39,12 +39,14 @@ flowchart TB
     planning --> gate{{"You approve plan.md<br/>the only gate"}}
     gate -- "revise" --> planning
     gate -- "approve" --> impl["implementing<br/>qk/cook in the worktree"]
-    impl --> verify["verifying<br/>the runner runs qk-verify"]
-    verify --> review{"reviewing<br/>another model family, read-only"}
-    review -- "green, no serious findings" --> publish["publishing<br/>commit, push, ready-for-review PR"]
-    review -- "failed checks or blocker/important findings" --> fixing["fixing<br/>one round"]
+    impl --> verify{"verifying<br/>the runner runs qk-verify"}
+    verify -- "checks pass" --> review{"reviewing<br/>another model family, read-only"}
+    verify -- "checks fail" --> fixing["fixing<br/>one round"]
+    review -- "no blocker/important finding on changed files" --> publish["publishing<br/>commit, push, ready-for-review PR"]
+    review -- "blocker/important findings" --> fixing
     fixing --> verify
-    review -- "still failing after the round" --> blocked(["blocked<br/>fix by hand, then resume"])
+    verify -- "still failing after the round" --> blocked(["blocked<br/>fix by hand, then resume"])
+    review -- "still found after the round" --> blocked
     publish --> pr(["You review and merge"])
 ```
 

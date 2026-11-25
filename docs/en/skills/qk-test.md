@@ -11,7 +11,10 @@ Use this for independent or broader verification: before merge, after another ag
 ```mermaid
 flowchart TB
     in(["Change to verify"]) --> disc["Discover commands<br/>repository docs, CI, manifests"]
-    disc --> focused["Focused checks"] --> broad["Relevant broader suite"]
+    disc --> focused["Checks for the changed part"]
+    focused --> wide{"Requested, or shared interfaces touched?"}
+    wide -- "yes" --> broad["Broader suite"]
+    wide -- "no" --> classify
     broad --> classify{"Classify each failure"}
     classify --> new["New"]
     classify --> base["Baseline, with evidence"]

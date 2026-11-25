@@ -42,7 +42,7 @@ Phần lớn bộ kit giúp AI tự làm được nhiều hơn. qk trả lại c
 
 ## Cách hoạt động
 
-Skill chạy trong runtime bạn đang dùng, và chỉ khi bạn gọi. `qk-run` (tự bật) và dự án đồng hành `qk-harness` chạy lượt agent qua chính các runtime đó, mở pull request nhưng không bao giờ merge, và để lại bằng chứng để `qk brief` biến thành quyết định của bạn.
+Skill chạy trong runtime bạn đang dùng, và chỉ khi bạn gọi hoặc khi một runner do bạn khởi động trỏ lượt agent tới nó. `qk-run` (tự bật) và dự án đồng hành `qk-harness` chạy lượt agent qua chính các runtime đó, mở pull request nhưng không bao giờ merge, và để lại bằng chứng để `qk brief` biến thành quyết định của bạn.
 
 ```mermaid
 flowchart TB
@@ -51,7 +51,7 @@ flowchart TB
     you -- "tự bật: một task" --> runner["qk-run"]
     you -- "tự bật: nhiều task" --> harness["qk-harness<br/>dự án đồng hành"]
     subgraph runtime ["Claude Code, Codex, omp"]
-        skills["skill qk<br/>chỉ nạp khi được gọi"]
+        skills["skill qk<br/>chỉ nạp khi bạn hoặc runner gọi"]
     end
     runner -- "lượt agent" --> runtime
     harness -- "qk agent run" --> runtime
@@ -93,7 +93,7 @@ Các công cụ tuỳ chọn đi kèm:
 
 Review và chấm điểm pull request nằm ở dự án đồng hành [pr-orchestrator](https://github.com/dakiquang/pr-orchestrator).
 
-Việc chia được thành nhiều task làm song song thì chạy bằng dự án đồng hành [qk-harness](https://github.com/dakiquang/qk-harness): hợp đồng được review trước khi build, hai worker trên hai worktree riêng, một pull request sau khi tích hợp, và không bao giờ merge. Nó chỉ dùng qk qua [CLI contract](docs/vi/cli-contract.md). Việc một task thì `qk-run` vẫn rẻ và nhanh hơn.
+Việc chia được thành nhiều task làm song song thì chạy bằng dự án đồng hành [qk-harness](https://github.com/dakiquang/qk-harness): mặc định có hợp đồng được review trước khi build và hai worker trên hai worktree riêng, sau đó một pull request sau khi tích hợp, và không bao giờ merge. Nó chỉ dùng qk qua [CLI contract](docs/vi/cli-contract.md). Việc một task thì `qk-run` vẫn rẻ và nhanh hơn.
 
 ## Tài liệu
 

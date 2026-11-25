@@ -15,7 +15,7 @@ flowchart TB
     named -- "yes" --> route{"A route that honours them<br/>native subagent, Orca terminal, headless CLI"}
     route -- "none, login, quota, model" --> blocked(["blocked, with the reason"])
     route -- "found" --> snap["Record the checkout state"]
-    snap --> worker["Worker runs<br/>writing work in its own worktree"]
+    snap --> worker["Worker runs<br/>a writing task gets its own worktree"]
     worker --> after["Compare the checkout state"]
     after --> check["Check each finding<br/>accept or reject with evidence"]
     check --> you{{"You decide any integration"}}

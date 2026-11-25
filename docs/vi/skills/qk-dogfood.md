@@ -13,7 +13,10 @@ flowchart TB
     in(["Yêu cầu rõ ràng<br/>trọng tâm và đường dẫn bằng chứng"]) --> read["Đọc ngữ cảnh, bằng chứng<br/>và nguồn chỉ dẫn hiện tại"]
     read --> cause{"Nhóm nguyên nhân"}
     cause -- "chỉ dẫn sai, thiếu hoặc mơ hồ" --> bar{"Hai sự kiện độc lập,<br/>hoặc một lần người dùng sửa gắn với nó?"}
-    cause -- "agent sai, môi trường, bằng chứng yếu" --> keep["Không đổi, kèm lý do"]
+    cause -- "agent sai" --> small{"Một chỉ dẫn nhỏ mới có ngăn được không?"}
+    small -- "có" --> bar
+    small -- "không, luật vốn đã rõ" --> keep["Không đổi, kèm lý do"]
+    cause -- "môi trường, một lần, bằng chứng yếu" --> keep
     bar -- "không" --> keep
     bar -- "có" --> prop["Đề xuất: bằng chứng, file:line,<br/>hunk trong chat, tác dụng phụ, đối chứng"]
     prop --> report(["Báo cáo trong chat, không ghi gì"])

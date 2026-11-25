@@ -11,7 +11,10 @@ Dùng để kiểm độc lập hoặc rộng hơn: trước merge, sau thay đ�
 ```mermaid
 flowchart TB
     in(["Thay đổi cần kiểm"]) --> disc["Tìm lệnh kiểm<br/>docs của repo, CI, manifest"]
-    disc --> focused["Kiểm tập trung"] --> broad["Bộ test rộng hơn liên quan"]
+    disc --> focused["Kiểm phần đã đổi"]
+    focused --> wide{"Được yêu cầu, hoặc chạm interface dùng chung?"}
+    wide -- "có" --> broad["Bộ test rộng hơn"]
+    wide -- "không" --> classify
     broad --> classify{"Phân loại từng lỗi"}
     classify --> new["Mới"]
     classify --> base["Có sẵn, kèm bằng chứng"]
