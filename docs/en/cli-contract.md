@@ -84,7 +84,7 @@ Records a stopped run and its findings through the same projection qk-run uses, 
 | `limited` | no | When blocked by a usage limit: `{"runtime": "…", "reset_at": "ISO 8601" or null}`; `qk brief` then shows `waiting for <runtime> limit until HH:MM` |
 | `ledger_revision` | no | Raise it when recording a later state of the same run |
 
-- `--state-dir` is the caller's directory for this run: it must exist outside any repository and hold `state.json`, which the record points to. Its path identifies the run, so later snapshots of the same run replace earlier ones in `qk brief`.
+- `--state-dir` is the caller's directory for this run: it must exist outside any repository and hold `state.json`, which the record points to. Its path identifies the run, so later snapshots of the same run replace earlier ones in `qk brief`. For a blocked run, `qk brief` shows the first line of a top-level `reason` string in that `state.json` (the ledger keeps no reason text); without one the card says `reason unknown`.
 - `--producer` is stored as `data.producer` (one line, at most 100 characters). A blocked card for such a run names the producer instead of suggesting `qk run resume`.
 - Rejected input exits 2 and records nothing. The same input twice adds nothing.
 - Output: `{"contract": 1, "id": "<run record id>", "findings": n}`; without `--json`, the record id.

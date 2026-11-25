@@ -639,6 +639,11 @@ def _sync(args, ledger):
             by_url[_data(run)["pr_url"]].append(run)
     written = unchanged = 0
     for url, linked_runs in by_url.items():
+        # A merged pull request cannot change state again; once every linked run has seen it merged, it is not
+        # fetched again (its repository may since have moved or been replaced).
+        if all((decisions.get((_run_key(run), url)) or {}).get("state") == "MERGED" for run in linked_runs):
+            unchanged += len(linked_runs)
+            continue
         try:
             _pr_url(url)
             cwd = None
