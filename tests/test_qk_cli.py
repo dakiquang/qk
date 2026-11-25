@@ -637,12 +637,9 @@ class CliTests(unittest.TestCase):
         self.run_record()
         changes = [{}, {"title": "Changed title"}, {"headRefOid": OTHER_SHA},
                    {"state": "CLOSED", "closedAt": "2026-11-16T01:00:00Z"},
+                   {"state": "OPEN", "closedAt": None},
                    {"state": "MERGED", "mergedAt": "2026-11-16T01:00:00Z",
-                    "mergedBy": {"login": "reviewer"}},
-                   {"mergedAt": "2026-11-16T02:00:00Z"},
-                   {"closedAt": "2026-11-16T02:00:00Z"},
-                   {"mergedBy": {"login": "another-reviewer"}},
-                   {"state": "OPEN", "mergedAt": None, "closedAt": None, "mergedBy": None}]
+                    "mergedBy": {"login": "reviewer"}}]
         payload = {}
         for count, change in enumerate(changes, 1):
             payload.update(change)
@@ -657,6 +654,29 @@ class CliTests(unittest.TestCase):
                 self.assertIn("0 recorded; 1 unchanged", output)
                 self.assertEqual(ledger.store_path().read_bytes(), before)
                 self.assertEqual(sum(r["kind"] == "decision" for r in ledger.records()), count)
+        # Merged is final: later syncs do not ask GitHub again, whatever it would now say.
+        before = ledger.store_path().read_bytes()
+        with mock.patch.object(subprocess, "run", return_value=self.remote(title="Edited after merge")) as gh:
+            status, output, errors = self.cli("sync")
+        self.assertEqual((status, errors, gh.call_count), (0, "", 0))
+        self.assertIn("0 recorded; 1 unchanged", output)
+        self.assertEqual(ledger.store_path().read_bytes(), before)
+
+    def test_sync_skips_a_merged_pr_that_github_no_longer_resolves(self):
+        merged = self.run_record("merged")
+        self.decision(merged, state="MERGED", merged_at="2026-11-16T01:00:00Z", merged_by="reviewer",
+                      closed_at="2026-11-16T01:00:00Z")
+        missing = subprocess.CompletedProcess([], 1, "", "Could not resolve to a PullRequest")
+        with mock.patch.object(subprocess, "run", return_value=missing) as gh:
+            status, output, errors = self.cli("sync")
+        self.assertEqual((status, errors, gh.call_count), (0, "", 0))
+        self.assertIn("0 recorded; 1 unchanged; 0 failures", output)
+        # A run that has not seen the merge is still fetched, and a failure there still counts.
+        self.run_record("new", pr_url=URL)
+        with mock.patch.object(subprocess, "run", return_value=missing) as gh:
+            status, _, errors = self.cli("sync")
+        self.assertEqual((status, gh.call_count), (1, 1))
+        self.assertIn("Could not resolve", errors)
 
     def test_sync_remote_merged_and_closed_decisions_remove_pending_items(self):
         for state in ("MERGED", "CLOSED"):
