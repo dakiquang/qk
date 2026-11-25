@@ -84,7 +84,7 @@ Ghi một run đã dừng và các finding của nó qua cùng phép chiếu qk-
 | `limited` | không | Khi bị chặn vì giới hạn hạn mức: `{"runtime": "…", "reset_at": "ISO 8601" hoặc null}`; `qk brief` khi đó hiện `waiting for <runtime> limit until HH:MM` |
 | `ledger_revision` | không | Tăng số này khi ghi trạng thái mới hơn của cùng một run |
 
-- `--state-dir` là thư mục của bên gọi cho run này: phải tồn tại, nằm ngoài mọi repository và có `state.json`, file mà bản ghi trỏ tới. Đường dẫn này là danh tính của run, nên ảnh chụp sau của cùng run thay ảnh trước trong `qk brief`.
+- `--state-dir` là thư mục của bên gọi cho run này: phải tồn tại, nằm ngoài mọi repository và có `state.json`, file mà bản ghi trỏ tới. Đường dẫn này là danh tính của run, nên ảnh chụp sau của cùng run thay ảnh trước trong `qk brief`. Với run bị chặn, `qk brief` hiện dòng đầu của chuỗi `reason` ở cấp cao nhất trong `state.json` đó (sổ không giữ chữ lý do); không có thì thẻ ghi `reason unknown`.
 - `--producer` được lưu vào `data.producer` (một dòng, tối đa 100 ký tự). Card bị chặn của run này ghi tên producer thay vì gợi ý `qk run resume`.
 - Đầu vào bị từ chối thì thoát 2 và không ghi gì. Gửi cùng đầu vào hai lần không thêm gì.
 - Đầu ra: `{"contract": 1, "id": "<id bản ghi run>", "findings": n}`; không có `--json` thì in id bản ghi.
