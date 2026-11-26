@@ -1014,6 +1014,11 @@ def _record_decision(ledger, run, choice, head, decided_at, elapsed, via, merged
         **({"merged": merged} if choice == "merge" else {})},
         repo=run.get("repo", ""), task_kind=run.get("task_kind", ""), refs=[run["id"]], source="user")
     print(_text("Recorded %s: %s" % (choice, record["id"])))
+    if choice in ("abort-later", "resume-later"):
+        action, rid = "resume" if choice == "resume-later" else "abort", data.get("run_id", run["id"])
+        print(_text("Only the intent was recorded; nothing was run. " + (
+            "Run %s was recorded by %s; %s it with that tool, not qk run." % (rid, data["producer"], action)
+            if data.get("producer") else "Run it yourself: qk run %s %s" % (action, rid))))
     return record
 
 
