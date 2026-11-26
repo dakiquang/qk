@@ -292,8 +292,10 @@ def agent_command(spec, write, cwd, extra_dirs, read_only_mcp=(), claude_skills=
         env.setdefault("UV_CACHE_DIR", str(Path(cache) / "uv"))
         env.setdefault("UV_PYTHON_INSTALL_DIR", str(Path(data) / "uv" / "python"))
         return cmd + ["-"], out, env
+    # --wait-async: omp can move a long command to a background job even when told not to; without the flag
+    # `omp -p` exits when the turn ends, before the job reports, and the reply has no qk-result block.
     cmd = ["omp", "-p", "--mode", "json", "--no-session", "--no-title", "--no-skills", "--no-extensions",
-           "--no-rules", "--cwd", str(cwd)]
+           "--no-rules", "--wait-async", "--cwd", str(cwd)]
     profile = os.environ.get("QK_RUN_OMP_PROFILE")
     if profile:
         cmd += ["--profile", profile]
