@@ -502,6 +502,19 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(sum(event.startswith("drain start") for event in events), 1)
         self.assertEqual(sum(event.startswith("drain end") for event in events), 1)
 
+    def test_drain_started_in_the_same_second_gets_its_own_log(self):
+        fixed = qk_run.state_root() / "drain-20261127-060000.log"
+        with mock.patch.object(qk_run, "drain_log_path", return_value=fixed):
+            for _ in range(2):
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(qk_run.main(["drain"]), 0)
+        second = fixed.with_name("drain-20261127-060000-2.log")
+        self.assertIn(f"Drain log: {second}\n", output.getvalue())
+        for path in (fixed, second):
+            events = [line[22:] for line in path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(sum(event.startswith("drain start") for event in events), 1, path)
+            self.assertEqual(sum(event.startswith("drain end") for event in events), 1, path)
+
     def test_drain_log_that_cannot_be_opened_stops_before_any_agent(self):
         agent = Agent()
         ids = self.queue_runs(agent, 1)

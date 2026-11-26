@@ -1265,6 +1265,19 @@ def drain_log_path():
     return state_root() / time.strftime("drain-%Y%m%d-%H%M%S.log")
 
 
+def open_drain_log(path):
+    """Create the session log exclusively, so a drain that starts in the same second as the last one gets
+    `-2`, `-3`, ... instead of appending to that drain's log."""
+    for number in range(1, 100):
+        candidate = path if number == 1 else path.with_name(f"{path.stem}-{number}{path.suffix}")
+        try:
+            return candidate, candidate.open("x", encoding="utf-8")
+        except FileExistsError:
+            if not candidate.is_file():
+                raise
+    raise FileExistsError(f"{path} and its numbered variants already exist")
+
+
 def drain_deadline(until, now):
     """The next local HH:MM strictly after now."""
     if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", until):
@@ -1338,7 +1351,7 @@ def cmd_drain(args):
             sys.exit("qk-run: another drain is already running (drain.lock is held)")
         path = drain_log_path()
         try:
-            session = path.open("a", encoding="utf-8")
+            path, session = open_drain_log(path)
         except OSError as error:
             sys.exit(f"qk-run: cannot open the drain log {path}: {error}")
         print(f"Drain log: {path}", flush=True)
