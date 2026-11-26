@@ -32,7 +32,7 @@ import qk_ledger
 
 QK_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(QK_ROOT / "skills" / "qk-commit" / "scripts"))
-from qk_preflight import check_identity  # noqa: E402
+from qk_preflight import SECRET_RE, check_identity  # noqa: E402
 DEFAULT_IMPL = "omp:anthropic/claude-opus-5-5"
 DEFAULT_REVIEW = "codex:"
 RUNTIMES = ("omp", "claude", "codex")
@@ -55,14 +55,19 @@ TERMINAL = ("done", "aborted")
 
 
 class Blocked(Exception):
-    """A gate failed; the run stops in `blocked` with this reason."""
+    """A gate failed; the run stops in `blocked` with this reason. `summary`, when given, is the reason without
+    the agent or command output it quotes; the drain session log records only that."""
+
+    def __init__(self, message, summary=None):
+        super().__init__(message)
+        self.summary = summary
 
 
 class Limited(Blocked):
     """An agent turn stopped by its runtime's usage limit; `limit` says which runtime and when it resets."""
 
-    def __init__(self, message, limit):
-        super().__init__(message)
+    def __init__(self, message, limit, summary=None):
+        super().__init__(message, summary)
         self.limit = limit
 
 
@@ -172,7 +177,8 @@ def sh(args, cwd, check=True, timeout=600, input_text=None):
     proc = subprocess.run(args, cwd=str(cwd), capture_output=True, text=True,
                           timeout=timeout, input=input_text)
     if check and proc.returncode != 0:
-        raise Blocked(f"{' '.join(args[:3])} failed ({proc.returncode}): {proc.stderr.strip()[:500]}")
+        raise Blocked(f"{' '.join(args[:3])} failed ({proc.returncode}): {proc.stderr.strip()[:500]}",
+                      f"{' '.join(args[:3])} failed ({proc.returncode})")
     return proc
 
 
@@ -621,7 +627,8 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
                             stop_agent(proc)
                             if usage:
                                 progress(tokens_line(usage))
-                            blocked = Blocked(f"read-only stage called {target_display(target)}")
+                            blocked = Blocked(f"read-only stage called {target_display(target)}",
+                                              "read-only stage called a tool it may not use")
                             blocked.usage = usage  # run_agent records the tokens the stopped turn used
                             raise blocked
         try:
@@ -647,8 +654,9 @@ def call_agent(spec, prompt, cwd, write, timeout, extra_dirs, *, events, progres
     if proc.returncode != 0:
         stderr = "".join(line for line in errors if line)
         message = f"{spec} exited {proc.returncode}: {(stderr or text).strip()[-800:]}"
+        summary = f"{spec} exited {proc.returncode}"
         limit = limit_of(runtime, f"{stderr}\n{text}")
-        blocked = Limited(message, limit) if limit else Blocked(message)
+        blocked = Limited(message, limit, summary) if limit else Blocked(message, summary)
         blocked.usage = usage
         raise blocked
     return text, usage
@@ -665,14 +673,15 @@ def read_result(text):
         raise Blocked(f"qk-result is not valid JSON: {error}")
     if not isinstance(result, dict) or result.get("status") not in ("done", "blocked", "needs_input"):
         status = result.get("status") if isinstance(result, dict) else None
-        raise Blocked(f"qk-result has invalid status {status!r}")
+        raise Blocked(f"qk-result has invalid status {status!r}", "qk-result has an invalid status")
     return result
 
 
 def parse_result(text):
     result = read_result(text)
     if result["status"] != "done":
-        raise Blocked(f"agent reported {result['status']}: {result.get('reason') or result.get('summary')}")
+        raise Blocked(f"agent reported {result['status']}: {result.get('reason') or result.get('summary')}",
+                      f"agent reported {result['status']}")
     return result
 
 
@@ -825,6 +834,9 @@ def verify_commands(text):
 
 
 def implementing(state):
+    ok, report = check_identity(Path(state["worktree"]), gh_call=gh, git_call=git)
+    if not ok:
+        raise Blocked(report)
     prompt = f"""Read {skill('qk-cook')} and follow it to implement the approved plan {run_dir(state['id']) / 'plan.md'}.
 Work only inside {state['worktree']}. The plan is approved; do not ask for approval again.
 {CLEAN}
@@ -976,7 +988,8 @@ def reviewing(state):
 
 def next_fix(state, why):
     if state.get("fix_rounds", 0) >= 1:
-        raise Blocked(f"{why} after the single fix round:\n" + "\n".join(state["problems"]))
+        raise Blocked(f"{why} after the single fix round:\n" + "\n".join(state["problems"]),
+                      f"{why} after the single fix round")
     state.setdefault("addressed", []).extend(state["problems"])
     return "fixing"
 
@@ -1102,7 +1115,8 @@ RESUMABLE_BY_HAND = ("verifying", "reviewing", "fixing")
 def block(state, stage, error):
     """Stop the run in `blocked`. After verify, review or fix, also record the worktree as it was at the block,
     so `resume` can tell hand fixes made after it from changes made while the stage ran."""
-    state.update(stage="blocked", blocked_at=stage, reason=str(error))
+    state.update(stage="blocked", blocked_at=stage, reason=str(error),
+                 reason_summary=getattr(error, "summary", None) or str(error))
     state.pop("blocked_tree", None)
     state.pop("limited", None)
     limit = getattr(error, "limit", None)
@@ -1226,8 +1240,8 @@ def cmd_approve(args):
     return advance(state)
 
 
-def next_queued():
-    """Return the next queued state and the number queued, scanning afresh each time."""
+def queued_runs():
+    """Valid queued states, oldest queued first, scanning afresh each time."""
     queued = []
     for path in state_root().glob("*/state.json"):
         try:
@@ -1239,7 +1253,31 @@ def next_queued():
                 queued.append(state)
         except (OSError, ValueError):
             pass
-    return (min(queued, key=lambda state: (state["queued_at"], state["id"])) if queued else None, len(queued))
+    return sorted(queued, key=lambda state: (state["queued_at"], state["id"]))
+
+
+def next_queued():
+    """Return the next queued state and the number queued, scanning afresh each time."""
+    runs = queued_runs()
+    return (runs[0] if runs else None, len(runs))
+
+
+def drain_log_path():
+    """The session log of a drain starting now. Separate function so tests can replace it."""
+    return state_root() / time.strftime("drain-%Y%m%d-%H%M%S.log")
+
+
+def open_drain_log(path):
+    """Create the session log exclusively, so a drain that starts in the same second as the last one gets
+    `-2`, `-3`, ... instead of appending to that drain's log."""
+    for number in range(1, 100):
+        candidate = path if number == 1 else path.with_name(f"{path.stem}-{number}{path.suffix}")
+        try:
+            return candidate, candidate.open("x", encoding="utf-8")
+        except FileExistsError:
+            if not candidate.is_file():
+                raise
+    raise FileExistsError(f"{path} and its numbered variants already exist")
 
 
 def drain_deadline(until, now):
@@ -1313,95 +1351,139 @@ def cmd_drain(args):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             sys.exit("qk-run: another drain is already running (drain.lock is held)")
-        ran, tries, retried, first_seen, left = {}, {}, {}, {}, 0
+        path = drain_log_path()
+        try:
+            path, session = open_drain_log(path)
+        except OSError as error:
+            sys.exit(f"qk-run: cannot open the drain log {path}: {error}")
+        print(f"Drain log: {path}", flush=True)
+        ran, tries, retried, first_seen, left, cause = {}, {}, {}, {}, 0, ""
+
+        def record(message):
+            """One timestamped line in the session log. Only run ids, stages, paths, flags and reasons go here."""
+            text = SECRET_RE.sub("[redacted]", " ".join(str(message).split()))
+            session.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {text}\n")
+            session.flush()
 
         def say(message):
             print(message)
+            record(message)
             if args.notify:
                 notify(message)
 
-        def drive(state, step):
+        def drive(state, step, how):
+            stage = state.get("blocked_at", "blocked") if state["stage"] == "blocked" else state["stage"]
+            record(f"run {state['id']} start ({how}) at {stage}; log {run_dir(state['id']) / 'run.log'}")
             try:
                 step(state)
             except Exception as error:  # one broken run must not stop the rest of the queue
-                block(state, state["stage"], f"{type(error).__name__}: {error}")
+                block(state, state["stage"], Blocked(f"{type(error).__name__}: {error}", type(error).__name__))
             ran[state["id"]] = state
+            end = state["stage"]
+            if end == "blocked":
+                end = f"blocked at {state.get('blocked_at')}: {state.get('reason_summary', '')}"
+                limit = state.get("limited")
+                if limit:
+                    end += f" (limited: {limit.get('runtime')} until {limit.get('reset_at') or 'unknown'})"
+            record(f"run {state['id']} end: {end}")
             if args.notify and state["stage"] == "blocked" and not (wait_limits and state.get("limited")):
                 reason = " ".join(state.get("reason", "").split())[:DISPLAY_LIMIT]
                 notify(f"{state['id']} blocked: {reason}")
 
-        while True:
-            state, left = next_queued()
-            if state is not None:
-                if deadline is not None and datetime.now() >= deadline:
-                    print(f"Deadline reached; {left} queued runs left.")
-                    break
-                state["stage"] = "implementing"
-                save(state)
-                drive(state, advance)
-                continue
-            if not wait_limits:
-                break
-            if deadline is not None and datetime.now() >= deadline:  # a resumed run worked past it
-                left_limited = limited_runs()
-                if left_limited:
-                    ran.update((state["id"], state) for state in left_limited)
-                    say("Deadline reached; runs stopped by a usage limit are left for qk-run resume.")
-                break
-            # The queue is empty: wait for the earliest usage limit to reset, then resume the runs it stopped.
-            now, waiting = datetime.now(), {}
-            for state in limited_runs():
-                run_id = state["id"]
-                if tries.get(run_id, 0) >= LIMIT_TRIES:
+        try:
+            queued = [state["id"] for state in queued_runs()]
+            until = f"{args.until} (deadline {deadline:%Y-%m-%d %H:%M})" if deadline is not None else "none"
+            record(f"drain start: until {until}, wait-limits {'on' if wait_limits else 'off'}, "
+                   f"notify {'on' if args.notify else 'off'}, queued {len(queued)}"
+                   + (f": {' '.join(queued)}" if queued else ""))
+            while True:
+                state, left = next_queued()
+                if state is not None:
+                    if deadline is not None and datetime.now() >= deadline:
+                        print(f"Deadline reached; {left} queued runs left.")
+                        record(f"Deadline reached; {left} queued runs left.")
+                        cause = "deadline"
+                        break
+                    state["stage"] = "implementing"
+                    save(state)
+                    drive(state, advance, "queued")
                     continue
-                reset = limit_reset(state)
-                wake = reset + LIMIT_GRACE if reset else first_seen.setdefault(run_id, now) + LIMIT_RETRY_GAP
-                if run_id in retried:  # limited again: never retry one run more often than the gap
-                    wake = max(wake, retried[run_id] + LIMIT_RETRY_GAP)
-                waiting[run_id] = (wake, state)
-            if not waiting:
-                break
-            wake = min(moment for moment, _ in waiting.values())
-            names = ", ".join(sorted({str(state["limited"].get("runtime") or "runtime")
-                                      for _, state in waiting.values()}))
-            if deadline is not None and wake >= deadline:
-                say(f"Gave up: {names} limit resets after the {deadline:%H:%M} deadline; "
-                    f"{len(waiting)} limited runs left for qk-run resume.")
-                ran.update((run_id, state) for run_id, (_, state) in waiting.items())  # counted as blocked
-                break
-            due = [(moment, state) for moment, state in waiting.values() if moment <= max(wake, now)]
-            if wake > now:
-                say(f"{names} limited; {len(due)} runs waiting until {wake:%H:%M}.")
-                if not wait_until(wake):
-                    continue  # a run was queued meanwhile: run it first
-            say(f"Retrying {len(due)} runs stopped by a usage limit.")
-            for moment, state in due:
-                if deadline is not None and datetime.now() >= deadline:
+                if not wait_limits:
+                    cause = "queue empty"
                     break
-                run_id = state["id"]
-                try:
-                    state = load(run_id)
-                except SystemExit:
-                    continue
-                if state.get("stage") != "blocked" or not state.get("limited"):
-                    continue  # resumed or aborted by hand while the drain waited
-                tries[run_id] = tries.get(run_id, 0) + 1
-                retried[run_id] = max(datetime.now(), moment)
-                drive(state, resume)
-                if state["stage"] == "blocked" and state.get("limited") and tries[run_id] >= LIMIT_TRIES:
-                    say(f"Gave up on {run_id}: still limited after {LIMIT_TRIES} tries.")
-        finished = list(ran.values())
-        done = sum(state["stage"] == "done" for state in finished)
-        blocked = sum(state["stage"] == "blocked" for state in finished)
-        limited = sum(state["stage"] == "blocked" and bool(state.get("limited")) for state in finished)
-        if not finished and left == 0:
-            print("Nothing is queued.")
-        by_limit = f" ({limited} by a usage limit)" if limited else ""
-        summary = f"Drain: {done} done, {blocked} blocked{by_limit}, {left} left queued."
-        print(summary)
-        if args.notify:
-            notify(summary)
-        return 1 if blocked else 0
+                if deadline is not None and datetime.now() >= deadline:  # a resumed run worked past it
+                    left_limited = limited_runs()
+                    if left_limited:
+                        ran.update((state["id"], state) for state in left_limited)
+                        say("Deadline reached; runs stopped by a usage limit are left for qk-run resume.")
+                    cause = "deadline"
+                    break
+                # The queue is empty: wait for the earliest usage limit to reset, then resume the runs it stopped.
+                now, waiting = datetime.now(), {}
+                for state in limited_runs():
+                    run_id = state["id"]
+                    if tries.get(run_id, 0) >= LIMIT_TRIES:
+                        continue
+                    reset = limit_reset(state)
+                    wake = reset + LIMIT_GRACE if reset else first_seen.setdefault(run_id, now) + LIMIT_RETRY_GAP
+                    if run_id in retried:  # limited again: never retry one run more often than the gap
+                        wake = max(wake, retried[run_id] + LIMIT_RETRY_GAP)
+                    waiting[run_id] = (wake, state)
+                if not waiting:
+                    cause = "queue empty"
+                    break
+                wake = min(moment for moment, _ in waiting.values())
+                names = ", ".join(sorted({str(state["limited"].get("runtime") or "runtime")
+                                          for _, state in waiting.values()}))
+                if deadline is not None and wake >= deadline:
+                    say(f"Gave up: {names} limit resets after the {deadline:%H:%M} deadline; "
+                        f"{len(waiting)} limited runs left for qk-run resume.")
+                    ran.update((run_id, state) for run_id, (_, state) in waiting.items())  # counted as blocked
+                    cause = "limit resets after the deadline"
+                    break
+                due = [(moment, state) for moment, state in waiting.values() if moment <= max(wake, now)]
+                if wake > now:
+                    say(f"{names} limited; {len(due)} runs waiting until {wake:%H:%M}.")
+                    if not wait_until(wake):
+                        continue  # a run was queued meanwhile: run it first
+                say(f"Retrying {len(due)} runs stopped by a usage limit.")
+                for moment, state in due:
+                    if deadline is not None and datetime.now() >= deadline:
+                        break
+                    run_id = state["id"]
+                    try:
+                        state = load(run_id)
+                    except SystemExit:
+                        continue
+                    if state.get("stage") != "blocked" or not state.get("limited"):
+                        continue  # resumed or aborted by hand while the drain waited
+                    tries[run_id] = tries.get(run_id, 0) + 1
+                    retried[run_id] = max(datetime.now(), moment)
+                    drive(state, resume, f"limit retry {tries[run_id]}")
+                    if state["stage"] == "blocked" and state.get("limited") and tries[run_id] >= LIMIT_TRIES:
+                        say(f"Gave up on {run_id}: still limited after {LIMIT_TRIES} tries.")
+            finished = list(ran.values())
+            done = sum(state["stage"] == "done" for state in finished)
+            blocked = sum(state["stage"] == "blocked" for state in finished)
+            limited = sum(state["stage"] == "blocked" and bool(state.get("limited")) for state in finished)
+            if not finished and left == 0:
+                print("Nothing is queued.")
+            by_limit = f" ({limited} by a usage limit)" if limited else ""
+            summary = f"Drain: {done} done, {blocked} blocked{by_limit}, {left} left queued."
+            print(summary)
+            if args.notify:
+                notify(summary)
+            record(f"drain end ({cause}): {summary}")
+            return 1 if blocked else 0
+        except BaseException as error:  # Ctrl-C or an unexpected error: say why the session ended, then stop
+            try:
+                detail = str(error)
+                record(f"drain end (error): {type(error).__name__}" + (f": {detail}" if detail else ""))
+            except OSError:
+                pass
+            raise
+        finally:
+            session.close()
 
 
 def cmd_revise(args):
@@ -1424,6 +1506,7 @@ def resume(state):
     """Retry a blocked run's stage, accepting hand fixes made after a block at verify, review or fix."""
     state["stage"] = state.pop("blocked_at")
     state.pop("reason", None)
+    state.pop("reason_summary", None)
     state.pop("limited", None)
     try:
         accept_manual_changes(state)

@@ -429,6 +429,152 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual([c[0] for c in agent.calls], ["plan"])
         self.assertEqual(self.cli("drain"), 0)
 
+    def queue_runs(self, agent, count):
+        """Start and queue `count` runs; returns their ids in queue order."""
+        ids = []
+        agent.behaviour["plan"] = lambda cwd, state_dir: (ids.append(state_dir.name) or planned())
+        qk_run.call_agent = agent
+        for n in range(count):
+            self.cli("start", "add a greeting file", "--repo", str(self.repo))
+            self.cli("approve", ids[-1], "--later")
+            state = qk_run.load(ids[-1])
+            state["queued_at"] = float(n + 1)
+            qk_run.save(state)
+        return ids
+
+    def drain_events(self):
+        """The one drain session log and its events, each line checked for its timestamp."""
+        logs = sorted(qk_run.state_root().glob("drain-*.log"))
+        self.assertEqual(len(logs), 1)
+        lines = logs[0].read_text(encoding="utf-8").splitlines()
+        for line in lines:
+            self.assertRegex(line, r"^\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] ")
+        return logs[0], [line[22:] for line in lines]
+
+    def run_start(self, run_id):
+        return f"run {run_id} start (queued) at implementing; log {qk_run.run_dir(run_id) / 'run.log'}"
+
+    def test_drain_session_log_records_start_runs_and_end(self):
+        ids = self.queue_runs(Agent(), 2)
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(qk_run.main(["drain"]), 0)
+        path, events = self.drain_events()
+        self.assertIn(f"Drain log: {path}\n", output.getvalue())
+        self.assertEqual(events, [
+            f"drain start: until none, wait-limits off, notify off, queued 2: {ids[0]} {ids[1]}",
+            self.run_start(ids[0]), f"run {ids[0]} end: done",
+            self.run_start(ids[1]), f"run {ids[1]} end: done",
+            "drain end (queue empty): Drain: 2 done, 0 blocked, 0 left queued."])
+
+    def test_drain_end_line_written_when_interrupted(self):
+        ids = self.queue_runs(Agent(), 1)
+        with mock.patch.object(qk_run, "advance", side_effect=KeyboardInterrupt), \
+                self.assertRaises(KeyboardInterrupt):
+            self.cli("drain")
+        _, events = self.drain_events()
+        self.assertIn(self.run_start(ids[0]), events)
+        self.assertEqual(events[-1], "drain end (error): KeyboardInterrupt")
+
+    def test_second_drain_losing_the_lock_writes_nothing_to_the_log(self):
+        qk_run.save({"id": "first", "stage": "queued", "queued_at": 1.0})
+        seen = []
+
+        def logs():
+            return {path: path.read_text(encoding="utf-8") for path in qk_run.state_root().glob("drain-*.log")}
+
+        def advance(state):
+            before = logs()
+            try:
+                self.cli("drain")
+            except SystemExit as refused:
+                seen.append(str(refused.code))
+            seen.append(logs() == before)
+            state["stage"] = "done"
+            qk_run.save(state)
+            return 0
+
+        with mock.patch.object(qk_run, "advance", side_effect=advance):
+            self.assertEqual(self.cli("drain"), 0)
+        self.assertEqual(len(seen), 2)
+        self.assertIn("another drain", seen[0])
+        self.assertTrue(seen[1])
+        _, events = self.drain_events()
+        self.assertEqual(sum(event.startswith("drain start") for event in events), 1)
+        self.assertEqual(sum(event.startswith("drain end") for event in events), 1)
+
+    def test_drain_started_in_the_same_second_gets_its_own_log(self):
+        fixed = qk_run.state_root() / "drain-20261127-060000.log"
+        with mock.patch.object(qk_run, "drain_log_path", return_value=fixed):
+            for _ in range(2):
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(qk_run.main(["drain"]), 0)
+        second = fixed.with_name("drain-20261127-060000-2.log")
+        self.assertIn(f"Drain log: {second}\n", output.getvalue())
+        for path in (fixed, second):
+            events = [line[22:] for line in path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(sum(event.startswith("drain start") for event in events), 1, path)
+            self.assertEqual(sum(event.startswith("drain end") for event in events), 1, path)
+
+    def test_drain_log_that_cannot_be_opened_stops_before_any_agent(self):
+        agent = Agent()
+        ids = self.queue_runs(agent, 1)
+        unwritable = qk_run.state_root() / "drain-unwritable.log"
+        unwritable.mkdir()
+        with mock.patch.object(qk_run, "drain_log_path", return_value=unwritable), \
+                self.assertRaises(SystemExit) as caught:
+            self.cli("drain")
+        self.assertIn("cannot open the drain log", str(caught.exception.code))
+        self.assertEqual([call[0] for call in agent.calls], ["plan"])
+        self.assertEqual(qk_run.load(ids[0])["stage"], "queued")
+        self.assertEqual(self.cli("drain"), 0)  # drain.lock was released
+        self.assertEqual(qk_run.load(ids[0])["stage"], "done")
+
+    def test_drain_identity_failure_blocks_at_implementing_and_next_run_runs(self):
+        cooked = []
+
+        def cook(cwd, state_dir):
+            cooked.append(state_dir.name)
+            (cwd / "greeting.txt").write_text("hello\n")
+            return result()
+
+        ids = self.queue_runs(Agent(cook=cook), 2)
+        report = ("Active gh account | night-user\nPush permission | false\n"
+                  "The active account does not have push permission.")
+        qk_run.check_identity = lambda repo, gh_call=None, git_call=None: \
+            (False, report) if ids[0] in str(repo) else (True, "ok")
+        self.assertEqual(self.cli("drain"), 1)
+        first, second = (qk_run.load(run_id) for run_id in ids)
+        self.assertEqual((first["stage"], first["blocked_at"], first["reason"]), ("blocked", "implementing", report))
+        self.assertEqual(cooked, [ids[1]])
+        self.assertEqual(run(Path(first["worktree"]), "git", "status", "--porcelain"), "")
+        self.assertEqual(second["stage"], "done")
+        _, events = self.drain_events()
+        self.assertIn(f"run {ids[0]} end: blocked at implementing: Active gh account | night-user "
+                      "Push permission | false The active account does not have push permission.", events)
+
+    def test_drain_log_never_contains_environment_tokens(self):
+        canary = "qk-drain-canary-value"
+        ids = self.queue_runs(Agent(), 1)
+        with mock.patch.dict(os.environ, {"GH_TOKEN": canary, "QK_TEST_CANARY": canary}):
+            self.assertEqual(self.cli("drain"), 0)
+        self.assertEqual(qk_run.load(ids[0])["stage"], "done")
+        path, _ = self.drain_events()
+        text = path.read_text(encoding="utf-8")
+        for absent in (canary, "qk-result", "Work only inside"):
+            self.assertNotIn(absent, text)
+
+    def test_drain_log_keeps_agent_reported_reason_out(self):
+        canary = "qk-drain-agent-reason-canary"
+        ids = self.queue_runs(Agent(cook=lambda cwd, state_dir: result(status="blocked", reason=canary)), 1)
+        self.assertEqual(self.cli("drain"), 1)
+        state = qk_run.load(ids[0])
+        self.assertEqual((state["stage"], state["blocked_at"]), ("blocked", "implementing"))
+        self.assertIn(canary, state["reason"])
+        self.assertIn(canary, (qk_run.run_dir(ids[0]) / "run.log").read_text(encoding="utf-8"))
+        path, events = self.drain_events()
+        self.assertNotIn(canary, path.read_text(encoding="utf-8"))
+        self.assertIn(f"run {ids[0]} end: blocked at implementing: agent reported blocked", events)
+
     def test_drain_blocked_exit_and_optional_notifications(self):
         from unittest import mock
         for enabled in (False, True):
@@ -1200,7 +1346,7 @@ Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the
 
         def changing_identity(repo, gh_call=None, git_call=None):
             checks.append(Path(repo))
-            return (True, "preflight passed") if len(checks) == 1 else (False, "publishing identity denied")
+            return (True, "checks passed") if len(checks) < 3 else (False, "publishing identity denied")
 
         qk_run.check_identity = changing_identity
         state = self.start(Agent())
@@ -1209,9 +1355,48 @@ Use "blocked" or "needs_input" with a reason instead of guessing. Respond in the
         self.assertEqual(blocked["stage"], "blocked")
         self.assertEqual(blocked["blocked_at"], "publishing")
         self.assertEqual(blocked["reason"], "publishing identity denied")
-        self.assertEqual([path.resolve() for path in checks],
-                         [self.repo.resolve(), Path(blocked["worktree"]).resolve()])
+        worktree = Path(blocked["worktree"]).resolve()
+        self.assertEqual([path.resolve() for path in checks], [self.repo.resolve(), worktree, worktree])
         self.assertNotIn(blocked["branch"], self.remote_branches())
+
+    def test_approve_now_checks_identity_before_implementing(self):
+        agent = Agent()
+        state = self.start(agent)
+        report = "Active gh account | night-user\nPush permission | false"
+        qk_run.check_identity = lambda repo, gh_call=None, git_call=None: (False, report)
+        self.assertEqual(self.cli("approve", state["id"]), 1)
+        blocked = qk_run.load(state["id"])
+        self.assertEqual((blocked["stage"], blocked["blocked_at"], blocked["reason"]),
+                         ("blocked", "implementing", report))
+        self.assertEqual([call[0] for call in agent.calls], ["plan"])
+        qk_run.check_identity = lambda repo, gh_call=None, git_call=None: (True, "ok")
+        self.assertEqual(self.cli("resume", state["id"]), 0)
+        self.assertEqual(qk_run.load(state["id"])["stage"], "done")
+        self.assertEqual([call[0] for call in agent.calls].count("cook"), 1)
+
+    def test_passing_identity_check_changes_nothing(self):
+        events, checked = [], []
+
+        def passing(repo, gh_call=None, git_call=None):
+            events.append("identity")
+            checked.append(Path(repo).resolve())
+            return True, "ok"
+
+        def cook(cwd, state_dir):
+            events.append("cook")
+            (cwd / "greeting.txt").write_text("hello\n")
+            return result()
+
+        agent = Agent(cook=cook)
+        state = self.start(agent)
+        qk_run.check_identity = passing
+        self.assertEqual(self.cli("approve", state["id"]), 0)
+        done = qk_run.load(state["id"])
+        self.assertEqual(done["stage"], "done")
+        self.assertEqual(events, ["identity", "cook", "identity"])
+        self.assertEqual(checked, [Path(done["worktree"]).resolve()] * 2)
+        self.assertEqual([call[0] for call in agent.calls], ["plan", "cook", "review"])
+        self.assertEqual(len([c for c in self.gh_calls if c[:2] == ("pr", "create")]), 1)
 
     def test_hidden_repository_blocks_with_identity_report(self):
         run(self.repo, "git", "remote", "set-url", "origin", "git@github.com:example/repo.git")

@@ -53,6 +53,7 @@ Drain: 4 done, 0 blocked, 0 left queued.
 - `--notify` shows one notification for each blocked run and one for the summary. A failed notification only prints a warning.
 - Usage limits: when an agent turn stops because a runtime hit its usage limit (Claude's 5-hour or session limit, Codex's usage limit), the run blocks with `limited` (runtime and reset time) in its state. With `--until`, drain waits for it: once the queue is empty it sleeps until two minutes after the reset time the message named, says so (`claude limited; 2 runs waiting until 23:52.`), resumes those runs and carries on. A message with no reset time is retried every 30 minutes; one run is retried at most 3 times per drain. A reset after the deadline ends the drain with `Gave up: claude limit resets after the 07:00 deadline; …`, and the runs stay blocked for `qk run resume`. Only runs that came through the queue are resumed; a run blocked for any other reason is left for you. `--wait-limits` turns this on without `--until`, `--no-wait-limits` turns it off.
 - The last line is `Drain: X done, Y blocked, Z left queued.`, with `(N by a usage limit)` after the blocked count when some are waiting for a limit. The exit code is 1 if any run blocked.
+- Session log: every drain that holds `drain.lock` writes its own session log, `drain-YYYYMMDD-HHMMSS.log` (`-2`, `-3`, … when a drain starts in the same second as the previous one), in the state directory next to the run directories, and prints `Drain log: <path>` at start, so no `| tee` is needed. Each line starts with a `[YYYY-MM-DD HH:MM:SS]` timestamp. The log records the start (`--until` and the deadline, `--wait-limits`, `--notify`, the queued run ids), each run's start with its `run.log` path and the stage it ended in, blocked reasons, limit waits, the deadline, and the drain end with its cause (`deadline`, `queue empty`, `limit resets after the deadline`, or `error` after Ctrl-C or an unexpected error). It holds no agent output (that is in each run's `run.log`), no environment variables, tokens or prompts. A drain refused by `drain.lock` writes nothing. A drain that cannot open its log stops before any agent turn. A killed drain may have no end line; its last `run … start` line without a matching end names the run it was working on.
 
 ## Morning
 
@@ -96,18 +97,32 @@ Without a terminal, for example when an agent in a chat runs the commands for yo
 
 ## When something goes wrong
 
-- **A drain killed mid-run** (Ctrl-C, a closed terminal, a kill) leaves that run in its in-progress stage. `resume`, `approve` and `drain` all skip it. While a run works, the runner holds `run.lock` in its run directory and the kernel drops it when the process dies, so `qk brief` shows a run in a working stage whose lock is free as `stopped at <stage> (runner gone)`, with `Next: qk run status <id>, then qk run abort <id>`. The free lock shows only that the runner is gone: an agent it started runs in its own session and may still be finishing its turn in the worktree, so check with `ps` before you abort. Only `qk run abort <id>` gets the run out. Abort leaves the branch, a pushed branch and any PR as they are.
+- **A drain killed mid-run** (Ctrl-C, a closed terminal, a kill) leaves that run in its in-progress stage. `resume`, `approve` and `drain` all skip it. While a run works, the runner holds `run.lock` in its run directory and the kernel drops it when the process dies, so `qk brief` shows a run in a working stage whose lock is free as `stopped at <stage> (runner gone)`, with `Next: qk run status <id>, then qk run abort <id>`. The free lock shows only that the runner is gone: an agent it started runs in its own session and may still be finishing its turn in the worktree, so follow [Recovering a run stopped mid-stage](#recovering-a-run-stopped-mid-stage) before you abort. Only `qk run abort <id>` gets the run out. Abort leaves the branch, a pushed branch and any PR as they are.
 - **Usage limits** are waited for as described under [Night](#night). **Login failures** and limits without `--until` end that run as `blocked`, and drain moves on to the next run, which may block for the same reason.
 - **Two tasks at once:** drain never runs two queued runs together, but it does not stop `start`, `approve` without `--later`, or `resume` that you run by hand in another terminal.
 - **Sleep:** a sleeping machine pauses the agents and the drain. Keep `caffeinate -i` in front of `drain`.
 
+### Recovering a run stopped mid-stage
+
+1. Make sure nothing still runs:
+   - `qk brief` shows `stopped at <stage> (runner gone)`: `run.lock` is free and the runner is gone.
+   - `pgrep -fl -- "<id>"` prints nothing. The run id is in every agent's command line through its run directory, and in `qk run approve|resume <id>`.
+   - `lsof +D <worktree>` prints nothing. A command an agent started, such as a test suite, does not carry the run id and can outlive its agent.
+
+   If anything still runs, stop here and wait for it, or stop it yourself.
+2. `qk run abort <id>`. It keeps the branch and the worktree, and prints the worktree path.
+3. Review the uncommitted changes in the worktree: `git -C <worktree> status --untracked-files=all` and `git -C <worktree> diff`. Commit them only on a local branch you approve, for example the run's `qk/…` branch that the worktree is on. Do not push yet.
+4. Before any push, check again: run the commands in the `qk-verify` block of `approved-plan.md` from the worktree root, and have the change reviewed. Push or open the PR by hand only after that.
+
 ## Publishing account
 
-The active `gh` account must have push permission on the repository. The runner checks it at `start` and again right before the push during the drain; `gh pr create` also uses that account. `git push` uses git's own credentials, so they must be able to push too; with an SSH origin, the key decides, and the check cannot tell which account owns it. From the qk clone, check without changing anything:
+The active `gh` account must have push permission on the repository. The runner checks it at `start`, again right before the implementing stage (whether `approve` or `drain` starts it, and when `resume` retries it), and right before the push; `gh pr create` also uses that account. `git push` uses git's own credentials, so they must be able to push too; with an SSH origin, the key decides, and the check cannot tell which account owns it. From the qk clone, check without changing anything:
 
 ```bash
 python3 skills/qk-commit/scripts/qk_preflight.py identity --repo <path>
 ```
+
+A failed check before implementing blocks the run at `implementing` with the check's report and calls no agent. Switch the account (Way 1 or Way 2 below), then `qk run resume <id>`. A drain moves on to the next run, which blocks the same way until the account is fixed.
 
 **Way 1: switch the active account.** Run `gh auth switch -u <other-account>` before `start`, keep it through the drain, then `gh auth switch -u <your-account>` afterwards. This covers `git push` only when git gets github.com credentials from `gh auth git-credential`; check with `git config --get-regexp '^credential'`. The switch is global, so every other terminal sees it too.
 

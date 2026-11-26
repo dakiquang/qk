@@ -53,6 +53,7 @@ Drain: 4 done, 0 blocked, 0 left queued.
 - `--notify` hiện một thông báo cho mỗi run bị chặn và một thông báo tổng kết. Thông báo lỗi chỉ in cảnh báo.
 - Giới hạn hạn mức: khi một lượt agent dừng vì runtime chạm giới hạn (giới hạn 5 giờ hoặc giới hạn phiên của Claude, giới hạn sử dụng của Codex), run bị chặn và trạng thái ghi `limited` (runtime và giờ mở lại). Khi có `--until`, drain chờ: khi hàng đợi đã hết, nó ngủ tới 2 phút sau giờ mở lại mà thông báo ghi, báo điều đó (`claude limited; 2 runs waiting until 23:52.`), chạy tiếp các run đó rồi làm tiếp. Thông báo không ghi giờ mở lại thì thử lại mỗi 30 phút; mỗi run được thử lại tối đa 3 lần trong một drain. Giờ mở lại sau hạn thì drain dừng với `Gave up: claude limit resets after the 07:00 deadline; …`, và các run vẫn bị chặn chờ `qk run resume`. Chỉ run đi qua hàng đợi mới được chạy tiếp; run bị chặn vì lý do khác thì để cho bạn. `--wait-limits` bật việc này khi không có `--until`, `--no-wait-limits` tắt nó.
 - Dòng cuối là `Drain: X done, Y blocked, Z left queued.`, thêm `(N by a usage limit)` sau số bị chặn khi có run đang chờ hạn mức. Mã thoát là 1 nếu có run bị chặn.
+- Nhật ký phiên: mỗi drain giữ được `drain.lock` tự ghi nhật ký phiên của nó, `drain-YYYYMMDD-HHMMSS.log` (thêm `-2`, `-3`, … khi một drain bắt đầu cùng giây với drain trước), trong thư mục state cạnh các thư mục run, và in `Drain log: <path>` lúc bắt đầu, nên không cần `| tee`. Mỗi dòng mở đầu bằng mốc giờ `[YYYY-MM-DD HH:MM:SS]`. Nhật ký ghi lúc bắt đầu (`--until` và hạn, `--wait-limits`, `--notify`, id các run trong hàng đợi), lúc mỗi run bắt đầu kèm đường dẫn `run.log` của nó và bước mà run dừng lại, lý do bị chặn, các lần chờ hạn mức, lúc tới hạn, và lúc drain kết thúc kèm nguyên nhân (`deadline`, `queue empty`, `limit resets after the deadline`, hoặc `error` sau Ctrl-C hay một lỗi bất ngờ). Nhật ký không chứa output của agent (cái đó nằm trong `run.log` của từng run), không có biến môi trường, token hay prompt. Drain bị `drain.lock` từ chối thì không ghi gì. Drain không mở được nhật ký thì dừng trước mọi lượt agent. Drain bị kill có thể không có dòng kết thúc; dòng `run … start` cuối cùng không có dòng kết thúc tương ứng cho biết run mà drain đang làm.
 
 ## Buổi sáng
 
@@ -96,18 +97,32 @@ Khi không có terminal, ví dụ khi một agent trong khung chat chạy lệnh
 
 ## Khi có sự cố
 
-- **Drain bị dừng giữa chừng** (Ctrl-C, đóng terminal, bị kill) để run đó kẹt ở bước đang chạy. `resume`, `approve` và `drain` đều bỏ qua nó. Khi run đang làm việc, runner giữ `run.lock` trong thư mục run và hệ điều hành nhả khoá khi tiến trình chết, nên `qk brief` hiện run đang ở bước làm việc mà khoá trống là `stopped at <stage> (runner gone)`, kèm `Next: qk run status <id>, then qk run abort <id>`. Khoá trống chỉ cho biết runner đã chết: agent mà runner khởi động chạy trong session riêng và có thể vẫn đang làm nốt lượt trong worktree, nên kiểm bằng `ps` trước khi abort. Chỉ `qk run abort <id>` đưa run ra. Abort để nguyên nhánh, nhánh đã push và PR nếu có.
+- **Drain bị dừng giữa chừng** (Ctrl-C, đóng terminal, bị kill) để run đó kẹt ở bước đang chạy. `resume`, `approve` và `drain` đều bỏ qua nó. Khi run đang làm việc, runner giữ `run.lock` trong thư mục run và hệ điều hành nhả khoá khi tiến trình chết, nên `qk brief` hiện run đang ở bước làm việc mà khoá trống là `stopped at <stage> (runner gone)`, kèm `Next: qk run status <id>, then qk run abort <id>`. Khoá trống chỉ cho biết runner đã chết: agent mà runner khởi động chạy trong session riêng và có thể vẫn đang làm nốt lượt trong worktree, nên làm theo [Khôi phục run dừng giữa chừng](#khôi-phục-run-dừng-giữa-chừng) trước khi abort. Chỉ `qk run abort <id>` đưa run ra. Abort để nguyên nhánh, nhánh đã push và PR nếu có.
 - **Giới hạn hạn mức** được chờ như mô tả ở [Ban đêm](#ban-đêm). **Lỗi đăng nhập**, và giới hạn khi không có `--until`, làm run đó dừng ở `blocked`, và drain chuyển sang run kế tiếp, run này có thể bị chặn vì cùng lý do.
 - **Hai việc cùng lúc:** drain không bao giờ chạy hai run trong hàng đợi cùng lúc, nhưng không chặn `start`, `approve` không có `--later`, hay `resume` mà bạn tự chạy ở terminal khác.
 - **Máy ngủ:** máy ngủ thì agent và drain tạm dừng. Giữ `caffeinate -i` trước `drain`.
 
+### Khôi phục run dừng giữa chừng
+
+1. Chắc chắn không còn gì đang chạy:
+   - `qk brief` hiện `stopped at <stage> (runner gone)`: `run.lock` trống và runner đã chết.
+   - `pgrep -fl -- "<id>"` không in gì. Id của run có trong dòng lệnh của mọi agent qua thư mục run của nó, và trong `qk run approve|resume <id>`.
+   - `lsof +D <worktree>` không in gì. Lệnh do agent khởi chạy, như bộ test, không mang id của run và có thể còn chạy sau khi agent đã dừng.
+
+   Nếu còn gì đang chạy, dừng ở đây và chờ nó xong, hoặc tự dừng nó.
+2. `qk run abort <id>`. Lệnh giữ lại nhánh và worktree, và in đường dẫn worktree.
+3. Xem lại các thay đổi chưa commit trong worktree: `git -C <worktree> status --untracked-files=all` và `git -C <worktree> diff`. Chỉ commit chúng trên một nhánh local mà bạn chấp nhận, ví dụ nhánh `qk/…` của run mà worktree đang ở. Chưa push.
+4. Trước mọi lần push, kiểm lại: chạy các lệnh trong khối `qk-verify` của `approved-plan.md` từ gốc worktree, và cho người review thay đổi. Chỉ tự push hoặc mở PR sau bước đó.
+
 ## Tài khoản publish
 
-Tài khoản `gh` đang hoạt động phải có quyền push vào repo. Runner kiểm ở `start` và kiểm lại ngay trước khi push trong lúc drain; `gh pr create` cũng dùng tài khoản đó. `git push` dùng thông tin đăng nhập riêng của git, nên chúng cũng phải push được; với origin SSH, key quyết định, và bước kiểm không biết key thuộc tài khoản nào. Từ bản clone qk, kiểm mà không đổi gì:
+Tài khoản `gh` đang hoạt động phải có quyền push vào repo. Runner kiểm ở `start`, kiểm lại ngay trước bước implementing (dù `approve` hay `drain` khởi động nó, và khi `resume` chạy lại nó), và ngay trước khi push; `gh pr create` cũng dùng tài khoản đó. `git push` dùng thông tin đăng nhập riêng của git, nên chúng cũng phải push được; với origin SSH, key quyết định, và bước kiểm không biết key thuộc tài khoản nào. Từ bản clone qk, kiểm mà không đổi gì:
 
 ```bash
 python3 skills/qk-commit/scripts/qk_preflight.py identity --repo <path>
 ```
+
+Kiểm thất bại trước bước implementing thì run bị chặn ở `implementing` kèm báo cáo của bước kiểm, và không agent nào được gọi. Đổi tài khoản (Cách 1 hoặc Cách 2 bên dưới), rồi `qk run resume <id>`. Drain chuyển sang run kế tiếp, run này cũng bị chặn y như vậy cho tới khi tài khoản được sửa.
 
 **Cách 1: đổi tài khoản đang hoạt động.** Chạy `gh auth switch -u <other-account>` trước `start`, giữ nguyên suốt lúc drain, rồi `gh auth switch -u <your-account>` sau đó. Cách này chỉ áp dụng cho `git push` khi git lấy thông tin đăng nhập github.com từ `gh auth git-credential`; kiểm bằng `git config --get-regexp '^credential'`. Việc đổi có tác dụng toàn cục, nên mọi terminal khác cũng thấy.
 
