@@ -1566,7 +1566,7 @@ class AgentStreamTest(unittest.TestCase):
         for write in (False, True):
             omp, _, env = command("omp:anthropic/x", write)
             self.assertIsNone(env)
-            for flag in ("--no-skills", "--no-extensions", "--no-rules"):
+            for flag in ("--no-skills", "--no-extensions", "--no-rules", "--wait-async"):
                 self.assertIn(flag, omp, (flag, write))
 
     def test_claude_skills_replace_the_skill_isolation_flag(self):
