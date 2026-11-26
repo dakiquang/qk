@@ -89,11 +89,12 @@ def check_identity(repo, gh_call=None, git_call=None):
         return True, SECRET_RE.sub("[redacted]", "\n".join(lines))
 
     if not_found:
-        lines.append("Repository is not visible to the active account (404 / Not Found).")
+        cause = "Repository is not visible to the active account (404 / Not Found)."
     elif visible and permission == "false":
-        lines.append("The active account does not have push permission.")
+        cause = "The active account does not have push permission."
     else:
-        lines.append("Could not confirm push permission for the active account.")
+        cause = "Could not confirm push permission for the active account."
+    lines.insert(0, cause)  # first line: qk run and the brief card header show only this line
     try:
         accounts = _accounts(gh_call(repo, "auth", "status", check=False))
     except Exception:

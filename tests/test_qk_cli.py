@@ -311,6 +311,26 @@ class CliTests(unittest.TestCase):
         self.assertIn("blocked at verifying: reason unknown", output.splitlines()[0])
         self.assertIn(run["id"], output)
 
+    def test_brief_blocked_identity_card_starts_with_cause(self):
+        preflight_dir = str(Path(__file__).resolve().parents[1] / "skills" / "qk-commit" / "scripts")
+        if preflight_dir not in sys.path:
+            sys.path.insert(0, preflight_dir)
+        preflight = importlib.import_module("qk_preflight")
+        replies = {("remote", "get-url"): "https://github.com/example/repo.git",
+                   ("config", "user.email"): "test@example.invalid", ("api", "user"): "active-user",
+                   ("api", "repos/example/repo"): "false", ("auth", "status"): ""}
+        ok, report = preflight.check_identity("/unused", gh_call=lambda repo, *args, check=True: replies[args[:2]],
+                                               git_call=lambda repo, *args, check=True: replies[args[:2]])
+        self.assertFalse(ok)
+        state = self.root / "run" / "state.json"
+        state.parent.mkdir()
+        state.write_text(json.dumps({"reason": report}))
+        self.run_record("blocked", status="blocked", blocked_at="publishing", pr_url="", refs=[str(state)])
+        _, output, _ = self.cli("brief")
+        header = output.splitlines()[0]
+        self.assertIn("blocked at publishing: The active account does not have push permission.", header)
+        self.assertNotIn("Field | Value", header)
+
     def test_brief_long_title_keeps_risk_visible(self):
         run = self.run_record(changed_files=["package.json"], lines_added=1, lines_deleted=0)
         self.decision(run, title="A detailed change " * 30)
@@ -1122,11 +1142,13 @@ class CliTests(unittest.TestCase):
         cases = (("one", "leave", 0), ("one", "abort-later", 1), ("blocked", "merge", 1),
                  ("blocked", "leave", 1), ("blocked", "abort-later", 0), ("blocked", "resume-later", 0),
                  ("killed", "resume-later", 1), ("killed", "abort-later", 0), ("missing", "leave", 1))
+        outputs = {}
         with mock.patch.object(subprocess, "run", side_effect=AssertionError("only merge calls gh")):
             for run_id, choice, expected in cases:
                 with self.subTest(run_id=run_id, choice=choice):
-                    status, _, errors = self.cli("decide", run_id, choice)
+                    status, output, errors = self.cli("decide", run_id, choice)
                     self.assertEqual(status, expected, errors)
+                    outputs[run_id, choice] = output
             status, _, errors = self.cli("decide", "one", "leave", "--method", "squash")
         self.assertEqual(status, 1)
         self.assertIn("--method applies only to merge", errors)
@@ -1134,6 +1156,12 @@ class CliTests(unittest.TestCase):
                          [("one", "leave"), ("blocked", "abort-later"), ("blocked", "resume-later"),
                           ("killed", "abort-later")])
         self.assertEqual(self.user_records()[0]["data"]["head"], SHA)
+        self.assertEqual(outputs["one", "leave"], "Recorded leave: %s\n" % self.user_records()[0]["id"])
+        for (run_id, choice), command in ((("blocked", "abort-later"), "qk run abort blocked"),
+                                          (("blocked", "resume-later"), "qk run resume blocked"),
+                                          (("killed", "abort-later"), "qk run abort killed")):
+            self.assertEqual(outputs[run_id, choice].splitlines()[1],
+                             "Only the intent was recorded; nothing was run. Run it yourself: " + command)
 
     def test_decide_skips_runs_the_brief_does_not_show(self):
         self.decision(self.run_record(), state="MERGED")
@@ -1190,6 +1218,31 @@ class CliTests(unittest.TestCase):
                 self.assertEqual([record["data"]["choice"] for record in records], expected)
                 for record in records:
                     self.assertEqual((record["data"]["pr_url"], record["data"]["head"]), (None, None))
+                notes = [line for line in output.splitlines() if "Only the intent was recorded" in line]
+                self.assertEqual(notes, ["Only the intent was recorded; nothing was run. Run it yourself: qk run %s "
+                                         "blocked" % choice[:-len("-later")] for choice in expected])
+
+    def test_brief_and_decide_name_the_producer_for_other_tools_runs(self):
+        run = self.run_record("blocked", status="blocked", pr_url="", producer="qk-harness 0.3")
+        prompt = "[a] abort later  [r] resume later  [s] skip: "
+        for how, value, action in (("brief", "a", "abort"), ("brief", "r", "resume"),
+                                   ("decide", "abort-later", "abort"), ("decide", "resume-later", "resume")):
+            with self.subTest(how=how, value=value), mock.patch.dict(
+                    os.environ, {"QK_STATE_DIR": str(self.root / ("producer-" + how + value))}), \
+                    mock.patch.object(subprocess, "run", side_effect=AssertionError("intent never runs anything")):
+                ledger.append("run", run["data"], repo=run["repo"], task_kind=run["task_kind"])
+                if how == "brief":
+                    status, output, errors, _ = self.tty_cli([value], "brief")
+                    card, after = output.split(prompt)
+                    self.assertIn("Next: resume or abort run blocked with qk-harness 0.3, which recorded it", card)
+                else:
+                    status, after, errors = self.cli("decide", "blocked", value)
+                    output = after
+                self.assertEqual((status, errors), (0, ""))
+                self.assertEqual(after.splitlines()[1], "Only the intent was recorded; nothing was run. Run blocked "
+                                 "was recorded by qk-harness 0.3; %s it with that tool, not qk run." % action)
+                self.assertNotIn("qk run abort", output)
+                self.assertNotIn("qk run resume", output)
 
     def stopped_state(self, run_id, stage="implementing", lock=False):
         directory = self.root / "state" / "qk-run" / run_id
