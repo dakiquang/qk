@@ -622,10 +622,12 @@ class CaseSanityTest(unittest.TestCase):
             h = elapsed(hook, payload)
             extra.append(h - b)
 ''') + tail}
+        bodies["mislabeled"] = bodies["note"].replace('"-I", "-S", str(SCRIPT), "hook"]', '"-I", "-S", "-c", "pass", "hook"]')
         expected = {
             None: {"pair-order": False, "tolerates-burst": False},
             "snippet": {"pair-order": False},
             "note": {},
+            "mislabeled": {"pair-order": False, "catches-regression": False},  # "hook" in argv, prefs.py never runs
         }
         for variant, failing in expected.items():
             with self.subTest(variant):

@@ -32,7 +32,13 @@ calls, clock = [], [0.0]
 def fake_run(*args, **kwargs):
     command = args[0] if args else kwargs.get("args")
     parts = [str(part) for part in command] if isinstance(command, (list, tuple)) else str(command).split()
-    kind = "hook" if "hook" in parts else "bare"
+    script = [part for part in parts if os.path.basename(part) == "prefs.py"]
+    if script and parts[-1] == "hook" and "-c" not in parts:
+        kind = "hook"
+    elif not script and parts[-2:] == ["-c", "pass"]:
+        kind = "bare"
+    else:
+        kind = "other"
     cost = hook_cost if kind == "hook" else bare_cost
     if mode == "regression" and kind == "hook":
         cost += regression
@@ -106,6 +112,7 @@ def ran_once(run):
 
 
 def pair_order(run):
+    """Bare (`-c pass`) then hook (`prefs.py hook`) in each pair; any other command shape is graded `o`."""
     ok, detail = ran_once(run)
     if not ok:
         return criterion("pair-order", False, detail)
