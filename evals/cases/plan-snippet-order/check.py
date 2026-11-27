@@ -28,11 +28,14 @@ burst, burst_delay, bare_cost, hook_cost, regression = json.loads(sys.argv[3])
 os.environ.pop("CI", None)
 sys.path.insert(0, workdir)
 calls, clock = [], [0.0]
+real_script = os.path.realpath(os.path.join(workdir, "prefs.py"))
 
 def fake_run(*args, **kwargs):
     command = args[0] if args else kwargs.get("args")
     parts = [str(part) for part in command] if isinstance(command, (list, tuple)) else str(command).split()
-    script = [part for part in parts if os.path.basename(part) == "prefs.py"]
+    base = kwargs.get("cwd") or os.getcwd()
+    script = [part for part in parts if os.path.basename(part) == "prefs.py"
+              and os.path.realpath(os.path.join(base, part)) == real_script]
     if script and parts[-1] == "hook" and "-c" not in parts:
         kind = "hook"
     elif not script and parts[-2:] == ["-c", "pass"]:
@@ -112,7 +115,7 @@ def ran_once(run):
 
 
 def pair_order(run):
-    """Bare (`-c pass`) then hook (`prefs.py hook`) in each pair; any other command shape is graded `o`."""
+    """Bare (`-c pass`) then hook (the repository's own `prefs.py hook`) in each pair; any other command is `o`."""
     ok, detail = ran_once(run)
     if not ok:
         return criterion("pair-order", False, detail)

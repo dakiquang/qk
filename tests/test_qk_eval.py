@@ -622,12 +622,14 @@ class CaseSanityTest(unittest.TestCase):
             h = elapsed(hook, payload)
             extra.append(h - b)
 ''') + tail}
+        bodies["elsewhere"] = bodies["note"].replace('str(SCRIPT), "hook"]', '"/nonexistent/prefs.py", "hook"]')
         bodies["mislabeled"] = bodies["note"].replace('"-I", "-S", str(SCRIPT), "hook"]', '"-I", "-S", "-c", "pass", "hook"]')
         expected = {
             None: {"pair-order": False, "tolerates-burst": False},
             "snippet": {"pair-order": False},
             "note": {},
             "mislabeled": {"pair-order": False, "catches-regression": False},  # "hook" in argv, prefs.py never runs
+            "elsewhere": {"pair-order": False, "catches-regression": False},  # a prefs.py that is not the repo's
         }
         for variant, failing in expected.items():
             with self.subTest(variant):
