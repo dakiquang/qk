@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An overnight `qk run drain` writes its own session log, `drain-YYYYMMDD-HHMMSS.log` in the state directory, and
+  prints its path: start settings and queued runs, each run's start and end stage, blocked reasons, limit waits and
+  the drain's end with its cause. It holds no agent output, environment variables, tokens or prompts.
+- `qk run` checks the GitHub publishing identity right before the implementing stage, for `approve` and `drain`
+  alike; a failing check blocks the run at `implementing` without calling an agent.
+- The overnight guide describes how to recover a run stopped mid-stage without resuming a writer that may still
+  run.
+- Eval case `plan-snippet-order`: `qk-cook` on an approved plan whose snippet contradicts its own note, graded by
+  the order the latency test actually runs commands in.
+
+### Changed
+
+- A failing identity check reports its cause on the first line, so `qk brief` and `qk run status` show the cause
+  instead of the table header.
+- After `resume-later` or `abort-later`, in the brief or with `qk decide`, qk says that only the intent was recorded
+  and prints the command to run, or names the tool that recorded the run.
+- `Hook.test_latency_budget` measures bare and hook runs in interleaved pairs and compares the median, so a brief
+  burst of machine load no longer fails it.
+
+### Fixed
+
+- `qk run` passes `--wait-async` to omp, so a turn that moved a long command to a background job waits for it
+  instead of ending without a `qk-result` block.
+- `qk sync` no longer fetches a pull request once every linked run has seen it merged.
+
 ## [0.11.0] - 2026-11-24
 
 ### Added
