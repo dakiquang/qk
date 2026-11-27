@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-27
+
 ### Added
 
 - An overnight `qk run drain` writes its own session log, `drain-YYYYMMDD-HHMMSS.log` in the state directory, and
