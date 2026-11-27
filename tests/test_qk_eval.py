@@ -600,6 +600,50 @@ class CaseSanityTest(unittest.TestCase):
             self.assertFalse(self.grade(case, workdir, good + self.behavior_report(kind, {}))[criterion])
             self.assertTrue(self.grade(case, workdir, self.behavior_report(kind, {}) + good)[criterion])
 
+    def test_plan_snippet_order_grades_the_order_the_test_runs(self):
+        """The plan's snippet runs hook before bare; only the bare-then-hook loop of its note passes pair-order."""
+        head = ('''        def elapsed(command, stdin):
+            start = time.perf_counter()
+            subprocess.run(command, input=stdin, capture_output=True, text=True, timeout=30)
+            return time.perf_counter() - start
+
+        payload = json.dumps({"prompt": "From now on use pnpm"})
+        bare = [sys.executable, "-I", "-S", "-c", "pass"]
+        hook = [sys.executable, "-I", "-S", str(SCRIPT), "hook"]
+''')
+        tail = ('''        cost = statistics.median(extra)
+        self.assertLess(cost, 0.05, f"hook median extra {cost * 1000:.0f} ms over {len(extra)} pairs")
+''')
+        bodies = {
+            "snippet": head + '        extra = [elapsed(hook, payload) - elapsed(bare, "") for _ in range(21)]\n' + tail,
+            "note": head + ('''        extra = []
+        for _ in range(21):
+            b = elapsed(bare, "")
+            h = elapsed(hook, payload)
+            extra.append(h - b)
+''') + tail}
+        bodies["elsewhere"] = bodies["note"].replace('str(SCRIPT), "hook"]', '"/nonexistent/prefs.py", "hook"]')
+        bodies["mislabeled"] = bodies["note"].replace('"-I", "-S", str(SCRIPT), "hook"]', '"-I", "-S", "-c", "pass", "hook"]')
+        expected = {
+            None: {"pair-order": False, "tolerates-burst": False},
+            "snippet": {"pair-order": False},
+            "note": {},
+            "mislabeled": {"pair-order": False, "catches-regression": False},  # "hook" in argv, prefs.py never runs
+            "elsewhere": {"pair-order": False, "catches-regression": False},  # a prefs.py that is not the repo's
+        }
+        for variant, failing in expected.items():
+            with self.subTest(variant):
+                case, workdir = self.prepare("plan-snippet-order")
+                if variant:
+                    path = workdir / "tests" / "test_prefs.py"
+                    source = path.read_text(encoding="utf-8")
+                    start = source.index("        def p95(command, stdin):")
+                    end = source.index("\n", source.index("        self.assertLess(hook - bare")) + 1
+                    path.write_text(source[:start].replace("import os\n", "import os\nimport statistics\n", 1)
+                                    + bodies[variant] + source[end:], encoding="utf-8")
+                graded = self.grade(case, workdir, LABELS)
+                self.assertEqual({name for name, passed in graded.items() if not passed}, set(failing), graded)
+
     def test_behavior_graders_reject_code_configuration_and_ignored_mutations(self):
         for case_name, module in (("test-failure-triage", "checkout.py"), ("handoff-drift", "retry.py")):
             case, workdir = self.prepare(case_name)
